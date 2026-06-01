@@ -973,7 +973,7 @@ const historyEntry=(type,actor,detail,boro)=>({type,actor,detail,boro,time:Date.
 // ── Components ─────────────────────────────────────────────────────────────────
 function StatBar({label,value,max=10,color}){
   return <div style={{marginBottom:5}}>
-    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"'Share Tech Mono',monospace",color:"#888",marginBottom:2}}><span>{label}</span><span style={{color}}>{value}/{max}</span></div>
+    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"'Share Tech Mono',monospace",color:"#bbb",marginBottom:2}}><span>{label}</span><span style={{color}}>{value}/{max}</span></div>
     <div style={{height:4,background:"#111",border:"1px solid #1a1a1a"}}><div style={{height:"100%",width:`${(value/max)*100}%`,background:`linear-gradient(90deg,${color}66,${color})`,boxShadow:`0 0 5px ${color}44`,transition:"width 0.4s"}}/></div>
   </div>;
 }
@@ -1267,7 +1267,7 @@ function QuestPanel({gs,npcs,onAccept,onComplete,onAbandon,boro}){
         const npc=npcs.find(n=>n.id===q.npc);
         return <div key={q.id} style={{marginBottom:5,padding:"5px 7px",border:"1px solid #161616",background:"#090909"}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-            <span style={{color:"#888",fontSize:8}}>{npc?.icon} {npc?.name}</span>
+            <span style={{color:"#bbb",fontSize:8}}>{npc?.icon} {npc?.name}</span>
             <span style={{fontSize:7,color:"#666"}}>Tier {q.tier}</span>
           </div>
           <div style={{color:"#e9c46a",fontSize:8,marginBottom:2}}>{q.title}</div>
@@ -1766,7 +1766,7 @@ export default function NYC(){
     if(!upgrade&&existing){push(`Already a safe house in ${getBoro(boro)?.name}.`);return;}
     if(upgrade&&(!existing||(existing.owner!==gs.name&&existing.crewOwner!==gs.crew))){push(`You don't own the safe house here.`);return;}
     if(upgrade&&(existing.level||1)>=3){push(`Already at max level.`);return;}
-    const safe=upgrade?{...existing,level:(existing.level||1)+1}:{owner:gs.name,crewOwner:gs.crew||null,level:1,stash:{weed:0,pills:0,powder:0}};
+    const safe=upgrade?{...existing,level:(existing.level||1)+1}:{owner:gs.name,ownerLower:gs.name.toLowerCase(),crewOwner:gs.crew||null,level:1,stash:{weed:0,pills:0,powder:0},cashStash:0};
     const ws={...world,safehouses:{...world.safehouses,[boro]:safe}};
     setWorld(ws);saveWorld(ws);
     updGs(g=>({...g,cash:g.cash-cost}));
@@ -1775,7 +1775,8 @@ export default function NYC(){
   const stashProduct=(pKey)=>{
     if(!gs)return;
     const safe=world.safehouses?.[boro];
-    if(!safe||(safe.owner!==gs.name&&safe.crewOwner!==gs.crew)){push(`No safe house you own here.`);return;}
+    const ownsIt=safe&&(safe.owner===gs.name||safe.ownerLower===gs.name.toLowerCase()||safe.crewOwner===gs.crew);
+    if(!ownsIt){push(`No safe house you own here.`);return;}
     const qty=gs.product[pKey]||0;if(qty===0){push(`No ${pKey} to stash.`);return;}
     const ws={...world,safehouses:{...world.safehouses,[boro]:{...safe,stash:{...safe.stash,[pKey]:(safe.stash?.[pKey]||0)+qty}}}};
     setWorld(ws);saveWorld(ws);
@@ -1785,7 +1786,8 @@ export default function NYC(){
   const unstashProduct=(pKey)=>{
     if(!gs)return;
     const safe=world.safehouses?.[boro];
-    if(!safe||(safe.owner!==gs.name&&safe.crewOwner!==gs.crew)){push(`No safe house you own here.`);return;}
+    const ownsIt2=safe&&(safe.owner===gs.name||safe.ownerLower===gs.name?.toLowerCase()||safe.crewOwner===gs.crew);
+    if(!ownsIt2){push(`No safe house you own here.`);return;}
     const qty=safe.stash?.[pKey]||0;if(qty===0){push(`Nothing stashed.`);return;}
     const ws={...world,safehouses:{...world.safehouses,[boro]:{...safe,stash:{...safe.stash,[pKey]:0}}}};
     setWorld(ws);saveWorld(ws);
@@ -1794,7 +1796,8 @@ export default function NYC(){
   };
   const restSafe=()=>{
     const safe=world.safehouses?.[boro];
-    if(!safe||(safe.owner!==gs?.name&&safe.crewOwner!==gs?.crew)){push(`No safe house you own here.`);return;}
+    const ownsIt3=safe&&(safe.owner===gs?.name||safe.crewOwner===gs?.crew);
+    if(!ownsIt3){push(`No safe house you own here.`);return;}
     updGs(g=>applyXP({...g,survival:{hunger:clamp(g.survival.hunger-5,0,100),warmth:100,health:clamp(g.survival.health+20,0,100),energy:100},heat:clamp(g.heat-2,0,10)},5,"rest"));
     push(`You crash at the safe house.`,`Fully warm. Health up. Heat drops 2.`,`Best sleep you've had in weeks.`);
   };
@@ -2080,7 +2083,10 @@ export default function NYC(){
     if(unstashM){unstashProduct(unstashM[1].toLowerCase());return;}
 
     // BUY
-    const buyM=C.match(/^BUY (\w+)(?:\s+(\d+))?$/);
+    // Support BUY POWDER 2 and BUY 2 POWDER
+    const _buyA=C.match(/^BUY ([A-Za-z]+) (\d+)$/);
+    const _buyB=C.match(/^BUY (\d+) ([A-Za-z]+)$/);
+    const buyM=_buyA||(_buyB?[_buyB[0],_buyB[2],_buyB[1]]:C.match(/^BUY (\w+)(?:\s+(\d+))?$/));
     if(buyM){
       const pKey=buyM[1].toLowerCase();const qty=parseInt(buyM[2])||1;
       if(!PRODUCTS[pKey]){push(`Unknown product. Try: weed, pills, powder.`);return;}
@@ -2243,7 +2249,7 @@ export default function NYC(){
     // MOVE — blizzard/storm adds energy penalty
     const mvM=C.match(/^MOVE (.+)$/);
     if(mvM){
-      const t=BOROUGHS.find(bx=>bx.name.toLowerCase().includes(mvM[1].toLowerCase())||bx.id===mvM[1].toLowerCase());
+      const _mvIn=mvM[1].toLowerCase().replace(/^the /,'').trim();const t=BOROUGHS.find(bx=>bx.name.toLowerCase().includes(_mvIn)||bx.id===_mvIn||bx.short.toLowerCase()===_mvIn||_mvIn.includes(bx.id));
       if(!t){push(`Unknown borough.`);return;}if(t.id===boro){push(`Already in ${t.name}.`);return;}
       const penalty=10+weather.movePenalty;
       if(gs.survival.energy<penalty){push(`Too tired to travel. Need ${penalty} energy. REST first.`);return;}
@@ -2461,6 +2467,11 @@ export default function NYC(){
       updGs(g=>{
         const habHealth=g.isJunkie&&g.cash<habitCost?clamp(g.survival.health-15,0,100):g.survival.health+5;
         const newAddiction=Math.max(0,(g.addiction||0)-1);
+        const _oldLvl=getAddictionLevel(g.addiction||0);
+        const _newLvl=getAddictionLevel(newAddiction);
+        if(_newLvl.name!==_oldLvl.name&&newAddiction<(g.addiction||0)){
+          setTimeout(()=>push(`${CLASS_SUBSTANCE[g.archetype?.id||'veteran']?.icon} Addiction easing: ${_oldLvl.name} → ${_newLvl.name} (${newAddiction}/100)`),300);
+        }
         return{...g,day:nextDay,addiction:newAddiction,hustleCount:0,hustleBoroLast:"",hustleBoros:{},
           cash:g.cash-habitCost+income+crewBonus+safePassive+commBonus,
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
@@ -3495,7 +3506,7 @@ export default function NYC(){
     // STASH CASH — deposit cash to safe house (keeps it below robbery threshold)
     if(C==="STASH CASH"){
       const safe=world.safehouses?.[boro];
-      if(!safe||(safe.owner!==gs.name&&safe.crewOwner!==gs.crew)){push(`No safe house here. BUY SAFEHOUSE first.`);return;}
+      if(!safe||(safe.owner!==gs.name&&safe.crewOwner!==gs.crew)){push(`No safe house here. BUY SAFEHOUSE $500 first.`);return;}
       const toStash=Math.max(0,gs.cash-100); // keep $100 on you
       if(toStash<=0){push(`Nothing to stash.`);return;}
       updGs(g=>({...g,cash:g.cash-toStash,cashStash:(g.cashStash||0)+toStash}));
@@ -3602,7 +3613,7 @@ export default function NYC(){
   // ── BOOT ──────────────────────────────────────────────────────────────────
   if(phase==="boot")return(<>
     <style>{FONTS+`@keyframes fadeIn{from{opacity:0;transform:translateX(-3px)}to{opacity:1}}@keyframes blink{50%{opacity:0}}`}</style>
-    <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Share Tech Mono',monospace"}}>
+    <div style={{minHeight:"100vh",background:"#0d0f0f",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:500,width:"100%"}}>
         <div style={{fontFamily:"'VT323',monospace",fontSize:56,color:"#e9c46a",letterSpacing:4,textShadow:"0 0 28px #e9c46a88,0 0 60px #e9c46a33",marginBottom:4}}>HOBO QUEST</div>
         <div style={{fontSize:10,color:"#888",marginBottom:26,letterSpacing:3}}>SURVIVE · HUSTLE · CONQUER · NYC</div>
@@ -3617,7 +3628,7 @@ export default function NYC(){
   // ── CHARACTER ─────────────────────────────────────────────────────────────
   if(phase==="character")return(<>
     <style>{FONTS}</style>
-    <div style={{minHeight:"100vh",background:"#070707",color:"#c0c0b8",padding:"20px 16px",overflowY:"auto",fontFamily:"'Share Tech Mono',monospace"}}>
+    <div style={{minHeight:"100vh",background:"#0d0f0f",color:"#c0c0b8",padding:"20px 16px",overflowY:"auto",fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:660,margin:"0 auto",paddingTop:12}}>
         <div style={{fontFamily:"'VT323',monospace",fontSize:42,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 16px #e9c46a55",marginBottom:3}}>CHARACTER CREATION</div>
         <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:22}}>WHO ARE YOU OUT HERE?</div>
@@ -3636,7 +3647,7 @@ export default function NYC(){
         {selA&&!bsDone&&(
           <div style={{marginBottom:20}}>
             <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:12}}>// YOUR STORY — Question {bsStep+1} of {BACKSTORY_QUESTIONS.length}</div>
-            <div style={{fontSize:12,color:"#c4b49a",marginBottom:12,lineHeight:1.6}}>{BACKSTORY_QUESTIONS[bsStep]?.question}</div>
+            <div style={{fontSize:12,color:"#d4c9b0",marginBottom:12,lineHeight:1.6}}>{BACKSTORY_QUESTIONS[bsStep]?.question}</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {BACKSTORY_QUESTIONS[bsStep]?.options.map(opt=>{
                 const isSelected=backstory[BACKSTORY_QUESTIONS[bsStep].id]===opt.id;
@@ -3721,7 +3732,7 @@ export default function NYC(){
               {savedChar.archetype?.name} · Level {savedChar.level} · Day {savedChar.day} · ${savedChar.cash}
             </div>
             <div style={{display:"flex",gap:8}}>
-              <div onClick={()=>continueGame(savedChar)} style={{padding:"10px 18px",background:"#e9c46a",color:"#070707",fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,cursor:"pointer"}}>CONTINUE →</div>
+              <div onClick={()=>continueGame(savedChar)} style={{padding:"10px 18px",background:"#e9c46a",color:"#0d0f0f",fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,cursor:"pointer"}}>CONTINUE →</div>
               <div onClick={()=>{setSavedChar(null);setCName("");setNameIn("");setPinIn("");setSelA(null);setBsDone(false);setBackstory({});setBsStep(0);}} style={{padding:"10px 14px",background:"#e6394620",border:"1px solid #e63946",color:"#e63946",fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,cursor:"pointer"}}>NEW</div>
             </div>
           </div>
@@ -3733,7 +3744,7 @@ export default function NYC(){
               {!selA?"← Select an archetype above first.":!bsDone?"← Answer the backstory questions above.":""}
             </div>}
             {selA&&bsDone&&(
-              <div onClick={startGame} style={{background:"#e9c46a",color:"#070707",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:3,padding:"14px 28px",cursor:"pointer",display:"inline-block",boxShadow:"0 0 28px #e9c46a44",marginTop:4}}>
+              <div onClick={startGame} style={{background:"#e9c46a",color:"#0d0f0f",fontFamily:"'Bebas Neue',sans-serif",fontSize:18,letterSpacing:3,padding:"14px 28px",cursor:"pointer",display:"inline-block",boxShadow:"0 0 28px #e9c46a44",marginTop:4}}>
                 HIT THE STREETS →
               </div>
             )}
@@ -3751,7 +3762,7 @@ export default function NYC(){
     const wColors={clear:"#e9c46a",cloudy:"#888",rain:"#457b9d",fog:"#aaa",blizzard:"#a8dadc",heatwave:"#e63946",storm:"#8b5cf6"};
     return(<>
       <style>{FONTS+`@keyframes blink{50%{opacity:0}}@keyframes wanted{0%,100%{opacity:1}50%{opacity:0.3}}::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:#0a0a0a}::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:2px}::-webkit-scrollbar-thumb:hover{background:#3a3a3a}input[type=number]::-webkit-inner-spin-button{opacity:0}*{box-sizing:border-box}`}</style>
-      <div style={{width:"100vw",height:"100vh",display:"flex",flexDirection:"column",background:"#070707",overflow:"hidden",fontFamily:"'Share Tech Mono',monospace"}}>
+      <div style={{width:"100vw",height:"100vh",display:"flex",flexDirection:"column",background:"#0d0f0f",overflow:"hidden",fontFamily:"'Share Tech Mono',monospace"}}>
 
         {/* TOP BAR */}
         <div style={{borderBottom:"1px solid #111",display:"flex",alignItems:"center",padding:"0 12px",gap:10,background:"#080808",height:38,flexShrink:0}}>
@@ -3840,14 +3851,14 @@ export default function NYC(){
           {!tutDone&&gs&&(
             <div style={{padding:"5px 12px",background:"#e9c46a08",borderBottom:"1px solid #e9c46a22",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div style={{fontSize:8,color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace"}}>📖 {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)]?.msg?.slice(0,60)}...</div>
-              <div onClick={()=>setTutDone(true)} style={{fontSize:7,color:"#444",cursor:"pointer",marginLeft:8}}>skip</div>
+              <div onClick={()=>{setTutDone(true);setTutStep(TUTORIAL_STEPS.length-1);}} style={{fontSize:8,color:"#888",cursor:"pointer",marginLeft:8,padding:"2px 6px",border:"1px solid #333"}}>skip ×</div>
             </div>
           )}
           <div ref={feedRef} style={{flex:1,padding:"10px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:2,minHeight:0,scrollBehavior:"smooth"}}>
             {feed.map((line,i)=>{
               const s=typeof line==="string"?line:"";
               const div=s.startsWith("—");const isC=s.startsWith(">");const lvl=s.startsWith("★");const warn=s.startsWith("⚠")||s.startsWith("🚨")||s.startsWith("☠")||s.startsWith("❄️");
-              return <div key={i} style={{fontSize:div?10:12,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#c4b49a",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.7,minHeight:s===""?6:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
+              return <div key={i} style={{fontSize:div?10:13,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#d4c9b0",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.8,minHeight:s===""?7:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
             })}
             <span style={{color:"#e9c46a",animation:"blink 1.3s infinite",fontSize:12}}>█</span>
           </div>
@@ -4029,8 +4040,8 @@ export default function NYC(){
 
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
-          <span style={{color:"#e9c46a",fontSize:12,flexShrink:0}}>▶</span>
-          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="type command..." autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
+          <span style={{color:"#f4d03f",fontSize:13,flexShrink:0}}>▶</span>
+          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="type a command  (HELP for full list)" autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#f4d03f",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
           <div onClick={()=>inputRef.current?.focus()} style={{fontSize:8,color:"#666",padding:"4px 8px",border:"1px solid #1a1a1a",cursor:"pointer",flexShrink:0}}>ENTER ↵</div>
         </div>
 
