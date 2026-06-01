@@ -1,5 +1,4 @@
 'use client'
-'use client'
 import { useState, useEffect, useRef } from "react";
 import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe } from '../lib/supabase';
 
@@ -974,7 +973,7 @@ const historyEntry=(type,actor,detail,boro)=>({type,actor,detail,boro,time:Date.
 // ── Components ─────────────────────────────────────────────────────────────────
 function StatBar({label,value,max=10,color}){
   return <div style={{marginBottom:5}}>
-    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"'Share Tech Mono',monospace",color:"#555",marginBottom:2}}><span>{label}</span><span style={{color}}>{value}/{max}</span></div>
+    <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontFamily:"'Share Tech Mono',monospace",color:"#888",marginBottom:2}}><span>{label}</span><span style={{color}}>{value}/{max}</span></div>
     <div style={{height:4,background:"#111",border:"1px solid #1a1a1a"}}><div style={{height:"100%",width:`${(value/max)*100}%`,background:`linear-gradient(90deg,${color}66,${color})`,boxShadow:`0 0 5px ${color}44`,transition:"width 0.4s"}}/></div>
   </div>;
 }
@@ -996,7 +995,7 @@ function WeatherBanner({weather,day}){
         <div style={{fontSize:7,color:"#444",fontFamily:"'Share Tech Mono',monospace"}}>{w.desc}</div>
       </div>
     </div>
-    <div style={{fontSize:7,color:"#2a2a2a",fontFamily:"'Share Tech Mono',monospace",textAlign:"right"}}>
+    <div style={{fontSize:7,color:"#666",fontFamily:"'Share Tech Mono',monospace",textAlign:"right"}}>
       <div>BUST {w.bustMult<1?`-${Math.round((1-w.bustMult)*100)}%`:w.bustMult>1?`+${Math.round((w.bustMult-1)*100)}%`:"normal"}</div>
       {w.movePenalty>0&&<div style={{color:"#e9c46a"}}>MOVE -{w.movePenalty}E</div>}
     </div>
@@ -1008,15 +1007,15 @@ function SafePanel({gs,world,boro,onBuy,onUpgrade,onStash,onUnstash,onRest}){
   const isMine=localHouse&&(localHouse.owner===gs.name||(gs.crew&&localHouse.crewOwner===gs.crew));
   const stashTotal=Object.values(localHouse?.stash||{}).reduce((a,b)=>a+b,0);
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// SAFE HOUSES</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// SAFE HOUSES</div>
     {/* Current borough */}
     <div style={{marginBottom:8,padding:"6px 8px",border:`1px solid ${isMine?"#e9c46a33":"#161616"}`,background:isMine?"#e9c46a05":"#090909"}}>
       <div style={{color:isMine?"#e9c46a":"#444",fontSize:9,marginBottom:3}}>{getBoro(boro)?.name} {isMine?"🏠":""}</div>
       {!localHouse&&<><div style={{color:"#333",fontSize:7,marginBottom:5}}>No safe house here. Cost: ${SAFEHOUSE_COST}</div>
         <div onClick={onBuy} style={{padding:"3px 8px",background:"#e9c46a15",border:"1px solid #e9c46a33",color:"#e9c46a",cursor:"pointer",fontSize:7,display:"inline-block"}}>BUY SAFEHOUSE</div></>}
-      {localHouse&&!isMine&&<div style={{color:"#555",fontSize:7}}>Owned by {localHouse.owner||localHouse.crewOwner}. {localHouse.level>1?`Level ${localHouse.level}.`:""}</div>}
+      {localHouse&&!isMine&&<div style={{color:"#999",fontSize:7}}>Owned by {localHouse.owner||localHouse.crewOwner}. {localHouse.level>1?`Level ${localHouse.level}.`:""}</div>}
       {isMine&&<>
-        <div style={{color:"#555",fontSize:7,marginBottom:4}}>Level {localHouse.level||1} · Heat drain: -{(localHouse.level||1)*0.5}/tick · Stash: {stashTotal} items</div>
+        <div style={{color:"#999",fontSize:7,marginBottom:4}}>Level {localHouse.level||1} · Heat drain: -{(localHouse.level||1)*0.5}/tick · Stash: {stashTotal} items</div>
         {/* stash contents */}
         {Object.entries(localHouse.stash||{}).filter(([,v])=>v>0).map(([k,v])=>(
           <div key={k} style={{fontSize:7,color:"#2a9d8f",marginBottom:1}}>{PRODUCTS[k]?.icon||"📦"} {k}: {v}</div>
@@ -1034,12 +1033,12 @@ function SafePanel({gs,world,boro,onBuy,onUpgrade,onStash,onUnstash,onRest}){
       </>}
     </div>
     {/* All owned */}
-    {myHouses.length>0&&<><div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:4}}>// YOUR HOUSES</div>
+    {myHouses.length>0&&<><div style={{color:"#999",letterSpacing:2,marginBottom:4}}>// YOUR HOUSES</div>
     {myHouses.map(([bId,s])=><div key={bId} style={{display:"flex",justifyContent:"space-between",fontSize:7,marginBottom:2,padding:"3px 5px",border:"1px solid #161616",background:"#090909"}}>
       <span style={{color:"#e9c46a"}}>{getBoro(bId)?.short} 🏠 Lvl {s.level||1}</span>
       <span style={{color:"#2a9d8f"}}>{Object.values(s.stash||{}).reduce((a,b)=>a+b,0)} stashed</span>
     </div>)}</>}
-    <div style={{color:"#2a2a2a",fontSize:7,marginTop:6}}>CMD: BUY SAFEHOUSE · UPGRADE SAFEHOUSE · STASH [product] · UNSTASH [product] · REST SAFE</div>
+    <div style={{color:"#999",fontSize:7,marginTop:6}}>CMD: BUY SAFEHOUSE · UPGRADE SAFEHOUSE · STASH [product] · UNSTASH [product] · REST SAFE</div>
   </div>;
 }
 function BoroMap({active,onSelect,world,weather,day}){
@@ -1151,7 +1150,7 @@ function CharPortrait({gs}){
             {RARITY_SYMBOL[item.rarity]} {item.name}
           </div>
         ))}
-        {!head&&!chest&&!weapon&&!acc&&<div style={{color:"#222"}}>No gear equipped</div>}
+        {!head&&!chest&&!weapon&&!acc&&<div style={{color:"#666"}}>No gear equipped</div>}
       </div>
     </div>
   );
@@ -1182,12 +1181,12 @@ function InvGrid({items,equipment,onEquip}){
 }
 function MktPanel({bId,day,prod,setProd,qty,setQty,onBuy,onSell,playerProd,weather}){
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// MARKET — {getBoro(bId)?.short}</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// MARKET — {getBoro(bId)?.short}</div>
     {Object.entries(PRODUCTS).map(([key,p])=>{
       const sp=mktPrice(bId,key,day,weather?.id),bp=Math.round(sp*p.bm);
       return <div key={key} onClick={()=>setProd(key)} style={{padding:"4px 6px",marginBottom:2,cursor:"pointer",border:`1px solid ${prod===key?"#e9c46a22":"#161616"}`,background:prod===key?"#e9c46a06":"transparent"}}>
         <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:prod===key?"#e9c46a":"#444"}}>{p.icon} {p.name}</span><span style={{color:"#2a9d8f"}}>${sp}</span></div>
-        <div style={{color:"#2a2a2a",fontSize:7,marginTop:1}}>Buy ${bp} · Have: {playerProd?.[key]||0}</div>
+        <div style={{color:"#999",fontSize:7,marginTop:1}}>Buy ${bp} · Have: {playerProd?.[key]||0}</div>
       </div>;
     })}
     {Object.entries(RECIPES).map(([name,r])=><div key={name} style={{fontSize:7,color:"#1e4e42",marginBottom:2,padding:"2px 4px",border:"1px solid #0e1e1a"}}>{r.icon} {name}: {r.desc}</div>)}
@@ -1201,32 +1200,32 @@ function MktPanel({bId,day,prod,setProd,qty,setQty,onBuy,onSell,playerProd,weath
 function NpcPanel({npcs,bId,onTalk}){
   const local=npcs.filter(n=>n.b===bId);
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// CONTACTS — {getBoro(bId)?.short}</div>
-    {local.length===0&&<div style={{color:"#222"}}>No contacts here.</div>}
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// CONTACTS — {getBoro(bId)?.short}</div>
+    {local.length===0&&<div style={{color:"#666"}}>No contacts here.</div>}
     {local.map(n=><div key={n.id} onClick={()=>onTalk(n)} style={{padding:"5px 6px",marginBottom:3,border:"1px solid #161616",background:"#090909",cursor:"pointer"}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:"#777"}}>{n.icon} {n.name}</span><span style={{color:n.rep>5?"#2a9d8f":n.rep>0?"#e9c46a":"#252525"}}>{n.rep>0?"★".repeat(Math.min(n.rep,5)):"·····"}</span></div>
-      <div style={{color:"#2a2a2a",fontSize:7,marginTop:1}}>{n.role}</div>
+      <div style={{color:"#999",fontSize:7,marginTop:1}}>{n.role}</div>
     </div>)}
   </div>;
 }
 function CrewPanel({gs,world,onJoin}){
   const myCrew=gs.crew?world.crews?.[gs.crew]:null;
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// CREWS</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// CREWS</div>
     {gs.crew&&myCrew&&<div style={{border:"1px solid #e9c46a33",padding:"6px 8px",marginBottom:8,background:"#e9c46a05"}}>
-      <div style={{color:"#e9c46a",fontSize:9,marginBottom:2}}>{gs.crew} <span style={{color:"#555",fontSize:7}}>· {gs.crewRole}</span></div>
-      <div style={{color:"#555",fontSize:7,marginBottom:1}}>Members: {myCrew.members.join(", ")}</div>
+      <div style={{color:"#e9c46a",fontSize:9,marginBottom:2}}>{gs.crew} <span style={{color:"#999",fontSize:7}}>· {gs.crewRole}</span></div>
+      <div style={{color:"#999",fontSize:7,marginBottom:1}}>Members: {myCrew.members.join(", ")}</div>
       <div style={{color:"#2a9d8f",fontSize:7}}>Bank: ${myCrew.bank||0}</div>
     </div>}
     {!gs.crew&&<div style={{color:"#333",fontSize:7,marginBottom:8}}>FORM CREW [name] or JOIN CREW [name]</div>}
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:4}}>// ALL CREWS</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:4}}>// ALL CREWS</div>
     {Object.keys(world.crews||{}).length===0&&<div style={{color:"#191919"}}>No crews yet.</div>}
     {Object.entries(world.crews||{}).map(([name,crew])=><div key={name} style={{padding:"4px 6px",border:"1px solid #161616",marginBottom:3,background:"#090909"}}>
       <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:gs.crew===name?"#e9c46a":"#555"}}>{name}</span><span style={{color:"#2a9d8f",fontSize:7}}>${crew.bank||0}</span></div>
-      <div style={{color:"#2a2a2a",fontSize:7,marginTop:1}}>{crew.members.length}m · {crew.founder}</div>
+      <div style={{color:"#999",fontSize:7,marginTop:1}}>{crew.members.length}m · {crew.founder}</div>
       {gs.crew!==name&&<div onClick={()=>onJoin(name,crew)} style={{color:"#2a9d8f",fontSize:7,marginTop:2,cursor:"pointer"}}>→ join</div>}
     </div>)}
-    <div style={{color:"#2a2a2a",letterSpacing:2,margin:"8px 0 4px"}}>// WALL OF DEAD</div>
+    <div style={{color:"#555",letterSpacing:2,margin:"8px 0 4px"}}>// WALL OF DEAD</div>
     {(world.wallOfDead||[]).length===0&&<div style={{color:"#191919"}}>Nobody dead yet.</div>}
     {(world.wallOfDead||[]).slice(-5).reverse().map((d,i)=><div key={i} style={{fontSize:7,color:"#3a2020",marginBottom:2}}>☠ {d.name} · Lvl {d.level} · Day {d.day}</div>)}
   </div>;
@@ -1239,7 +1238,7 @@ function QuestPanel({gs,npcs,onAccept,onComplete,onAbandon,boro}){
   const active=getActiveQuests(gs);
   const done=(gs.completedQuests||[]);
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// QUESTS</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// QUESTS</div>
 
     {/* active quests */}
     {active.length>0&&<>
@@ -1249,7 +1248,7 @@ function QuestPanel({gs,npcs,onAccept,onComplete,onAbandon,boro}){
         const urgent=daysLeft<=1;
         return <div key={q.id} style={{marginBottom:6,padding:"5px 7px",border:`1px solid ${urgent?"#e63946":"#e9c46a"}33`,background:urgent?"#e6394605":"#e9c46a05"}}>
           <div style={{color:urgent?"#e63946":"#e9c46a",fontSize:8,marginBottom:2}}>{q.title}</div>
-          <div style={{color:"#444",fontSize:7,marginBottom:3,lineHeight:1.4}}>{q.task}</div>
+          <div style={{color:"#888",fontSize:7,marginBottom:3,lineHeight:1.4}}>{q.task}</div>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:7}}>
             <span style={{color:urgent?"#e63946":"#555"}}>{daysLeft}d left</span>
             <div style={{display:"flex",gap:6}}>
@@ -1269,24 +1268,24 @@ function QuestPanel({gs,npcs,onAccept,onComplete,onAbandon,boro}){
         return <div key={q.id} style={{marginBottom:5,padding:"5px 7px",border:"1px solid #161616",background:"#090909"}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
             <span style={{color:"#888",fontSize:8}}>{npc?.icon} {npc?.name}</span>
-            <span style={{fontSize:7,color:"#2a2a2a"}}>Tier {q.tier}</span>
+            <span style={{fontSize:7,color:"#666"}}>Tier {q.tier}</span>
           </div>
           <div style={{color:"#e9c46a",fontSize:8,marginBottom:2}}>{q.title}</div>
-          <div style={{color:"#444",fontSize:7,marginBottom:4,lineHeight:1.4,fontStyle:"italic"}}>{q.briefing.slice(0,80)}...</div>
+          <div style={{color:"#888",fontSize:7,marginBottom:4,lineHeight:1.4,fontStyle:"italic"}}>{q.briefing.slice(0,80)}...</div>
           <div onClick={()=>onAccept(q.npc,q.tier)} style={{fontSize:7,color:"#2a9d8f",cursor:"pointer",padding:"2px 0"}}>→ ACCEPT</div>
         </div>;
       })}
     </>}
 
     {active.length===0&&available.length===0&&<>
-      <div style={{color:"#1e1e1e",fontSize:8,marginBottom:6}}>No quests available right now.</div>
-      <div style={{color:"#2a2a2a",fontSize:7,lineHeight:1.6}}>Build rep by talking to NPCs.
+      <div style={{color:"#888",fontSize:8,marginBottom:6}}>No quests available right now.</div>
+      <div style={{color:"#999",fontSize:7,lineHeight:1.6}}>Build rep by talking to NPCs.
 Each NPC has 3 quest tiers.
 Min rep: 2 / 5 / 8 per tier.</div>
-      <div style={{marginTop:8,color:"#2a2a2a",fontSize:7}}>Completed: {done.length} quests total</div>
+      <div style={{marginTop:8,color:"#999",fontSize:7}}>Completed: {done.length} quests total</div>
     </>}
 
-    <div style={{marginTop:8,fontSize:7,color:"#1e1e1e",borderTop:"1px solid #111",paddingTop:5}}>QUESTS · ACCEPT [npc] [tier] · COMPLETE [npc] [tier]</div>
+    <div style={{marginTop:8,fontSize:7,color:"#555",borderTop:"1px solid #111",paddingTop:5}}>QUESTS · ACCEPT [npc] [tier] · COMPLETE [npc] [tier]</div>
   </div>;
 }
 
@@ -1295,7 +1294,7 @@ function SkillPanel({gs,onUnlock}){
   const tree=SKILL_TREES[gs.archetype?.id]||[];
   const arch=gs.archetype;
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:4}}>// {arch?.name} SKILLS</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:4}}>// {arch?.name} SKILLS</div>
     <div style={{fontSize:7,color:"#e9c46a",marginBottom:8}}>Skill Points: {gs.skillPoints||0}</div>
     {tree.map((skill,i)=>{
       const owned=(gs.skills||[]).includes(skill.id);
@@ -1306,7 +1305,7 @@ function SkillPanel({gs,onUnlock}){
           <span style={{color:owned?"#2a9d8f":canLearn?"#e9c46a":"#555",fontSize:8}}>{owned?"✓ ":""}{skill.name}</span>
           <span style={{fontSize:7,color:owned?"#2a9d8f":locked?"#333":"#666"}}>{owned?"learned":locked?`Lvl ${skill.level}`:`${skill.cost}pt`}</span>
         </div>
-        <div style={{color:"#444",fontSize:7,lineHeight:1.4,marginBottom:canLearn?4:0}}>{skill.desc}</div>
+        <div style={{color:"#888",fontSize:7,lineHeight:1.4,marginBottom:canLearn?4:0}}>{skill.desc}</div>
         {canLearn&&<div onClick={()=>onUnlock(skill)} style={{fontSize:7,color:"#e9c46a",cursor:"pointer",padding:"2px 0"}}>→ UNLOCK ({skill.cost}pt)</div>}
       </div>;
     })}
@@ -1320,16 +1319,16 @@ function GearPanel({gs,onUnequip,day,boro}){
   const seed=(day+boro.length)%BASE_ITEMS.length;
   const market=[BASE_ITEMS[seed%BASE_ITEMS.length],BASE_ITEMS[(seed+7)%BASE_ITEMS.length],BASE_ITEMS[(seed+13)%BASE_ITEMS.length]];
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// EQUIPPED</div>
+    <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// EQUIPPED</div>
     {EQUIPMENT_SLOTS.map(slot=>{
       const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;
       const rar=item?ITEM_RARITY[item.rarity]:null;
       return <div key={slot} style={{display:"flex",justifyContent:"space-between",marginBottom:3,padding:"3px 5px",border:`1px solid ${item?"#252525":"#111"}`,background:item?"#0e0e0e":"#080808"}}>
         <div>
-          <div style={{fontSize:7,color:"#333",letterSpacing:1}}>{slot.toUpperCase()}</div>
+          <div style={{fontSize:7,color:"#777",letterSpacing:1}}>{slot.toUpperCase()}</div>
           {item&&<div style={{color:rar?.color||"#888",fontSize:8}}>{rar?.prefix}{item.name}</div>}
-          {item&&<div style={{color:"#2a2a2a",fontSize:7}}>{Object.entries(item.stats).map(([k,v])=>`${k}+${v}`).join(" ")}</div>}
-          {!item&&<div style={{color:"#1e1e1e",fontSize:7}}>empty</div>}
+          {item&&<div style={{color:"#999",fontSize:7}}>{Object.entries(item.stats).map(([k,v])=>`${k}+${v}`).join(" ")}</div>}
+          {!item&&<div style={{color:"#888",fontSize:7}}>empty</div>}
         </div>
         {item&&<div onClick={()=>onUnequip(slot)} style={{fontSize:7,color:"#e63946",cursor:"pointer",alignSelf:"center"}}>✕</div>}
       </div>;
@@ -1337,7 +1336,7 @@ function GearPanel({gs,onUnequip,day,boro}){
     {Object.keys(eqStats).length>0&&<div style={{fontSize:7,color:"#2a9d8f",marginTop:4,padding:"3px 5px",border:"1px solid #2a9d8f22",background:"#2a9d8f08"}}>
       Total: {Object.entries(eqStats).map(([k,v])=>`${k}+${v}`).join(" ")}
     </div>}
-    <div style={{color:"#2a2a2a",letterSpacing:2,margin:"8px 0 4px"}}>// BLACK MARKET</div>
+    <div style={{color:"#555",letterSpacing:2,margin:"8px 0 4px"}}>// BLACK MARKET</div>
     {market.map(item=>{
       const rar=ITEM_RARITY[item.rarity];const price=prices[item.rarity];
       const canAfford=gs.cash>=price;
@@ -1350,7 +1349,7 @@ function GearPanel({gs,onUnequip,day,boro}){
       </div>;
     })}
     {/* Full equippable catalog by slot */}
-    <div style={{color:"#2a2a2a",letterSpacing:2,marginTop:8,marginBottom:4}}>// IN INVENTORY</div>
+    <div style={{color:"#555",letterSpacing:2,marginTop:8,marginBottom:4}}>// IN INVENTORY</div>
     {(gs?.inventory||[]).filter(itemName=>{
       const item=BASE_ITEMS.find(b=>b.name===itemName||b.id===itemName);
       return !!item;
@@ -1361,13 +1360,13 @@ function GearPanel({gs,onUnequip,day,boro}){
       return <div key={i} style={{marginBottom:3,padding:"3px 5px",border:`1px solid ${isEquipped?rar.color+"44":"#161616"}`,background:isEquipped?`${rar.color}08`:"transparent",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <div>
           <div style={{color:rar.color,fontSize:7}}>{rar.prefix||RARITY_SYMBOL[item.rarity]} {item.name}</div>
-          <div style={{color:"#2a2a2a",fontSize:6}}>{item.slot} · {Object.entries(item.stats||{}).filter(([,v])=>typeof v==="number").map(([k,v])=>`${k}+${v}`).join(" ")}</div>
+          <div style={{color:"#666",fontSize:6}}>{item.slot} · {Object.entries(item.stats||{}).filter(([,v])=>typeof v==="number").map(([k,v])=>`${k}+${v}`).join(" ")}</div>
         </div>
         {!isEquipped&&<div onClick={()=>onEquip&&onEquip(item.slot)} style={{fontSize:6,color:"#2a9d8f",cursor:"pointer",padding:"1px 4px",border:"1px solid #2a9d8f33"}}>EQUIP</div>}
         {isEquipped&&<div style={{fontSize:6,color:rar.color}}>ON</div>}
       </div>;
     })}
-    <div style={{color:"#2a2a2a",fontSize:7,marginTop:6,borderTop:"1px solid #111",paddingTop:4}}>GEAR · EQUIP [name] · UNEQUIP [slot] · LOOT · BUY ITEM [name]</div>
+    <div style={{color:"#999",fontSize:7,marginTop:6,borderTop:"1px solid #111",paddingTop:4}}>GEAR · EQUIP [name] · UNEQUIP [slot] · LOOT · BUY ITEM [name]</div>
   </div>;
 }
 
@@ -1416,7 +1415,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
-  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
+  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w){}catch{}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
@@ -3606,7 +3605,7 @@ export default function NYC(){
     <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:24,fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:500,width:"100%"}}>
         <div style={{fontFamily:"'VT323',monospace",fontSize:56,color:"#e9c46a",letterSpacing:4,textShadow:"0 0 28px #e9c46a88,0 0 60px #e9c46a33",marginBottom:4}}>HOBO QUEST</div>
-        <div style={{fontSize:10,color:"#333",marginBottom:26,letterSpacing:3}}>SURVIVE · HUSTLE · CONQUER · NYC</div>
+        <div style={{fontSize:10,color:"#888",marginBottom:26,letterSpacing:3}}>SURVIVE · HUSTLE · CONQUER · NYC</div>
         <div style={{borderLeft:"2px solid #161616",paddingLeft:14}}>
           {bootL.map((line,i)=><div key={i} style={{fontSize:11,color:(typeof line==="string"&&line.includes("WARNING"))?"#ff6b6b":(typeof line==="string"&&line.includes("BOOT"))?"#e9c46a":"#4a8f5a",marginBottom:3,animation:"fadeIn 0.3s ease"}}>{line}</div>)}
           {bootL.length<BOOT.length&&<span style={{color:"#e9c46a",animation:"blink 1s infinite"}}>█</span>}
@@ -3621,22 +3620,22 @@ export default function NYC(){
     <div style={{minHeight:"100vh",background:"#070707",color:"#c0c0b8",padding:"20px 16px",overflowY:"auto",fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:660,margin:"0 auto",paddingTop:12}}>
         <div style={{fontFamily:"'VT323',monospace",fontSize:42,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 16px #e9c46a55",marginBottom:3}}>CHARACTER CREATION</div>
-        <div style={{fontSize:9,color:"#333",letterSpacing:2,marginBottom:22}}>WHO ARE YOU OUT HERE?</div>
-        <div style={{fontSize:9,color:"#333",letterSpacing:2,marginBottom:10}}>// SELECT ARCHETYPE</div>
+        <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:22}}>WHO ARE YOU OUT HERE?</div>
+        <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:10}}>// SELECT ARCHETYPE</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:22,gridAutoRows:"1fr"}}>
           {ARCHETYPES.map(a=><div key={a.id} onClick={()=>setSelA(a.id)} style={{border:`1px solid ${selA===a.id?a.color:"#1a1a1a"}`,background:selA===a.id?`${a.color}0b`:"#090909",padding:"11px 9px",cursor:"pointer",transition:"all 0.2s",boxShadow:selA===a.id?`0 0 16px ${a.color}22`:"none"}}>
             <div style={{fontSize:18,marginBottom:4}}>{a.icon}</div>
             <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,color:a.color,letterSpacing:2,marginBottom:4}}>{a.name}</div>
             <div style={{fontSize:8,color:"#444",lineHeight:1.5,marginBottom:7}}>{a.desc}</div>
-            <div style={{borderTop:"1px solid #111",paddingTop:5}}>{Object.entries(a.stats).map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:7,marginBottom:1}}><span style={{color:"#2a2a2a"}}>{k.toUpperCase()}</span><span style={{color:selA===a.id?a.color:"#252525"}}>{v}</span></div>)}</div>
-            <div style={{marginTop:5,fontSize:7,color:"#222"}}>STARTS: {a.gear.join(" · ")}</div>
+            <div style={{borderTop:"1px solid #111",paddingTop:5}}>{Object.entries(a.stats).map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:7,marginBottom:1}}><span style={{color:"#666"}}>{k.toUpperCase()}</span><span style={{color:selA===a.id?a.color:"#252525"}}>{v}</span></div>)}</div>
+            <div style={{marginTop:5,fontSize:7,color:"#666"}}>STARTS: {a.gear.join(" · ")}</div>
             {a.special&&<div style={{marginTop:4,fontSize:7,color:"#1e4e3a",borderTop:"1px solid #111",paddingTop:3,lineHeight:1.4}}>{a.special}</div>}
           </div>)}
         </div>
         {/* BACKSTORY QUESTIONS */}
         {selA&&!bsDone&&(
           <div style={{marginBottom:20}}>
-            <div style={{fontSize:9,color:"#333",letterSpacing:2,marginBottom:12}}>// YOUR STORY — Question {bsStep+1} of {BACKSTORY_QUESTIONS.length}</div>
+            <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:12}}>// YOUR STORY — Question {bsStep+1} of {BACKSTORY_QUESTIONS.length}</div>
             <div style={{fontSize:12,color:"#c4b49a",marginBottom:12,lineHeight:1.6}}>{BACKSTORY_QUESTIONS[bsStep]?.question}</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {BACKSTORY_QUESTIONS[bsStep]?.options.map(opt=>{
@@ -3647,7 +3646,7 @@ export default function NYC(){
                   if(bsStep<BACKSTORY_QUESTIONS.length-1){setBsStep(bsStep+1);}
                   else{setBsDone(true);}
                 }} style={{padding:"9px 12px",border:`1px solid ${isSelected?"#e9c46a44":"#1a1a1a"}`,background:isSelected?"#e9c46a08":"#090909",cursor:"pointer",transition:"all 0.15s"}}>
-                  <div style={{fontSize:10,color:isSelected?"#e9c46a":"#888",lineHeight:1.5}}>{opt.label}</div>
+                  <div style={{fontSize:10,color:isSelected?"#e9c46a":"#aaa",lineHeight:1.5}}>{opt.label}</div>
                   {isSelected&&<div style={{fontSize:8,color:"#555",marginTop:4,fontStyle:"italic"}}>{opt.flavor}</div>}
                 </div>;
               })}
@@ -3666,7 +3665,7 @@ export default function NYC(){
             <div onClick={()=>{setBackstory({});setBsStep(0);setBsDone(false);}} style={{fontSize:7,color:"#333",marginTop:6,cursor:"pointer"}}>change answers</div>
           </div>
         )}
-        <div style={{fontSize:9,color:"#333",letterSpacing:2,marginBottom:8}}>// STREET NAME + PIN</div>
+        <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:8}}>// STREET NAME + PIN</div>
         {/* Name input — Enter moves to PIN */}
         <div style={{marginBottom:8}}>
           <input
@@ -3712,7 +3711,7 @@ export default function NYC(){
             inputMode="numeric"
             style={{width:"100%",boxSizing:"border-box",background:"#090909",border:`1px solid ${pinIn.length===4?"#e9c46a":"#1e1e1e"}`,color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:18,padding:"9px 12px",outline:"none",letterSpacing:8,textAlign:"center"}}
           />
-          {nameIn.trim()&&pinIn.length<4&&<div style={{fontSize:8,color:"#2a2a2a",marginTop:4,textAlign:"center"}}>{"·".repeat(pinIn.length)}{"○".repeat(4-pinIn.length)}</div>}
+          {nameIn.trim()&&pinIn.length<4&&<div style={{fontSize:8,color:"#666",marginTop:4,textAlign:"center"}}>{"·".repeat(pinIn.length)}{"○".repeat(4-pinIn.length)}</div>}
         </div>
         {/* Save found — show continue or new options */}
         {cName&&savedChar&&(
@@ -3771,15 +3770,15 @@ export default function NYC(){
           {gs.retireEligible&&<div style={{fontSize:7,padding:"1px 5px",background:"#e9c46a22",border:"1px solid #e9c46a",color:"#e9c46a",cursor:"pointer"}} onClick={()=>setCmd("RETIRE")}>🏆 RETIRE?</div>}
           {/* weather in top bar */}
           <div style={{fontSize:9,color:wColors[weather.id]||"#888"}}>{weather.icon} {weather.name}</div>
-          <div style={{fontSize:8,color:"#333"}}>DAY {gs.day}</div>
+          <div style={{fontSize:8,color:"#777"}}>DAY {gs.day}</div>
           <div style={{flex:1}}/>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {(gs.skillPoints||0)>0&&<div style={{fontSize:7,padding:"1px 5px",background:"#e9c46a22",border:"1px solid #e9c46a",color:"#e9c46a",cursor:"pointer"}} onClick={()=>setTab("skills")}>⚡{gs.skillPoints}pt</div>}
             {!gs.isFixer&&!gs.isRat&&<div style={{fontSize:7,padding:"1px 5px",border:`1px solid ${(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]-1)?"#e63946":"#2a2a2a"}`,color:(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"])?"#e63946":"#333"}}>H {gs.hustleCount||0}/{HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}</div>}
             {Object.keys(gs.activeQuests||{}).length>0&&<div style={{fontSize:7,padding:"1px 5px",background:"#2a9d8f22",border:"1px solid #2a9d8f",color:"#2a9d8f",cursor:"pointer"}} onClick={()=>setTab("quests")}>📋{Object.keys(gs.activeQuests||{}).length}</div>}
-            <div style={{fontSize:8,color:"#333"}}>LVL {gs.level}</div>
+            <div style={{fontSize:8,color:"#777"}}>LVL {gs.level}</div>
             <div style={{width:60,height:3,background:"#141414",border:"1px solid #1a1a1a"}}><div style={{height:"100%",width:`${lvlPct}%`,background:"#e9c46a",transition:"width 0.4s"}}/></div>
-            <div style={{fontSize:7,color:"#2a2a2a"}}>{xpNext(gs.xp)} XP</div>
+            <div style={{fontSize:7,color:"#666"}}>{xpNext(gs.xp)} XP</div>
           </div>
           <div style={{width:6,height:6,borderRadius:"50%",background:pulse?"#2a9d8f":"#1a1a1a",transition:"background 0.3s"}}/>
           {others.slice(0,3).map(p=><div key={p.name} style={{fontSize:7,color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name}</div>)}
@@ -3792,22 +3791,22 @@ export default function NYC(){
         <div style={{borderRight:"1px solid #0f0f0f",padding:9,overflowY:"auto",display:"flex",flexDirection:"column",gap:8,width:195,flexShrink:0}}>
           <CharPortrait gs={gs}/>
           <div style={{display:"flex",justifyContent:"space-around",padding:"4px 0",borderBottom:"1px solid #111"}}>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:"#e9c46a"}}>${gs.cash}</div><div style={{fontSize:6,color:"#2a2a2a"}}>CASH</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:Math.round(gs.heat)>=8?"#e63946":"#555"}}>{Math.round(gs.heat)}/10</div><div style={{fontSize:6,color:"#2a2a2a"}}>HEAT</div></div>
-            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:"#2a9d8f"}}>{gs.level}</div><div style={{fontSize:6,color:"#2a2a2a"}}>LVL</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:"#e9c46a"}}>${gs.cash}</div><div style={{fontSize:6,color:"#666"}}>CASH</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:Math.round(gs.heat)>=8?"#e63946":"#555"}}>{Math.round(gs.heat)}/10</div><div style={{fontSize:6,color:"#666"}}>HEAT</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:14,fontFamily:"'VT323',monospace",color:"#2a9d8f"}}>{gs.level}</div><div style={{fontSize:6,color:"#666"}}>LVL</div></div>
           </div>
           <div>
-            <div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,marginBottom:4}}>// PRODUCT</div>
+            <div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:4}}>// PRODUCT</div>
             {Object.entries(PRODUCTS).map(([k,p])=><div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:8,marginBottom:2}}><span style={{color:"#383838"}}>{p.icon} {p.name}</span><span style={{color:gs.product[k]>0?"#e9c46a":"#222"}}>{gs.product[k]}</span></div>)}
             {Object.entries(gs.cooked||{}).filter(([,v])=>v>0).map(([n,q])=>{const r=RECIPES[n];return r?<div key={n} style={{display:"flex",justifyContent:"space-between",fontSize:8,marginBottom:2}}><span style={{color:"#2a9d8f"}}>{r.icon} {n}</span><span style={{color:"#2a9d8f"}}>{q}</span></div>:null;})}
           </div>
-          <div><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,marginBottom:4}}>// STATS</div>
+          <div><div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:4}}>// STATS</div>
             <StatBar label="HUSTLE"    value={gs.stats.hustle}    color="#e9c46a"/>
             <StatBar label="STREET IQ" value={gs.stats.streetiq}  color="#a8dadc"/>
             <StatBar label="TOUGHNESS" value={gs.stats.toughness} color="#e63946"/>
             <StatBar label="CHARM"     value={gs.stats.charm}     color="#f4a261"/>
           </div>
-          <div><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,marginBottom:4}}>// SURVIVAL</div>
+          <div><div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:4}}>// SURVIVAL</div>
             <SrvBar label="HUNGER" value={gs.survival.hunger} icon="🍞"/>
             <SrvBar label="WARMTH" value={gs.survival.warmth} icon={gs.isVampire?"🌙":weather.id==="blizzard"?"❄️":"🔥"}/>
             <SrvBar label="HEALTH" value={gs.survival.health} icon="❤️"/>
@@ -3824,7 +3823,7 @@ export default function NYC(){
             </div>}
           </div>
           <div>
-            <div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,marginBottom:4}}>// INVENTORY ({gs.inventory.length})</div>
+            <div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:4}}>// INVENTORY ({gs.inventory.length})</div>
             <InvGrid items={gs.inventory} equipment={gs.equipment} onEquip={(item)=>{
               const slot=item.slot;const oldItemId=gs.equipment?.[slot];
               const oldItem=oldItemId?getItemById(oldItemId):null;
@@ -3863,17 +3862,17 @@ export default function NYC(){
 
             {tab==="map"&&<>
               <BoroMap active={boro} onSelect={setBoro} world={world} weather={weather.id} day={gs.day}/>
-              <div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,marginBottom:5}}>// REP</div>
+              <div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:5}}>// REP</div>
               {BOROUGHS.map(b=><div key={b.id} style={{display:"flex",justifyContent:"space-between",fontSize:7,marginBottom:2}}>
-                <span style={{color:"#2a2a2a"}}>{b.short}</span>
+                <span style={{color:"#666"}}>{b.short}</span>
                 <span style={{color:gs.rep[b.id]>0?b.color:"#191919"}}>{"█".repeat(Math.min(gs.rep[b.id],5))}{"░".repeat(Math.max(5-gs.rep[b.id],0))}</span>
               </div>)}
-              {others.length>0&&<><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,margin:"8px 0 4px"}}>// ONLINE</div>
+              {others.length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// ONLINE</div>
               {others.map(p=><div key={p.name} style={{fontSize:7,marginBottom:2,display:"flex",justifyContent:"space-between"}}><span style={{color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name} · {getBoro(p.borough)?.short}</span>{p.heat>=9&&<span style={{color:"#e63946",fontSize:6}}>🚨</span>}</div>)}</>}
-              {Object.entries(world.bounties||{}).filter(([,v])=>v>0).length>0&&<><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,margin:"8px 0 4px"}}>// BOUNTIES</div>{Object.entries(world.bounties||{}).filter(([,v])=>v>0).map(([n,a])=><div key={n} style={{fontSize:7,color:"#e63946",marginBottom:2}}>☠ {n}: ${a}</div>)}</>}
-              {(world.pvpLog||[]).length>0&&<><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,margin:"8px 0 4px"}}>// RECENT HITS</div>{(world.pvpLog||[]).slice(-4).reverse().map((ev,i)=><div key={i} style={{fontSize:7,color:ev.won?"#e63946":"#444",marginBottom:2}}>{ev.attacker}→{ev.victim} · {getBoro(ev.boro)?.short} · {ev.won?`$${ev.stolen}`:"failed"}</div>)}</>}
-              {(world.worldHistory||[]).length>0&&<><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,margin:"8px 0 4px"}}>// WORLD HISTORY</div>{(world.worldHistory||[]).slice(-5).reverse().map((h,i)=><div key={i} style={{fontSize:7,color:"#4a6e4a",marginBottom:2,lineHeight:1.4}}>[Day {h.day}] {h.detail}</div>)}</>}
-              {(world.legends||[]).length>0&&<><div style={{fontSize:7,color:"#1e1e1e",letterSpacing:2,margin:"8px 0 4px"}}>// LEGENDS</div>{(world.legends||[]).slice(-3).reverse().map((l,i)=><div key={i} style={{fontSize:7,color:"#e9c46a",marginBottom:2}}>{l.badge} {l.name} · P{l.prestige}</div>)}</>}
+              {Object.entries(world.bounties||{}).filter(([,v])=>v>0).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// BOUNTIES</div>{Object.entries(world.bounties||{}).filter(([,v])=>v>0).map(([n,a])=><div key={n} style={{fontSize:7,color:"#e63946",marginBottom:2}}>☠ {n}: ${a}</div>)}</>}
+              {(world.pvpLog||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// RECENT HITS</div>{(world.pvpLog||[]).slice(-4).reverse().map((ev,i)=><div key={i} style={{fontSize:7,color:ev.won?"#e63946":"#444",marginBottom:2}}>{ev.attacker}→{ev.victim} · {getBoro(ev.boro)?.short} · {ev.won?`$${ev.stolen}`:"failed"}</div>)}</>}
+              {(world.worldHistory||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// WORLD HISTORY</div>{(world.worldHistory||[]).slice(-5).reverse().map((h,i)=><div key={i} style={{fontSize:7,color:"#4a6e4a",marginBottom:2,lineHeight:1.4}}>[Day {h.day}] {h.detail}</div>)}</>}
+              {(world.legends||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// LEGENDS</div>{(world.legends||[]).slice(-3).reverse().map((l,i)=><div key={i} style={{fontSize:7,color:"#e9c46a",marginBottom:2}}>{l.badge} {l.name} · P{l.prestige}</div>)}</>}
             </>}
 
             {tab==="market"&&<MktPanel bId={boro} day={gs.day} prod={mProd} setProd={setMProd} qty={mQty} setQty={setMQty} onBuy={panelBuy} onSell={panelSell} playerProd={gs.product} weather={weather}/>}
@@ -3895,7 +3894,7 @@ export default function NYC(){
             {tab==="npcs"&&<NpcPanel npcs={npcs} bId={boro} onTalk={npcTalk}/>}
 
             {tab==="chat"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-              <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// WORLD CHAT</div>
+              <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// WORLD CHAT</div>
               <div style={{maxHeight:200,overflowY:"auto",marginBottom:8,display:"flex",flexDirection:"column",gap:4}}>
                 {wMsgs.length===0&&<div style={{color:"#191919"}}>No messages yet.</div>}
                 {wMsgs.slice(-12).map((m,i)=><div key={i} style={{borderLeft:`2px solid ${m.from===gs.name?"#e9c46a":"#2a9d8f"}`,paddingLeft:6}}>
@@ -3907,7 +3906,7 @@ export default function NYC(){
             </div>}
 
             {tab==="shelter"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-              <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// SHELTERS TONIGHT</div>
+              <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// SHELTERS TONIGHT</div>
               {gs.isUndoc&&<div style={{color:"#e63946",fontSize:7,marginBottom:8,padding:"4px 6px",border:"1px solid #e6394633",background:"#e6394608"}}>No ID means no bed. You know this. CONNECT for community alternatives.</div>}
               {BOROUGHS.map(b=>{
                 const s=SHELTERS[b.id];if(!s)return null;
@@ -3918,12 +3917,12 @@ export default function NYC(){
                     <span style={{color:isHere?"#e9c46a":"#555",fontSize:9}}>{b.short} {s.name}</span>
                     <span style={{color:avail>0?"#2a9d8f":"#e63946",fontSize:8}}>{avail}/{beds}</span>
                   </div>
-                  <div style={{color:"#2a2a2a",fontSize:7,marginBottom:3}}>Curfew {s.curfew}:00 · {s.rules[0]}</div>
+                  <div style={{color:"#999",fontSize:7,marginBottom:3}}>Curfew {s.curfew}:00 · {s.rules[0]}</div>
                   {isHere&&avail>0&&!gs.isUndoc&&<div onClick={()=>{const raw2="checkin";const fakeE={key:"Enter"};setCmd("checkin");setTimeout(()=>{const evt={key:"Enter"};handleCmd({...evt,target:{value:"checkin"}});},50);}} style={{fontSize:7,color:"#2a9d8f",cursor:"pointer",padding:"2px 0"}}>→ CHECKIN here</div>}
                   {isHere&&avail===0&&<div style={{fontSize:7,color:"#e63946"}}>FULL tonight.</div>}
                 </div>;
               })}
-              <div style={{marginTop:8,fontSize:7,color:"#2a2a2a",borderTop:"1px solid #111",paddingTop:6}}>
+              <div style={{marginTop:8,fontSize:7,color:"#666",borderTop:"1px solid #111",paddingTop:6}}>
                 <div style={{marginBottom:3}}>🧠 Mental: {gs.survival.mental||70}%</div>
                 {(gs.survival.mental||70)<30&&<div style={{color:"#e63946"}}>Critical. Find a shelter or talk to someone.</div>}
                 <div style={{color:"#1e4e3a",marginTop:4}}>Letters written to world log: {world.letters?.length||0}</div>
@@ -3932,7 +3931,7 @@ export default function NYC(){
             </div>}
             {tab==="crews"&&<CrewPanel gs={gs} world={world} onJoin={joinCrewPanel}/>}
             {tab==="journal"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-              <div style={{color:"#2a2a2a",letterSpacing:2,marginBottom:6}}>// {gs.name.toUpperCase()}'s JOURNAL</div>
+              <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// {gs.name.toUpperCase()}'s JOURNAL</div>
               {/* backstory summary */}
               {gs.backstory&&Object.keys(gs.backstory).length>0&&<div style={{marginBottom:8,padding:"6px 8px",border:"1px solid #e9c46a22",background:"#e9c46a05"}}>
                 <div style={{fontSize:7,color:"#e9c46a",letterSpacing:1,marginBottom:4}}>ORIGIN</div>
@@ -3944,12 +3943,12 @@ export default function NYC(){
               </div>}
               {/* journal entries */}
               <div style={{display:"flex",flexDirection:"column",gap:3,maxHeight:320,overflowY:"auto"}}>
-                {(gs.journal||[]).length===0&&<div style={{color:"#1e1e1e"}}>Nothing written yet. Live some days first.</div>}
+                {(gs.journal||[]).length===0&&<div style={{color:"#999"}}>Nothing written yet. Live some days first.</div>}
                 {(gs.journal||[]).slice(-20).map((entry,i)=>(
                   <div key={i} style={{fontSize:7,color:"#6a8a6a",lineHeight:1.6,borderLeft:"1px solid #1e3e1e",paddingLeft:6}}>{entry}</div>
                 ))}
               </div>
-              <div style={{marginTop:8,fontSize:7,color:"#2a2a2a"}}>JOURNAL · BACKSTORY commands</div>
+              <div style={{marginTop:8,fontSize:7,color:"#666"}}>JOURNAL · BACKSTORY commands</div>
             </div>}
 
           </div>
@@ -3961,7 +3960,7 @@ export default function NYC(){
             <div style={{maxWidth:460,width:"92%",border:"1px solid #e6394666",background:"#0a0a0a",padding:20,maxHeight:"80vh",overflowY:"auto"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                 <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:"#e63946",letterSpacing:2}}>⚔ {combat.enemy?.name}</div>
-                <div style={{fontSize:9,color:"#555"}}>Round {combat.round}</div>
+                <div style={{fontSize:9,color:"#999"}}>Round {combat.round}</div>
               </div>
               {/* HP bars */}
               <div style={{marginBottom:10}}>
@@ -3995,7 +3994,7 @@ export default function NYC(){
                   const isHit=s.includes("HIT")||s.includes("damage")||s.includes("down.");
                   const isMiss=s.includes("MISS")||s.includes("dodge");
                   const isCrit=s.includes("CRITICAL");
-                  return <div key={i} style={{fontSize:9,color:isCrit?"#f4a261":isHit?"#e63946":isMiss?"#555":"#666",marginBottom:2,lineHeight:1.5}}>{s}</div>;
+                  return <div key={i} style={{fontSize:9,color:isCrit?"#f4a261":isHit?"#e63946":isMiss?"#777":"#888",marginBottom:2,lineHeight:1.5}}>{s}</div>;
                 })}
               </div>
             </div>
@@ -4021,7 +4020,7 @@ export default function NYC(){
                   </div>
                 ))}
               </div>
-              <div style={{fontSize:8,color:"#2a2a2a",marginTop:12}}>Or type CHOOSE 1{rareEvent.choices.length>1?" / CHOOSE 2":""} in the command line.</div>
+              <div style={{fontSize:8,color:"#666",marginTop:12}}>Or type CHOOSE 1{rareEvent.choices.length>1?" / CHOOSE 2":""} in the command line.</div>
             </div>
           </div>
         )}
@@ -4031,8 +4030,8 @@ export default function NYC(){
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
           <span style={{color:"#e9c46a",fontSize:12,flexShrink:0}}>▶</span>
-          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="type command..." autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:13,letterSpacing:1,minWidth:0}}/>
-          <div onClick={()=>inputRef.current?.focus()} style={{fontSize:8,color:"#2a2a2a",padding:"4px 8px",border:"1px solid #1a1a1a",cursor:"pointer",flexShrink:0}}>ENTER ↵</div>
+          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="type command..." autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
+          <div onClick={()=>inputRef.current?.focus()} style={{fontSize:8,color:"#666",padding:"4px 8px",border:"1px solid #1a1a1a",cursor:"pointer",flexShrink:0}}>ENTER ↵</div>
         </div>
 
       </div>
