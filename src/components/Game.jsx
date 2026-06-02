@@ -1773,8 +1773,23 @@ export default function NYC(){
     if(!fresh)return;
     worldRef.current=fresh;
     const prevMsgCount=(wMsgs||[]).length;
-    const newMsgs=fresh.messages||[];
-    setWorld(fresh);
+    // normalize: Supabase returns snake_case, game uses camelCase
+    // messages column is just "messages" in both - should work
+    // but player_alerts vs playerAlerts needs merging
+    const normalized={
+      ...fresh,
+      messages: fresh.messages||[],
+      pvpLog: fresh.pvp_log||fresh.pvpLog||[],
+      playerAlerts: fresh.player_alerts||fresh.playerAlerts||{},
+      wallOfDead: fresh.wall_of_dead||fresh.wallOfDead||[],
+      worldHistory: fresh.world_history||fresh.worldHistory||[],
+      captainBoro: fresh.captain_boro||fresh.captainBoro||null,
+      captainDay: fresh.captain_day||fresh.captainDay||0,
+      shelterCheckins: fresh.shelter_checkins||fresh.shelterCheckins||{},
+      copPresence: fresh.cop_presence||fresh.copPresence||{},
+    };
+    const newMsgs=normalized.messages;
+    setWorld(normalized);
     setWMsgs(newMsgs);
     // auto scroll chat if open
     setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
@@ -1787,7 +1802,7 @@ export default function NYC(){
     setPulse(true);setTimeout(()=>setPulse(false),800);
     const g=gsRef.current;if(!g)return;
     // player alerts — attacks, bounties, wires, dominates etc
-    const alerts=(fresh.playerAlerts||fresh.player_alerts||{})[g.name]||[];
+    const alerts=(normalized.playerAlerts||{})[g.name]||[];
     if(alerts.length>0){
       alerts.forEach(a=>{
         const msg=typeof a==="string"?a:a.msg;
@@ -1802,7 +1817,7 @@ export default function NYC(){
     }
     // corner stolen alert
     (g.cornersOwned||[]).forEach(bId=>{
-      if(fresh.corners?.[bId]&&fresh.corners[bId]!==g.name)
+      if(normalized.corners?.[bId]&&normalized.corners[bId]!==g.name)
         setFeed(p=>[...p,`⚠ ${fresh.corners[bId]} took your ${getBoro(bId)?.name} corner while you were away.`]);
     });
   };
@@ -1837,17 +1852,17 @@ export default function NYC(){
     };
   },[]);
 
-  // Game clock — 1 real second = 4 game minutes
+  // Game clock — 1 real minute = 1 game minute (slow, atmospheric)
   useEffect(()=>{
     const clockTick=setInterval(()=>{
       setGameTime(prev=>{
         let {hour,minute}=prev;
-        minute+=4;
-        if(minute>=60){minute=minute-60;hour++;}
+        minute+=1;
+        if(minute>=60){minute=0;hour++;}
         if(hour>=26){return{hour:8,minute:0};}
         return{hour,minute};
       });
-    },1000);
+    },60000); // every real minute = 1 game minute
     return()=>clearInterval(clockTick);
   },[]);
 
