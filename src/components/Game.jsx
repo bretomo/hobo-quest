@@ -792,7 +792,7 @@ const getWeather=day=>{
   const idx=day%pool.length;
   return WEATHER_TYPES[pool[idx]];
 };
-const defWorld=()=>({corners:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{}});
+const defWorld=()=>({corners:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{}});
 
 // ── PRESTIGE ──────────────────────────────────────────────────────────────────
 const PRESTIGE_LEVEL = 10; // level required to retire
@@ -1200,6 +1200,45 @@ const MENTAL_CONSEQUENCES = {
     "You woke up behind a dumpster on a block you don't recognize.",
     "The city feels like it's contracting. Getting smaller every day.",
   ],
+};
+
+// ── DAILY CONTRACTS ─────────────────────────────────────────────────────────────
+const CONTRACT_TEMPLATES = [
+  // Deal contracts
+  {id:"sell_weed_bkn",   cat:"deal",   title:"Move Weight in Brooklyn",    desc:"A connect needs 3 units of weed moved in Brooklyn. Today only.",           task:{type:"sell",product:"weed",qty:3,boro:"brooklyn"},   reward:{cash:120,xp:40,rep:1},  diff:"easy"},
+  {id:"sell_powder_man", cat:"deal",   title:"Manhattan Powder Run",       desc:"Premium powder. Manhattan buyers. 4 units before midnight.",                task:{type:"sell",product:"powder",qty:4,boro:"manhattan"}, reward:{cash:280,xp:60,rep:2},  diff:"medium"},
+  {id:"sell_pills_qns",  cat:"deal",   title:"Queens Pills Drop",          desc:"Medical-grade pills needed in Queens. 3 units. Cash on delivery.",           task:{type:"sell",product:"pills",qty:3,boro:"queens"},    reward:{cash:150,xp:45,rep:1},  diff:"easy"},
+  {id:"move_any_bronx",  cat:"deal",   title:"Bronx Distribution",        desc:"Don't care what it is. Move 5 units of anything in the Bronx.",              task:{type:"sell",product:"any",qty:5,boro:"bronx"},       reward:{cash:200,xp:50,rep:2},  diff:"medium"},
+  {id:"multi_boro",      cat:"deal",   title:"Cross-Borough Run",         desc:"Sell in 3 different boroughs today. Each one counts.",                       task:{type:"multiboro",qty:3},                             reward:{cash:350,xp:80,rep:3},  diff:"hard"},
+  // Combat contracts
+  {id:"fight_anyone",    cat:"combat", title:"Prove Yourself",            desc:"Word is you're soft. Start a fight today. Win it.",                          task:{type:"fight",wins:1},                                reward:{cash:100,xp:35,heat:1}, diff:"easy"},
+  {id:"rob_player",      cat:"combat", title:"Tax Collection",            desc:"Someone in this city owes money. Doesn't matter who. Rob a player today.",   task:{type:"rob",qty:1},                                   reward:{cash:150,xp:50,heat:2}, diff:"medium"},
+  {id:"boss_hunt",       cat:"combat", title:"Take Down a Boss",          desc:"There's a boss-level threat operating in the city. Neutralize them.",         task:{type:"bossfight",qty:1},                             reward:{cash:400,xp:150,rep:3}, diff:"hard"},
+  {id:"corner_war",      cat:"combat", title:"Corner Takeover",           desc:"Claim a corner that belongs to someone else today.",                          task:{type:"corner_steal",qty:1},                          reward:{cash:180,xp:55,rep:2},  diff:"medium"},
+  // Survival contracts
+  {id:"stay_clean",      cat:"survive","title":"Ghost Mode",              desc:"Don't get wanted all day. Stay off the radar from now until you sleep.",      task:{type:"no_wanted"},                                   reward:{cash:80,xp:30,heat:-2}, diff:"easy"},
+  {id:"low_heat",        cat:"survive","title":"Ice Cold",                desc:"End the day with heat below 3. Start managing it now.",                       task:{type:"low_heat",threshold:3},                        reward:{cash:120,xp:40,rep:1},  diff:"medium"},
+  {id:"survive_blizzard",cat:"survive","title":"Winter Soldier",          desc:"Survive the day without dropping below 50% warmth. No shelter allowed.",     task:{type:"warmth",threshold:50},                         reward:{cash:150,xp:45},        diff:"medium",weatherOnly:"blizzard"},
+  {id:"stay_fed",        cat:"survive","title":"Full Stomach",            desc:"Keep hunger above 60% all day. Actually take care of yourself.",              task:{type:"hunger",threshold:60},                         reward:{cash:90,xp:30,mental:15},diff:"easy"},
+  // Community contracts
+  {id:"talk_all_npcs",   cat:"community","title":"Working the Room",      desc:"Talk to 3 different NPCs today. Build relationships.",                        task:{type:"talk",qty:3},                                  reward:{cash:80,xp:35,rep:2},   diff:"easy"},
+  {id:"help_shelter",    cat:"community","title":"Give Something Back",   desc:"Check into a shelter today. Donate $20 on the way out.",                      task:{type:"shelter",cash:20},                             reward:{cash:60,xp:25,mental:20,rep:1},diff:"easy"},
+  {id:"panhandle_grind", cat:"community","title":"The Long Sit",          desc:"Panhandle 4 times today. The city owes you something.",                       task:{type:"panhandle",qty:4},                             reward:{cash:100,xp:30,mental:10},diff:"medium"},
+];
+
+// Generate 3 daily contracts for the world
+const generateDailyContracts=(day,weather)=>{
+  // Deterministic per day so all players see the same contracts
+  const seed=day*7+weather.id.length;
+  const available=CONTRACT_TEMPLATES.filter(c=>!c.weatherOnly||c.weatherOnly===weather.id);
+  const picks=[];const used=new Set();
+  // One easy, one medium, one hard/medium
+  const byDiff={easy:available.filter(c=>c.diff==="easy"),medium:available.filter(c=>c.diff==="medium"),hard:available.filter(c=>c.diff==="hard")};
+  const pick=(pool,s)=>{const idx=(s*31+seed)%pool.length;return pool[idx];};
+  const c1=pick(byDiff.easy,1);
+  const c2=pick(byDiff.medium.filter(c=>c.id!==c1?.id),2);
+  const c3=pick([...byDiff.hard,...byDiff.medium].filter(c=>c.id!==c1?.id&&c.id!==c2?.id),3);
+  return[c1,c2,c3].filter(Boolean).map(c=>({...c,expires:day,completedBy:[]}));
 };
 
 // ── EXPANDED RARE EVENTS ──────────────────────────────────────────────────────
@@ -1881,6 +1920,81 @@ export default function NYC(){
     };
   };
 
+  // Track contract progress
+  const trackContract=(taskType,data={})=>{
+    if(!gs)return;
+    const today=world.contracts||[];
+    if(today.length===0)return;
+    const myCompleted=gs.contractsCompleted||[];
+    const myProgress=gs.contractProgress||{};
+    let newCompleted=[...myCompleted];
+    let newProgress={...myProgress};
+    let completedNow=[];
+    today.forEach(c=>{
+      if(myCompleted.includes(c.id))return;
+      const prog=newProgress[c.id]||{count:0,boros:[]};
+      let progNew={...prog};
+      let complete=false;
+      // Check if this action advances the contract
+      if(c.task.type==="sell"&&taskType==="sell"){
+        if(c.task.product==="any"||(data.product&&c.task.product===data.product)){
+          if(!c.task.boro||c.task.boro===data.boro){
+            progNew.count=(progNew.count||0)+(data.qty||1);
+            if(progNew.count>=(c.task.qty||1))complete=true;
+          }
+        }
+      }
+      if(c.task.type==="multiboro"&&taskType==="sell"){
+        const boros=[...(progNew.boros||[])];
+        if(!boros.includes(data.boro)){boros.push(data.boro);progNew.boros=boros;}
+        if(boros.length>=(c.task.qty||3))complete=true;
+      }
+      if(c.task.type==="fight"&&taskType==="fight_win"){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.wins||1))complete=true;}
+      if(c.task.type==="rob"&&taskType==="rob_win"){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.qty||1))complete=true;}
+      if(c.task.type==="bossfight"&&taskType==="boss_win"){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.qty||1))complete=true;}
+      if(c.task.type==="corner_steal"&&taskType==="corner_steal"){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.qty||1))complete=true;}
+      if(c.task.type==="talk"&&taskType==="talk"){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.qty||1))complete=true;}
+      if(c.task.type==="panhandle"&&taskType==="panhandle"&&data.success){progNew.count=(progNew.count||0)+1;if(progNew.count>=(c.task.qty||1))complete=true;}
+      if(c.task.type==="shelter"&&taskType==="shelter"){complete=true;}
+      if(c.task.type==="no_wanted"&&taskType==="got_wanted"){complete=false;progNew.failed=true;}
+      if(c.task.type==="low_heat"&&taskType==="sleep_check"){if(data.heat<=(c.task.threshold||3))complete=true;}
+      if(c.task.type==="warmth"&&taskType==="sleep_check"){if(data.warmth>=(c.task.threshold||50))complete=true;}
+      if(c.task.type==="hunger"&&taskType==="sleep_check"){if(data.hunger>=(c.task.threshold||60))complete=true;}
+      newProgress[c.id]=progNew;
+      if(complete&&!progNew.failed){
+        newCompleted.push(c.id);
+        completedNow.push(c);
+      }
+    });
+    if(completedNow.length>0){
+      updGs(g=>{
+        let ng={...g,contractsCompleted:newCompleted,contractProgress:newProgress};
+        completedNow.forEach(c=>{
+          ng={...ng,
+            cash:ng.cash+(c.reward.cash||0),
+            xp:ng.xp+(c.reward.xp||0),
+            heat:clamp(ng.heat+(c.reward.heat||0),0,10),
+            survival:{...ng.survival,mental:Math.min(100,(ng.survival.mental||70)+(c.reward.mental||0))},
+          };
+          if(c.reward.rep){BOROUGHS.forEach(b=>{ng={...ng,rep:{...ng.rep,[b.id]:Math.min(10,(ng.rep[b.id]||0)+c.reward.rep)}};})}
+        });
+        return ng;
+      });
+      setTimeout(()=>{
+        completedNow.forEach(c=>{
+          push("","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "📋 CONTRACT COMPLETE: "+c.title,
+            "+$"+( c.reward.cash||0)+(c.reward.xp?" +"+c.reward.xp+"XP":"")+(c.reward.rep?" +rep":""),
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━","");
+          const bWs=broadcastActivity(world,gs.name+" completed contract: "+c.title+". +$"+c.reward.cash+".","📋");
+          setWorld(bWs);saveWorld(bWs);
+        });
+      },100);
+    } else if(newCompleted.length!==myCompleted.length||JSON.stringify(newProgress)!==JSON.stringify(myProgress)){
+      updGs(g=>({...g,contractsCompleted:newCompleted,contractProgress:newProgress}));
+    }
+  };
+
   const addWorldHistory=(ws,type,actor,detail,bId)=>{
     const entry={type,actor,detail,boro:bId,time:Date.now(),day:ws.players?.[actor]?.day||1};
     return{...ws,worldHistory:[...(ws.worldHistory||[]).slice(-49),entry]};
@@ -2050,6 +2164,7 @@ export default function NYC(){
         } else {
           if(Math.round(g.heat)>=10&&!g.wanted){
             g.wanted=true;
+            trackContract('got_wanted');
             setTimeout(()=>{setFeed(f=>[...f,``,`🚨 WANTED. Cops hunting you. Lay low.`,``]);journalEvent('wanted');},10);
           } else if(g.heat<7&&g.wanted){
             g.wanted=false;
@@ -2259,6 +2374,8 @@ export default function NYC(){
       activeQuests:{},completedQuests:[],questProgress:{},
       title:"",
       dailySells:{},
+      contractsCompleted:[],
+      contractProgress:{},
       wantedStars:0,patrolEncountered:false,
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
@@ -2677,7 +2794,7 @@ export default function NYC(){
         `  BUY SAFEHOUSE · UPGRADE SAFEHOUSE`,`  STASH [product] · UNSTASH [product] · REST SAFE · STASH CASH · RETRIEVE CASH`,
         `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
         `  FORM CREW [name] · JOIN CREW [name] · LEAVE CREW`,`  CREW · CREWS · DEPOSIT [amt]`,
-        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
+        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  CONTRACTS · CONTRACT PROGRESS · WANTED POSTERS`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
         `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item] · CLIENT (Survivor only)`,
         `  WRITE [message] · READ LETTERS`,
         gs.isJunkie?`  SCORE — find street product cheap`:"",
@@ -2897,6 +3014,7 @@ export default function NYC(){
       setWorld(actWs);saveWorld(actWs);
       const archSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       if(archSub?.product===pKey){updGs(g=>({...g,addiction:Math.min(100,g.addiction+rnd(1,3))}));}
+      trackContract("sell",{product:pKey,qty,boro});
       push(`Moved ${qty}× ${PRODUCTS[pKey].name}. +$${total}${weather.bustMult<1?" (weather helped)":""}.`);return;
     }
 
@@ -3171,6 +3289,7 @@ export default function NYC(){
       let ws=addWorldHistory(world,"corner",gs.name,`${gs.name} claimed ${getBoro(boro)?.name} corner`,boro);
       ws=notifyPlayers(ws,gs.name,`🚩 ${gs.name} just claimed ${getBoro(boro)?.name} corner.`);
       ws=broadcastActivity(ws,`${gs.name} locked down ${getBoro(boro)?.name}. Corner claimed.`,"🚩");
+      if(ws.corners?.[boro]&&ws.corners[boro]!==gs.name)trackContract('corner_steal');
       ws={...ws,corners:{...ws.corners,[boro]:gs.name}};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
       updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro]},30,"claim"));
       push(`You claimed ${b.name} corner.`);journalEvent('firstCorner',boro);return;
@@ -3188,6 +3307,7 @@ export default function NYC(){
       push(``,`⚔ ${enemy.name} ${fightIntros[rnd(0,fightIntros.length-1)]}`,``,`${enemy.desc}`,``,`FIGHT · FLEE · USE [ability]`);
       resolveCombat(gs,eType,
         (loot)=>{const isBossWin=ENEMIES[enemyType]?.boss;
+      trackContract(isBossWin?'boss_win':'fight_win');
       const endMsgs=isBossWin?[ENEMIES[enemyType].winMsg||"Boss down."]:["Over. You walk away.","Done. They will not try that again.","You end it before it gets worse."];
       push("",endMsgs[rnd(0,endMsgs.length-1)]);
       if(isBossWin){
@@ -3258,6 +3378,53 @@ export default function NYC(){
     if(bnM){const amt=parseInt(bnM[2]);if(amt<10){push(`Min $10.`);return;}if(amt>gs.cash){push(`Don't have $${amt}.`);return;}
       const ws={...world,bounties:{...(world.bounties||{}),[bnM[1]]:((world.bounties||{})[bnM[1]]||0)+amt}};setWorld(ws);saveWorld(ws);
       updGs(g=>({...g,cash:g.cash-amt}));push(`$${amt} bounty on ${bnM[1]}.`);return;}
+    // CONTRACTS — daily contract board
+    if(C==="CONTRACTS"||C==="CONTRACT BOARD"||C==="BOARD"){
+      // Generate contracts for today if needed
+      let currentContracts=world.contracts||[];
+      if(world.contractsDay!==gs.day||currentContracts.length===0){
+        currentContracts=generateDailyContracts(gs.day,weather);
+        const cws={...world,contracts:currentContracts,contractsDay:gs.day};
+        setWorld(cws);saveWorld(cws);
+      }
+      const myCompleted=gs.contractsCompleted||[];
+      push("",
+        "📋 DAILY CONTRACT BOARD — Day "+gs.day,
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "Three contracts. One day. Complete them for cash, XP, and rep.",
+        "",
+        ...currentContracts.map((c,i)=>{
+          const done=myCompleted.includes(c.id);
+          const diff=c.diff==="hard"?"🔴":c.diff==="medium"?"🟡":"🟢";
+          const reward=`$${c.reward.cash||0}${c.reward.xp?` +${c.reward.xp}XP`:""}${c.reward.rep?` +${c.reward.rep}rep`:""}${c.reward.heat?` heat${c.reward.heat}`:""}${c.reward.mental?` +mental`:""}`;
+          return `${done?"✓":"○"} ${diff} ${c.title}
+   ${c.desc}
+   Reward: ${reward}`;
+        }),
+        "",
+        "Progress tracked automatically. Complete tasks today.",
+        "Type CONTRACTS to check progress.");
+      return;
+    }
+    // CONTRACT PROGRESS — check what's done
+    if(C==="CONTRACT PROGRESS"||C==="MY CONTRACTS"){
+      const myC=gs.contractsCompleted||[];
+      const myP=gs.contractProgress||{};
+      const today=world.contracts||[];
+      push("","📋 YOUR CONTRACT PROGRESS","",
+        ...today.map(c=>{
+          const done=myC.includes(c.id);
+          const prog=myP[c.id]||{};
+          let status="";
+          if(done){status="✓ COMPLETE";}
+          else if(c.task.type==="sell"||c.task.type==="fight"||c.task.type==="talk"||c.task.type==="panhandle"){
+            const curr=prog.count||0;const needed=c.task.qty||1;
+            status=`${curr}/${needed} done`;
+          } else {status="In progress";}
+          return `${done?"✓":"○"} ${c.title}: ${status}`;
+        }));
+      return;
+    }
     if(C==="BOUNTIES"||C==="BOUNTY BOARD"){
       const e=Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0);
       push("","☠ BOUNTY BOARD","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
@@ -3334,7 +3501,8 @@ export default function NYC(){
           `Cops ran a sweep on ${getBoro(boro)?.name} last night. Should be quiet today.`];
         push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``,`💡 ${hotTip[rnd(0,hotTip.length-1)]}`);
       } else {
-        push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``);
+        trackContract('talk');
+      push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``);
       }
       setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));
       updGs(g=>{
@@ -3438,6 +3606,8 @@ export default function NYC(){
       // Clean old day-keyed supply entries
       Object.keys(newSupply).filter(k=>{const m=k.match(/_d(\d+)$/);return m&&parseInt(m[1])<gs.day-2;}).forEach(k=>delete newSupply[k]);
       const safePassive=Object.entries(world.safehouses||{}).filter(([,s])=>s.owner===gs.name||(gs.crew&&s.crewOwner===gs.crew)).length*rnd(5,10);
+      // Check survive-type contracts on sleep
+      trackContract('sleep_check',{heat:gs.heat,warmth:gs.survival.warmth,hunger:gs.survival.hunger});
       const nextDay=gs.day+1;const nextWeather=getWeather(nextDay);
       // junkie habit cost
       let habitCost=0;let habitMsg="";
@@ -3462,6 +3632,7 @@ export default function NYC(){
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
         dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
+        contractsCompleted:[],contractProgress:{},
         dayJobDone:false,hasMetrocard:false,
 
           informsToday:0,patrolEncountered:false,feedUsed:false};
@@ -3626,6 +3797,7 @@ export default function NYC(){
            "The dog sits. Looks up with those eyes. Three people stop. You end up with $"+earned+".",
            "Guy in a suit walks past three times before the dog gets him. $"+earned+"."][rnd(0,2)]:
           PANHANDLE_MSGS[rnd(0,PANHANDLE_MSGS.length-1)];
+        trackContract('panhandle',{success:true});
         updGs(g=>applyXP({...g,cash:g.cash+earned,panhandleCount:(g.panhandleCount||0)+1,
           survival:{...g.survival,mental:clamp((g.survival.mental||70)-mentalCost,0,100),energy:clamp(g.survival.energy-energyCost,0,100)}},gs.isDrifter?3:2,"hustle"));
         push(panMsg,`+$${earned}. Mental -${mentalCost}. Energy -${energyCost}.`,panToday>=2?`People are recognizing you. Returns dropping.`:"");
@@ -3669,6 +3841,7 @@ export default function NYC(){
         heat:clamp(g.heat-1,0,10),
         shelterCheckins:{...(g.shelterCheckins||{}),[boro]:(g.shelterCheckins?.[boro]||0)+1},
       }));
+      trackContract("shelter");
       push(`You sign in at ${s.name}.`,`A real bed. Warm. Safe.`,`Hunger eased. Warmth restored. Mental health up.`,`You sleep better than you have in weeks.`);journalEvent("shelter",s.name);
       return;
     }
@@ -4789,6 +4962,23 @@ export default function NYC(){
         "","Each SLEEP adds 1 regular (max 5). Regulars pay while you sleep.");
       return;
     }
+    // WANTED POSTERS — view all active wanted posters
+    if(C==="WANTED POSTERS"||C==="POSTERS"){
+      const bounties=Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0);
+      if(bounties.length===0){push("No active wanted posters. BOUNTY [player] [amount] to post one.");return;}
+      push("","⚠ WANTED POSTERS","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ...bounties.map(([n,b])=>{
+          const amt=typeof b==="object"?b.amount:b;
+          const poster=typeof b==="object"?b.by:"anon";
+          const pData=world.players?.[n];
+          const lastBoro=pData?getBoro(pData.borough)?.name:"unknown borough";
+          return "☠ "+n+" — $"+amt+"
+   Posted by: "+poster+"
+   Last seen: "+lastBoro;
+        }),
+        "","Collect by winning FIGHT against the target.");
+      return;
+    }
     if(C==="VISION"){
       if(!gs.isSchizo){push("You don't see visions. Type LOOK.");return;}
       const hasVisionSkill=(gs.skills||[]).includes("the_knowing");
@@ -5340,7 +5530,32 @@ export default function NYC(){
               </div>)}
               {others.length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// ONLINE</div>
               {others.map(p=><div key={p.name} style={{fontSize:7,marginBottom:2,display:"flex",justifyContent:"space-between"}}><span style={{color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name} · {getBoro(p.borough)?.short}</span>{p.heat>=9&&<span style={{color:"#e63946",fontSize:6}}>🚨</span>}</div>)}</>}
-              {Object.entries(world.bounties||{}).filter(([,v])=>v>0).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// BOUNTIES</div>{Object.entries(world.bounties||{}).filter(([,v])=>v>0).map(([n,a])=><div key={n} style={{fontSize:7,color:"#e63946",marginBottom:2}}>☠ {n}: ${a}</div>)}</>}
+              {Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0).length>0&&<>
+                <div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// BOUNTIES</div>
+                {Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0).map(([n,b])=>{
+                  const amt=typeof b==="object"?b.amount:b;
+                  const poster=typeof b==="object"?b.by:"anon";
+                  const isMe=n===gs.name;
+                  return <div key={n} style={{marginBottom:4,padding:"4px 6px",border:`1px solid #e6394633`,background:isMe?"#e6394608":"transparent"}}>
+                    <div style={{fontSize:8,color:"#e63946",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>☠ WANTED: {n} {isMe?"← YOU":""}</div>
+                    <div style={{fontSize:7,color:"#888"}}>Bounty: ${amt}</div>
+                    <div style={{fontSize:6,color:"#444"}}>Posted by {poster} · FIGHT {n} to collect</div>
+                  </div>;
+                })}
+              </>}
+              {/* WANTED POSTER — full visual for bounty targets */}
+              {(()=>{
+                const myBounty=world.bounties?.[gs.name];
+                const myAmt=myBounty&&typeof myBounty==="object"?myBounty.amount:myBounty||0;
+                if(!myAmt>0)return null;
+                return <div style={{marginTop:8,padding:"8px",border:"2px solid #e63946",background:"#0a0000",textAlign:"center"}}>
+                  <div style={{fontSize:9,color:"#e63946",letterSpacing:3,fontFamily:"'Bebas Neue',sans-serif"}}>⚠ WANTED DEAD OR ALIVE ⚠</div>
+                  <div style={{fontSize:18,color:"#e9c46a",fontFamily:"'Bebas Neue',sans-serif",margin:"4px 0"}}>{gs.name}</div>
+                  <div style={{fontSize:8,color:"#888"}}>{gs.archetype?.name}</div>
+                  <div style={{fontSize:14,color:"#e63946",fontFamily:"'Bebas Neue',sans-serif",margin:"4px 0"}}>REWARD: ${myAmt}</div>
+                  <div style={{fontSize:6,color:"#555"}}>Last seen: {getBoro(boro)?.name} · Heat: {Math.round(gs.heat)}/10</div>
+                </div>;
+              })()}}
               {(world.pvpLog||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// RECENT HITS</div>{(world.pvpLog||[]).slice(-4).reverse().map((ev,i)=><div key={i} style={{fontSize:7,color:ev.won?"#e63946":"#444",marginBottom:2}}>{ev.attacker}→{ev.victim} · {getBoro(ev.boro)?.short} · {ev.won?`$${ev.stolen}`:"failed"}</div>)}</>}
               {(world.worldHistory||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// WORLD HISTORY</div>{(world.worldHistory||[]).slice(-5).reverse().map((h,i)=><div key={i} style={{fontSize:7,color:"#4a6e4a",marginBottom:2,lineHeight:1.4}}>[Day {h.day}] {h.detail}</div>)}</>}
               {(world.legends||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// LEGENDS</div>{(world.legends||[]).slice(-3).reverse().map((l,i)=><div key={i} style={{fontSize:7,color:"#e9c46a",marginBottom:2}}>{l.badge} {l.name} · P{l.prestige}</div>)}</>}
