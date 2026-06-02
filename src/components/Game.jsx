@@ -859,7 +859,7 @@ const COMBAT_ABILITIES = {
                  {id:"call_backup",  name:"Call Backup",   cooldown:5, desc:"Call a contact. Enemy flees immediately.", fn:(gs,enemy)=>{return{log:[`📱 CALL BACKUP. You make one call. ${enemy.name} doesn't want those problems. Gone.`],enemyDmg:0,selfDmg:0,endCombat:true,cashCost:0};}}],
   rat:          [{id:"rat_out",      name:"Rat Out",       cooldown:3, desc:"Snitch mid-fight. Cops arrive. Enemy flees, you get heat +2.", fn:(gs,enemy)=>{return{log:[`🐀 RAT OUT. You call it in. ${enemy.name} scatters. Cops incoming.`],enemyDmg:0,selfDmg:0,endCombat:true,heatCost:2};}},
                  {id:"sucker_stab",  name:"Sucker Stab",   cooldown:4, desc:"Stab from behind. 3d4 guaranteed hit, no AC check.", fn:(gs,enemy)=>{const r=rollStr(4,3);return{log:[`🐀 SUCKER STAB! From behind. ${r.rolls.join("+")}=${r.total}. They didn't see it coming.`],enemyDmg:r.total,selfDmg:0,autoHit:true};}}],
-  vampire:      [{id:"bite",         name:"Bite",          cooldown:3, desc:"Drain life. 2d6 damage, steal that HP for yourself.", fn:(gs,enemy)=>{const r=rollStr(6,2);const dmg=r.total+mod(gs.stats?.charm||5);return{log:[`🧛 BITE! Fangs in. ${r.rolls.join("+")}=${r.total}+${mod(gs.stats?.charm||5)} charm = ${dmg} damage. You drain ${Math.floor(dmg/2)}hp back.`],enemyDmg:dmg,selfDmg:-Math.floor(dmg/2)};}},
+  vampire:      [{id:"bite",         name:"Bite",          cooldown:3, desc:"Drain life. 2d6 damage, steal that HP for yourself.", fn:(gs,enemy)=>{const r=rollStr(6,2);const dmg=r.total+mod(gs.stats?.charm||5);const drain=Math.floor(dmg/2);return{log:[`🧛 BITE! Fangs in. ${r.rolls.join("+")}=${r.total}+${mod(gs.stats?.charm||5)} charm = ${dmg} damage dealt. +${drain}hp drained back to you.`],enemyDmg:dmg,selfDmg:-drain};}},
                  {id:"hypnosis",     name:"Hypnosis",      cooldown:4, desc:"Lock eyes. Enemy frozen for 2 rounds, -4 attack after.", fn:(gs,enemy)=>{return{log:[`👁 HYPNOSIS. Your eyes go black. ${enemy.name} freezes. Can't look away.`],enemyDmg:0,selfDmg:0,stunEnemy:true,stunRounds:2,blindEnemy:true};}}],
 };
 
@@ -1415,7 +1415,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
-  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
+ useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
@@ -1874,7 +1874,15 @@ export default function NYC(){
             enemy={...enemy,hp:Math.max(0,enemy.hp-abilityResult.enemyDmg)};
             newLog.push(`  ${enemy.name} HP: ${enemy.hp}/${enemy.maxHp}`);
           }
-          if(abilityResult.selfDmg>0){playerHp=Math.max(1,playerHp-abilityResult.selfDmg);}
+          if(abilityResult.selfDmg>0){
+            playerHp=Math.max(1,playerHp-abilityResult.selfDmg);
+          } else if(abilityResult.selfDmg<0){
+            // negative selfDmg = healing (Bite drains life)
+            const healAmt=Math.abs(abilityResult.selfDmg);
+            const cs2=getCombatStats(gs2);
+            playerHp=Math.min(cs2.hp,playerHp+healAmt);
+            newLog.push(`  You absorb ${healAmt}hp. Your HP: ${playerHp}`);
+          }
           if(abilityResult.skipEnemyTurn)newSkipEnemy=true;
           if(abilityResult.stunEnemy)newStunEnemy=abilityResult.stunRounds||1;
           if(abilityResult.advantage)newAdvantage=true;
@@ -2976,15 +2984,15 @@ export default function NYC(){
       const feedHeal=hasSkill(gs,"blood_money")?30:15;
       const feedBonus=hasSkill(gs,"blood_money")?20:0;
       const ancientBlood=hasSkill(gs,"ancient_blood");
-      const healAmt=ancientBlood?gs.survival.health+100:feedHeal; // full heal if ancient blood
+      const healAmt=ancientBlood?100:feedHeal; // full heal if ancient blood
       const cash=rnd(15,35)+feedBonus;
       updGs(g=>applyXP({...g,
         cash:g.cash+cash,
         feedUsed:true,
         feedCount:(g.feedCount||0)+1,
         survival:{...g.survival,
-          health:clamp(healAmt,0,100),
-          warmth:clamp(g.survival.warmth+20,0,100), // blood warms you
+          health:clamp(g.survival.health+healAmt,0,100), // FEED heals, not sets
+          warmth:clamp(g.survival.warmth+20,0,100),
         }},12,"fight"));
       const feedMsgs=[
         `You find someone alone near the overpass. They don't remember anything afterward.`,
@@ -2992,7 +3000,8 @@ export default function NYC(){
         `The subway car empties out. You're alone with someone who shouldn't have been alone.`,
         `Quick. Quiet. They'll wake up confused but alive. Mostly.`,
       ];
-      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,`+$${cash}. Health restored ${feedHeal}hp.`);
+      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,`+$${cash}. Health +${healAmt}hp.${ancientBlood?" (Ancient Blood — full restore)":""}`);
+      if(gs.survival.health>=95)push(`You're at full strength.`);
       return;
     }
 
