@@ -544,7 +544,7 @@ const JOURNAL_EVENTS = {
   levelUp:      (gs,lvl)=>`Day ${gs.day}: Reached Level ${lvl}. Still here. Still standing.`,
   death:        (gs)=>`Day ${gs.day}: This is where it ended. Level ${gs.level}.`,
   blizzard:     (gs)=>`Day ${gs.day}: Survived a blizzard. Barely. The cold out here is different.`,
-  rareEvent:    (gs,title)=>`Day ${gs.day}: ${title}. The city keeps throwing things at you.`,
+  rareEvent:    (gs,title)=>title==="The Incident"?`Day ${gs.day}. Coordinates: unknown. Duration: 11 seconds. Object: unclassified. Witness: one person. One dog. Nobody else saw it. This entry is factual.`:`Day ${gs.day}: ${title}. The city keeps throwing things at you.`,
   shelter:      (gs,name)=>`Day ${gs.day}: Slept at ${name}. A real bed. Strange how much that means.`,
   prestige:     (gs)=>`Day ${gs.day}: Retired. Level ${gs.level}. Starting again. Different now.`,
   robbery:      (gs,name)=>`Day ${gs.day}: ${name} took from me. I won't forget.`,
@@ -977,6 +977,8 @@ const BASE_ITEMS = [
   {id:"dog_tags",    name:"Dog Tags",              slot:"accessory", rarity:"uncommon",  stats:{toughness:1,mental:5},         desc:"Never take them off.", classes:["veteran"]},
   {id:"fake_id",     name:"Fake ID",               slot:"accessory", rarity:"uncommon",  stats:{heat:-1,charm:1},              desc:"Someone else's problem.", classes:["schemer","rat","undocumented"]},
   // ── OREGON TRAIL QUEST ITEMS ──────────────────────────────────────────────
+  {id:"alien_report",  name:"Alien Encounter Report", slot:"accessory",rarity:"legendary",stats:{charm:2,streetiq:3},desc:"Eleven seconds. You were there. Nobody believes you. You know.",quest:true},
+  {id:"alien_footage", name:"Alien Footage",           slot:"accessory",rarity:"legendary",stats:{charm:5,hustle:2},desc:"You have footage of something nobody can explain. This is worth something to the right person.", quest:true},
   {id:"rope",        name:"Rope",                  slot:"accessory", rarity:"uncommon",  stats:{hustle:1},                     desc:"Heavy duty. Could hold a lot.", quest:true},
   {id:"wpbag",       name:"Waterproof Bag",         slot:"accessory", rarity:"rare",      stats:{},                             desc:"Keeps things dry. Crucial.", quest:true},
   {id:"raft_mat",    name:"Raft Materials",         slot:"accessory", rarity:"rare",      stats:{},                             desc:"Lashed together from whatever you could find. Probably fine.", quest:true},
@@ -1299,6 +1301,27 @@ const RARE_EVENTS = [
     choices:[
       {label:"Sell it",           fn:(g)=>({...g,cash:g.cash+30}), outcome:"$30. Done."},
       {label:"Make a call first", fn:(g)=>({...g,cash:g.cash+20,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20)}}), outcome:"Emergency calls go through. You make one you've been putting off. Then sell it for $20."},
+    ]},
+  // ── THE INCIDENT ─────────────────────────────────────────────────────────────
+  { id:"alien_incident", prob:0.015, title:"The Incident",
+    nightOnly:true, // only fires between midnight and 4am
+    boroughs:["queens","staten","brooklyn"], // outer borough, industrial zones
+    desc:"Your dog stops walking. Completely still. Not scared — focused. You follow her eyeline. Over the water. Something is hovering. Not a helicopter. No sound. No blinking lights. Just a shape that shouldn't be there, lit from inside, the color of something you don't have a word for. It stays for eleven seconds. Then it's gone. You count. Eleven seconds.",
+    descSchizo:"You knew this was coming. You told people. Nobody listened. The voices have been saying Red Hook for three weeks. You are standing in Red Hook at 3am and there it is. Eleven seconds. Then gone. You feel, for the first time in years, completely calm.",
+    descDrifter:"Your dog stopped first. That's how you know it was real. She's never wrong. You watched it together — you and her, standing at the waterfront at 3am, watching something that had no business being here. She wagged her tail once. You don't know what that means. You've been thinking about it ever since.",
+    choices:[
+      {label:"Walk toward it",   fn:(g)=>({...g,
+        xp:(g.xp||0)+200,
+        inventory:[...g.inventory,"Alien Encounter Report"],
+        title:g.title||(g.isSchizo?"FIRST CONTACT":"BELIEVER"),
+        survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+30)},
+      }), outcome:"You walk toward it. Eleven seconds of something impossible. Then dark water and the smell of the harbor and your own heartbeat. You stand there for a long time. You don't tell anyone. Nobody would believe you anyway. But you know. You know."},
+      {label:"Stay still",       fn:(g)=>({...g,
+        xp:(g.xp||0)+50,
+        survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)},
+      }), outcome:"You stay still. Watch it. Commit every detail to memory. The shape. The light. The silence. Eleven seconds. When it's gone you walk away and don't look back. Some things you carry alone."},
+      {label:"Film it",          fn:(g)=>{const hasPhone=g.inventory.includes("Burner Phone")||g.inventory.includes("Found Phone")||g.inventory.includes("Burner");return hasPhone?{...g,xp:(g.xp||0)+300,inventory:[...g.inventory,"Alien Footage","Alien Encounter Report"],title:g.title||"WITNESS"}:{...g,xp:(g.xp||0)+50,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+10)}};},
+        outcome:"You reach for your phone. If you have one, you film it. If you don't, you watch it go and decide you'll remember everything. Either way it changes something."},
     ]},
   { id:"veteran_moment", prob:0.02, title:"A Familiar Sound",
     desc:"A car backfires on 8th Avenue. You're on the ground before you know why. When you look up, someone's watching.",
@@ -1825,6 +1848,11 @@ export default function NYC(){
       cloudy:"Gray. Quiet. The kind of day where things happen without witnesses.",
     };
     headlines.push(weatherNotes[weather.id]||"Another day out here.");
+    // Check for alien incident in world history
+    const alienEvent=history.find(h=>h.type==="alien");
+    if(alienEvent&&day-( alienEvent.day||0)<=1){
+      headlines.push(`${alienEvent.actor} reported unusual activity over the waterfront last night. No official comment.`);
+    }
 
     // Dead
     if(legends.length>0){
@@ -2616,6 +2644,14 @@ export default function NYC(){
         if(!choice){push(`Choose 1${rareEvent.choices.length>1?" or 2":""}.`);return;}
         updGs(g=>choice.fn(g));
         push(``,choice.outcome,``);
+        // Special broadcast for alien incident
+        if(rareEvent.id==="alien_incident"){
+          const aWs=broadcastActivity(world,`🛸 Something happened near the ${getBoro(boro)?.name} waterfront at ${(()=>{const h=gameTime?.hour||3;return h>12?`${h-12}am`:`${h}am`;})()}. ${gs.name} was there.`,"🛸");
+          const aWs2=addWorldHistory(aWs,"alien",gs.name,`${gs.name} witnessed The Incident in ${getBoro(boro)?.name} on Day ${gs.day}.`,boro);
+          setWorld(aWs2);saveWorld(aWs2);
+          // Captain lays low
+          setTimeout(()=>push(``,`The Captain was in ${getBoro(boro)?.name} tonight. After what happened, he's not.`,``),500);
+        }
         setRareEvent(null);
         return;
       }
@@ -2699,11 +2735,19 @@ export default function NYC(){
       updGs(g=>applyXP(g,1,"look"));
       // rare event roll on LOOK
       if(!rareEvent){
-        const triggered=RARE_EVENTS.find(ev=>Math.random()<ev.prob);
+        const _hour=gameTime?.hour||12;
+        const _isNight=_hour>=22||_hour<4;
+        const triggered=RARE_EVENTS.filter(ev=>{
+          if(ev.nightOnly&&!_isNight)return false;
+          if(ev.boroughs&&!ev.boroughs.includes(boro))return false;
+          return true;
+        }).find(ev=>Math.random()<ev.prob);
         if(triggered){
           setTimeout(()=>{
             setRareEvent(triggered);
-            push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`⚡ ${triggered.title.toUpperCase()}`,triggered.desc,``,`Type CHOOSE 1${triggered.choices.length>1?` or CHOOSE 2`:``} to respond.`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+            const eventDesc=triggered.id==="alien_incident"&&gs.isSchizo?triggered.descSchizo:triggered.id==="alien_incident"&&gs.isDrifter?triggered.descDrifter:triggered.desc;
+            const choiceCount=triggered.choices.length;
+            push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`⚡ ${triggered.title.toUpperCase()}`,eventDesc,``,`Type CHOOSE 1${choiceCount>1?" or CHOOSE 2":""}${choiceCount>2?" or CHOOSE 3":""} to respond.`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
           },200);
         }
       }
