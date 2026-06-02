@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from "react";
-import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe, sendChatMessage } from '../lib/supabase';
+import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe, sendChatMessage, cleanStaleCharacters, deleteCharacter } from '../lib/supabase';
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=VT323&display=swap');`;
 
@@ -31,12 +31,33 @@ const CLASS_SUBSTANCE = {
   rat:          {name:"powder",  product:"powder", icon:"❄️", buyCost:0,  desc:"Paranoia feeds the habit."},
 };
 const ADDICTION_LEVELS = [
-  {min:0,  max:19, name:"Clean",     icon:"○", desc:"No dependency yet."},
-  {min:20, max:39, name:"Curious",   icon:"◔", desc:"Starting to notice the absence."},
-  {min:40, max:59, name:"Hooked",    icon:"◑", desc:"It's part of the routine now."},
-  {min:60, max:79, name:"Dependent", icon:"◕", desc:"Can't function right without it."},
-  {min:80, max:94, name:"Consumed",  icon:"●", desc:"It runs your day. Not you."},
-  {min:95, max:100,name:"Destroyed", icon:"☠", desc:"Everything else is secondary."},
+  {min:0,  max:19, name:"Clean",     icon:"○", color:"#2a9d8f", desc:"No dependency. You're in control.",
+    effects:{},
+  },
+  {min:20, max:39, name:"Curious",   icon:"◔", color:"#e9c46a", desc:"Starting to notice the absence. The city looks different without it.",
+    effects:{hustle:-1},
+  },
+  {min:40, max:59, name:"Hooked",    icon:"◑", color:"#f4a261", desc:"Part of the routine. You tell yourself you could stop.",
+    effects:{hustle:-1,charm:-1,energyDrain:5},
+  },
+  {min:60, max:79, name:"Dependent", icon:"◕", color:"#e76f51", desc:"Can't function right without it. The body insists.",
+    effects:{hustle:-2,charm:-2,toughness:-1,energyDrain:10,hungerDrain:10},
+  },
+  {min:80, max:94, name:"Consumed",  icon:"●", color:"#e63946", desc:"It runs your day. Not you. Everything else is logistics.",
+    effects:{hustle:-3,charm:-3,toughness:-2,streetiq:-1,energyDrain:15,hungerDrain:15,heatRisk:true},
+  },
+  {min:95, max:100,name:"Destroyed", icon:"☠", color:"#9d0208", desc:"Rock bottom. You know it. Part of you doesn't care anymore.",
+    effects:{hustle:-4,charm:-4,toughness:-3,streetiq:-2,energyDrain:20,hungerDrain:20,heatRisk:true,random_spend:true},
+  },
+];
+// Recovery NPC — Carmen, appears when addiction >= 80
+const CARMEN_DIALOGUE = [
+  {rep:0, line:"I run a drop-in center on 3rd. You don't have to be ready. You just have to show up."},
+  {rep:1, line:"Second day. You came back. That's more than most people manage."},
+  {rep:2, line:"The shaking will stop. It takes longer than anyone tells you. But it stops."},
+  {rep:3, line:"You're doing something most people never do. I mean that."},
+  {rep:4, line:"Recovery isn't a straight line. Yesterday doesn't erase today. Today counts."},
+  {rep:5, line:"I've been where you are. Different substance. Same math. You can come back from this."},
 ];
 const getAddictionLevel=(score)=>ADDICTION_LEVELS.find(l=>score>=l.min&&score<=l.max)||ADDICTION_LEVELS[0];
 const HIGH_EVENTS = {
@@ -107,6 +128,61 @@ const HUSTLE_SAME_BORO_HEAT = 2;
 const DEMAND_DROP = 0.22;         // price drop per seller (aggressive)
 const DEMAND_SPIKE = 0.25;        // price spike per day without supply
 
+// ── CORNER SYSTEM ─────────────────────────────────────────────────────────────
+const CORNER_BASE_INCOME = {
+  manhattan: [80,120],  // [min,max] per day — prime real estate
+  bronx:     [45,70],
+  brooklyn:  [50,75],
+  queens:    [40,65],
+  staten:    [20,35],   // low traffic, low pay
+};
+const CORNER_UPGRADE_COST  = [0, 150, 350, 700]; // cost to reach level 1,2,3
+const CORNER_UPGRADE_MULT  = [1.0, 1.5, 2.2, 3.5]; // income multiplier per level
+const CORNER_HEAT_DRAIN = { // passive heat added per day of ownership
+  manhattan: 0.3,
+  bronx:     0.2,
+  brooklyn:  0.15,
+  queens:    0.15,
+  staten:    0.1,
+};
+const CORNER_PRESENCE_DAYS = 2;
+
+// ── STREET ARMY SYSTEM ───────────────────────────────────────────────────────
+const ARMY_UNITS = [
+  { id:"lookout",   name:"Lookout",       icon:"👁",  cost:80,  upkeep:15, power:1, slots:1,
+    desc:"Eyes on the block. Warns you when cops or rivals move in. Reduces bust chance 10%.",
+    heatAdd:0.5, combatBonus:1, defenseBonus:2 },
+  { id:"runner",    name:"Runner",        icon:"🏃",  cost:120, upkeep:20, power:2, slots:1,
+    desc:"Moves product fast. +1 sell per day, reduces move heat.",
+    heatAdd:0.7, combatBonus:1, defenseBonus:1, sellBonus:1 },
+  { id:"enforcer",  name:"Enforcer",      icon:"🦾",  cost:200, upkeep:35, power:4, slots:2,
+    desc:"Muscle. +4 to all fight rolls. Deters corner takeovers.",
+    heatAdd:1.2, combatBonus:4, defenseBonus:5 },
+  { id:"lieutenant",name:"Lieutenant",    icon:"⭐",  cost:400, upkeep:60, power:7, slots:3,
+    desc:"Runs ops for you. Collects corner income even when cold. +6 fight, +8 defense.",
+    heatAdd:2.0, combatBonus:6, defenseBonus:8, keepsCornersWarm:true },
+  { id:"fixer_hire",name:"Street Fixer",  icon:"🔧",  cost:300, upkeep:45, power:3, slots:2,
+    desc:"Handles dirty work. Reduces heat by 0.5/day passively.",
+    heatAdd:-0.5, combatBonus:2, defenseBonus:3, heatReduce:0.5 },
+];
+const MAX_ARMY_SIZE = 8; // total slots
+const getArmyPower=(army=[])=>army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.power||0);},0);
+const getArmyUpkeep=(army=[])=>army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.upkeep||0);},0);
+const getArmySlots=(army=[])=>army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.slots||0);},0);
+const getArmyCombatBonus=(army=[])=>army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.combatBonus||0);},0);
+const getArmyDefenseBonus=(army=[])=>army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.defenseBonus||0);},0);
+const getArmyHeatMult=(army=[])=>{
+  const totalHeat=army.reduce((s,u)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.heatAdd||0);},0);
+  return Math.max(0, totalHeat); // total passive heat per day from army size
+}; // must visit within this many days or corner goes cold
+const getCornerIncome=(boroId, level=0, gs)=>{
+  const base=CORNER_BASE_INCOME[boroId]||[20,40];
+  const mult=CORNER_UPGRADE_MULT[level]||1;
+  const hasKingpin=hasSkill(gs||{},"kingpin");
+  const kingpinMult=hasKingpin?2:1;
+  return Math.round(rnd(base[0],base[1])*mult*kingpinMult);
+};
+
 // ── COP SYSTEM ────────────────────────────────────────────────────────────
 const WANTED_TIERS = [
   {stars:0, name:"Clean",          desc:"Nobody knows your name.",                      movePenalty:0, dealPenalty:0,  cantEnter:[]},
@@ -167,7 +243,7 @@ const ARCHETYPES = [
     startCash:50, isHooker:true,
     special:"Highest charm stat in the game. CLIENT command replaces HUSTLE — higher yield, more risk. Regulars system builds over time. Cops are the real danger. The Stroll is a separate economy that operates in Manhattan and Queens at night." },
   { id:"schizo", name:"THE SCHIZO", icon:"🌀", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
-  { id:"drifter", name:"THE DRIFTER", icon:"🐕", color:"#c9a96e", desc:"You and your dog. The city can't take what you don't have.", stats:{hustle:5,streetiq:6,toughness:6,charm:9,heat:0}, gear:["Leash & collar","Cardboard sign","Sleeping bag"], xp:{panhandle:3,talk:2},
+  { id:"drifter", name:"GUY WITH DOG", icon:"🐕", color:"#c9a96e", desc:"You and your dog. The city can't take what you don't have.", stats:{hustle:5,streetiq:6,toughness:6,charm:9,heat:0}, gear:["Leash & collar","Cardboard sign","Sleeping bag"], xp:{panhandle:3,talk:2},
     startCash:15, isDrifter:true,
     special:"Your dog changes everything. Highest panhandle yield in the game — people give to the dog. Dog can SCOUT ahead, GUARD your stash, and DISTRACT during encounters. Hard mode: no shelters (dog not allowed), low cash, but the dog boosts mental health passively and NPCs trust you more." },
 ];
@@ -760,6 +836,24 @@ const SEARCH_FINDS = [
   {type:"nothing", desc:"Someone got here first. You can tell by the disturbed trash, the way nothing of value is left. You're not the only one who knows these spots.", value:null},
   {type:"nothing", desc:"Three rats scatter when you move the cardboard. They look at you like you interrupted something. Maybe you did.", value:null},
   {type:"nothing", desc:"An hour of looking. Nothing. Some days the city gives you nothing and you just have to accept that and keep moving.", value:null},
+  // More finds — gear, consumables, rare discoveries
+  {type:"gear",    desc:"Gym bag behind the locker room. Nobody claimed it. Inside: wrapped up tight, clearly someone's backup.", item:"Brass Knuckles", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Abandoned camp under the BQE. Sleeping bag, a canned good, and something wrapped in a shirt.", item:"Army Jacket", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Donation box outside a church. Someone dropped a coat with a flask still in the inside pocket.", item:"Hip Flask", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Dumpster behind a pawn shop. Merchandise that didn't sell. You find the watch first.", item:"Pawn Shop Watch", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Maintenance tunnel behind the train yard. Old army surplus box, sealed. Half the contents are usable.", item:"Army Ration", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Corner of an abandoned building. Someone lived here. Left in a hurry. Left a crowbar.", item:"Crowbar", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Street festival cleanup crew walked past a case. You didn't.", item:"Street Taser", value:null, rarity:"rare", prob:0.2},
+  {type:"gear",    desc:"Transit workers' supply closet, propped open. Old MetroCard in a drawer. You pocket it quietly.", item:"Old MetroCard", value:null, rarity:"common"},
+  {type:"gear",    desc:"Construction site dumpster. Thermal liner, factory-sealed, wrong size for whoever ordered it. Right size for you.", item:"Thermal Base Layer", value:null, rarity:"uncommon"},
+  {type:"gear",    desc:"Coin on the sidewalk. Then another. Then you see it's a trail leading to a storm drain. At the bottom: a coin someone carried for years.", item:"Lucky Coin", value:null, rarity:"rare", prob:0.15},
+  {type:"consumable",desc:"First aid kit zip-tied to a construction fence. Red cross faded. Contents mostly intact.", item:"Street Bandage", value:null, rarity:"common"},
+  {type:"consumable",desc:"Takeout bag outside a clinic side door. Hot meal inside, untouched. Still warm.", item:"Hot Meal (Container)", value:null, rarity:"common"},
+  {type:"consumable",desc:"Pharmacy dumpster. Sealed packaging. Pain pills, expired by a month. You'll live.", item:"Pain Pills", value:null, rarity:"uncommon"},
+  {type:"consumable",desc:"Roll of duct tape hanging off a broken fence. Three-quarters full. Good enough.", item:"Duct Tape", value:null, rarity:"common"},
+  {type:"map",      desc:"Hand-drawn on a paper bag. Locations marked with x's. You count six marks. Three you recognize.", item:"Hand-Drawn Map", value:null, rarity:"rare", prob:0.12},
+  {type:"nothing",  desc:"Someone's been through here. Recently. Boot prints in the wet ground, heading east.", value:null},
+  {type:"nothing",  desc:"You find a folded note. It says: 'If you're reading this, you're looking in the wrong place.' No signature.", value:null},
   // Quest items findable via SEARCH
   {type:"questitem", desc:"A coil of thick rope behind the loading dock. Heavy duty. Could hold something important.", value:null, item:"Rope", prob:0.15},
   {type:"questitem", desc:"A waterproof dry bag — the kind kayakers use — left near the waterfront. Still sealed.", value:null, item:"Waterproof Bag", prob:0.1},
@@ -792,7 +886,7 @@ const getWeather=day=>{
   const idx=day%pool.length;
   return WEATHER_TYPES[pool[idx]];
 };
-const defWorld=()=>({corners:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{}});
+const defWorld=()=>({corners:{},cornerLevels:{},cornerLastVisit:{},cornerDefending:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{},worldEvent:null,worldEventDay:0,tradeOffers:{},leaderboard:{},leaderboardWeek:0,offlineEvents:{},rivals:{}});
 
 // ── PRESTIGE ──────────────────────────────────────────────────────────────────
 const PRESTIGE_LEVEL = 10; // level required to retire
@@ -976,7 +1070,31 @@ const BASE_ITEMS = [
   {id:"shadow_clk",  name:"Shadow Cloak",          slot:"chest",     rarity:"legendary", stats:{heat:-2,toughness:2,charm:1},  desc:"Darkness made fabric.", classes:["vampire","ghost"]},
   {id:"dog_tags",    name:"Dog Tags",              slot:"accessory", rarity:"uncommon",  stats:{toughness:1,mental:5},         desc:"Never take them off.", classes:["veteran"]},
   {id:"fake_id",     name:"Fake ID",               slot:"accessory", rarity:"uncommon",  stats:{heat:-1,charm:1},              desc:"Someone else's problem.", classes:["schemer","rat","undocumented"]},
-  // ── OREGON TRAIL QUEST ITEMS ──────────────────────────────────────────────
+  // ── CONSUMABLES — single use, carried in inventory ─────────────────────────
+  {id:"bandage",     name:"Street Bandage",     slot:"consumable", rarity:"common",   uses:1, stats:{}, effect:{heal:25},         desc:"Dirty but effective. +25 health when used."},
+  {id:"adrenaline",  name:"Adrenaline Shot",    slot:"consumable", rarity:"rare",     uses:1, stats:{}, effect:{energy:60,fight:5},desc:"One hit of everything. USE in combat or before a fight."},
+  {id:"pain_pills",  name:"Pain Pills",         slot:"consumable", rarity:"uncommon", uses:1, stats:{}, effect:{heal:15,pain:true},desc:"Takes the edge off. +15 health, ignore next hit penalty."},
+  {id:"duct_tape",   name:"Duct Tape",          slot:"consumable", rarity:"common",   uses:3, stats:{}, effect:{repair:true},     desc:"Fixes almost anything. 3 uses."},
+  {id:"lockpick_kit",name:"Lockpick Kit",       slot:"consumable", rarity:"uncommon", uses:2, stats:{}, effect:{unlock:true},     desc:"Opens doors. 2 uses. LOCKPICK to use."},
+  {id:"disguise_kit",name:"Disguise Kit",       slot:"consumable", rarity:"rare",     uses:1, stats:{}, effect:{heatReset:3},     desc:"One-time heat drop -3. You become someone else briefly."},
+  {id:"hot_meal",    name:"Hot Meal (Container)",slot:"consumable",rarity:"common",   uses:1, stats:{}, effect:{hunger:60,mental:15},desc:"Real food. The kind that reminds you what normal feels like."},
+  // ── SCAVENGED / FOUND-ONLY ITEMS ──────────────────────────────────────────
+  {id:"army_ration", name:"Army Ration",        slot:"consumable", rarity:"uncommon", uses:1, stats:{}, effect:{hunger:80,energy:20},desc:"Found in someone's old duffel. Still sealed. Not expired."},
+  {id:"hip_flask",   name:"Hip Flask",          slot:"accessory",  rarity:"uncommon", stats:{mental:8,warmth:5,addiction:2},      desc:"Half full of something strong. Keeps the cold out."},
+  {id:"old_watch",   name:"Pawn Shop Watch",    slot:"accessory",  rarity:"uncommon", stats:{charm:1,streetiq:1},                desc:"Stopped at 4:17. You don't know which day."},
+  {id:"lucky_coin",  name:"Lucky Coin",         slot:"accessory",  rarity:"rare",     stats:{hustle:1,luck:2},                   desc:"You've kept it for a reason."},
+  {id:"broken_radio",name:"Broken Radio",       slot:"accessory",  rarity:"common",   stats:{mental:5},                          desc:"Gets one station. Static mostly. Enough."},
+  {id:"transit_card",name:"Old MetroCard",      slot:"accessory",  rarity:"common",   stats:{hustle:1},                          effect:{freeMove:true},desc:"Might have rides left. You won't know until you tap."},
+  {id:"stash_map",   name:"Hand-Drawn Map",     slot:"accessory",  rarity:"rare",     stats:{streetiq:2},                        effect:{scoutBonus:true},desc:"Someone's stash locations. Not all of them are empty."},
+  {id:"crow_bar",    name:"Crowbar",            slot:"weapon",     rarity:"uncommon", stats:{fightBonus:4,toughness:1},           desc:"Opens doors. Also heads."},
+  {id:"spiked_bat",  name:"Spiked Bat",         slot:"weapon",     rarity:"rare",     stats:{fightBonus:6,toughness:1,heat:1},   desc:"You added the nails yourself."},
+  {id:"taser",       name:"Street Taser",       slot:"weapon",     rarity:"rare",     stats:{fightBonus:3,stunChance:0.3},       desc:"Stun chance 30%. Charges limited."},
+  {id:"bike_lock",   name:"Kryptonite Lock",    slot:"weapon",     rarity:"uncommon", stats:{fightBonus:3,toughness:1},          desc:"Swing first. Questions later."},
+  {id:"night_goggles",name:"Night Vision Monocle",slot:"head",     rarity:"legendary",stats:{streetiq:3,heat:-2,bustReduction:0.15},desc:"Military surplus. Worth more than you."},
+  {id:"thermal_base",name:"Thermal Base Layer", slot:"chest",      rarity:"uncommon", stats:{warmth:12,energy:5},                desc:"Layered under everything. Nobody knows it's there."},
+  {id:"cargo_pants", name:"Cargo Pants",        slot:"feet",       rarity:"common",   stats:{hustle:1,carryBonus:5},             desc:"Pockets everywhere. Carry more."},
+  {id:"steel_cap_boots",name:"Steel Cap Boots", slot:"feet",       rarity:"rare",     stats:{toughness:3,fightBonus:2,warmth:4},desc:"Heavy. Authoritative."},
+  // ── OREGON TRAIL QUEST ITEMS ─────────────────────────────────────────────────
   {id:"alien_report",  name:"Alien Encounter Report", slot:"accessory",rarity:"legendary",stats:{charm:2,streetiq:3},desc:"Eleven seconds. You were there. Nobody believes you. You know.",quest:true},
   {id:"alien_footage", name:"Alien Footage",           slot:"accessory",rarity:"legendary",stats:{charm:5,hustle:2},desc:"You have footage of something nobody can explain. This is worth something to the right person.", quest:true},
   {id:"rope",        name:"Rope",                  slot:"accessory", rarity:"uncommon",  stats:{hustle:1},                     desc:"Heavy duty. Could hold a lot.", quest:true},
@@ -1007,9 +1125,9 @@ const getCombatStats=(gs)=>{
     return sum+(skill?.effect?.fightBonus||0)+(skill?.effect?.fightMult?2:0);
   },0);
   return {
-    ac: 10+mod(toughness),              // Armor Class
+    ac: 10+mod(toughness)+getArmyDefenseBonus(gs.army||[]),  // Armor Class
     hp: 10+toughness*2+gs.level*2,      // Max HP proxy
-    attackBonus: mod(toughness)+mod(hustle)+fightBonus+Math.floor(gs.level/3),
+    attackBonus: mod(toughness)+mod(hustle)+fightBonus+Math.floor(gs.level/3)+getArmyCombatBonus(gs.army||[]),
     damageBonus: mod(toughness)+fightBonus,
     initiative: mod(hustle)+mod(streetiq),
     savingThrow: mod(toughness)+mod(streetiq),
@@ -1108,20 +1226,93 @@ const COMBAT_ABILITIES = {
                  {id:"hypnosis",     name:"Hypnosis",      cooldown:4, desc:"Lock eyes. Enemy frozen for 2 rounds, -4 attack after.", fn:(gs,enemy)=>{return{log:[`👁 HYPNOSIS. Your eyes go black. ${enemy.name} freezes. Can't look away.`],enemyDmg:0,selfDmg:0,stunEnemy:true,stunRounds:2,blindEnemy:true};}}],
 };
 
-// ── TUTORIAL SYSTEM ───────────────────────────────────────────────────────────
+// ── ONBOARDING SYSTEM ────────────────────────────────────────────────────────
+// Guided first session — walks new players through core loop in 8 steps
 const TUTORIAL_STEPS = [
-  { id:"look",     trigger:"LOOK",     msg:"👋 Start here. Type LOOK to see what's around you.",                                        reward:null},
-  { id:"status",   trigger:"STATUS",   msg:"Good. Now type STATUS to check your character.",                                             reward:null},
-  { id:"hustle",   trigger:"HUSTLE",   msg:"You need cash. Type HUSTLE to work the block.",                                             reward:null},
-  { id:"eat",      trigger:"EAT",      msg:"Keep your hunger up. Type EAT to grab food ($5).",                                          reward:{cash:10}},
-  { id:"scout",    trigger:"SCOUT",    msg:"Know your market. Type SCOUT to check prices here.",                                        reward:null},
-  { id:"buy",      trigger:"BUY",      msg:"Time to move product. Type BUY WEED 1 to grab a bag.",                                     reward:{cash:15}},
-  { id:"sell",     trigger:"SELL",     msg:"Flip it. Type SELL WEED 1 to move it.",                                                    reward:null},
-  { id:"shelter",  trigger:"SHELTER",  msg:"Stay safe tonight. Type SHELTER to find a bed.",                                           reward:null},
-  { id:"skills",   trigger:"SKILLS",   msg:"You have skill points. Type SKILLS to see your tree.",                                     reward:{skillPoints:1}},
-  { id:"sleep",    trigger:"SLEEP",    msg:"End your day. Type SLEEP to move to tomorrow.",                                            reward:{xp:25}},
-  { id:"done",     trigger:null,       msg:"✓ Tutorial complete. You know enough to survive. Good luck out there.",                    reward:{cash:20}},
+  { id:"look",
+    trigger:"LOOK",
+    msg:"First thing you do when you hit a new block: LOOK around. Type LOOK.",
+    hint:"→ LOOK",
+    narrative:null,
+    reward:null },
+  { id:"status",
+    trigger:"STATUS",
+    msg:"Good. You're alive. Check your stats — type STATUS.",
+    hint:"→ STATUS",
+    narrative:"You take stock. Health, hunger, warmth, energy. Mental. The things that keep you upright.",
+    reward:null },
+  { id:"hustle",
+    trigger:"HUSTLE",
+    msg:"You need money. This block runs on hustle. Type HUSTLE to work it.",
+    hint:"→ HUSTLE",
+    narrative:"Everyone has an angle. Yours is whatever you can manage before someone notices.",
+    reward:null },
+  { id:"scout",
+    trigger:"SCOUT",
+    msg:"Smart move before buying anything — check the market. Type SCOUT.",
+    hint:"→ SCOUT",
+    narrative:"Prices move. A bag that's worth $110 in Manhattan goes for $70 here. Knowing the spread is the whole job.",
+    reward:{cash:10} },
+  { id:"buy",
+    trigger:"BUY",
+    msg:"Now buy something to flip. Try BUY WEED 1.",
+    hint:"→ BUY WEED 1",
+    narrative:"One bag. Small enough not to draw attention. The goal is to move it somewhere the price is better.",
+    reward:null },
+  { id:"sell",
+    trigger:"SELL",
+    msg:"Move it. Type SELL WEED 1 — same block to start, just to learn the flow.",
+    hint:"→ SELL WEED 1",
+    narrative:"You're not making money yet. You're learning the rhythm. Buy low somewhere, sell high somewhere else. That's the whole game.",
+    reward:{cash:15} },
+  { id:"sleep",
+    trigger:"SLEEP",
+    msg:"End your first day. Type SLEEP — health recovers, hunger resets, day advances.",
+    hint:"→ SLEEP",
+    narrative:"Day one. You made it. Tomorrow the contracts board resets, the market shifts, and something will happen that you didn't expect. That's the city.",
+    reward:{xp:30,cash:20} },
+  { id:"done",
+    trigger:null,
+    msg:"You know enough to survive. CONTRACTS for daily jobs. SCOUT before buying. Watch your heat. Good luck.",
+    hint:null,
+    narrative:null,
+    reward:null },
 ];
+// ── NOTORIETY TITLES ─────────────────────────────────────────────────────────
+// Earned after 10 days based on playstyle — shows under name citywide
+const NOTORIETY_TITLES = [
+  {id:"the_grinder",    title:"THE GRINDER",    icon:"💊", test:(l)=>l.deals>=50,          desc:"Moved 50+ units. The economy runs through you."},
+  {id:"the_ghost_rep",  title:"THE GHOST",      icon:"🌫", test:(l,gs)=>gs.heat<=2&&l.daysAlive>=10, desc:"10 days. Never over heat 2. Nobody sees you coming."},
+  {id:"the_hunter",     title:"THE HUNTER",     icon:"⚔",  test:(l)=>l.pvpWins>=5,         desc:"5 player wins. They know not to cross you."},
+  {id:"the_talker",     title:"THE DIPLOMAT",   icon:"🤝", test:(l)=>l.talkCount>=30,       desc:"30 NPC conversations. The street trusts you."},
+  {id:"the_panhandler", title:"THE REGULAR",    icon:"🎭", test:(l)=>l.panhandles>=20,      desc:"20 successful panhandles. This corner knows your face."},
+  {id:"the_boss_slayer",title:"BOSS SLAYER",    icon:"👹", test:(l)=>l.bossKills>=3,        desc:"Dropped 3 bosses. Legends don't die easy."},
+  {id:"the_survivor",   title:"THE SURVIVOR",   icon:"🏴", test:(l)=>l.daysAlive>=20,       desc:"20 days alive. Most don't make it half that."},
+  {id:"the_wealthy",    title:"THE MONEY",      icon:"💰", test:(l)=>l.cashEarned>=5000,    desc:"$5,000 earned lifetime. Paper over everything."},
+  {id:"the_corner_king",title:"CORNER KING",    icon:"🚩", test:(l)=>l.corners>=10,         desc:"10 corners claimed. The map is yours."},
+  {id:"the_legend",     title:"THE LEGEND",     icon:"👑", test:(l,gs)=>gs.level>=8&&l.daysAlive>=15&&l.deals>=30, desc:"Level 8+, 15 days, 30 deals. There is nobody else."},
+];
+
+const getNotorietyTitle=(gs)=>{
+  if(!gs?.lifetime||gs.day<10)return null; // need 10 days before title
+  const l=gs.lifetime;
+  // Return highest-tier matching title
+  const matches=NOTORIETY_TITLES.filter(t=>t.test(l,gs));
+  return matches[matches.length-1]||null; // last = highest tier
+};
+
+const checkNotoriety=(gs,updGs,push)=>{
+  const earned=getNotorietyTitle(gs);
+  if(!earned)return;
+  const already=gs.notorietyTitle===earned.id;
+  if(!already){
+    updGs(g=>({...g,notorietyTitle:earned.id}));
+    const notWs=broadcastActivity(worldRef.current||defWorld(),gs.name+" earned the notoriety title: "+earned.icon+" "+earned.title+".","🏆");
+    if(worldRef.current)saveWorld(notWs);
+    push("",""+earned.icon+" NOTORIETY EARNED: "+earned.title,""+earned.desc,"Type TITLE to see all your stats.","");
+  }
+};
+
 const getItemStats=(equipment)=>{
   // sum all equipped item stats
   const totals={};
@@ -1239,6 +1430,182 @@ const generateDailyContracts=(day,weather)=>{
   const c2=pick(byDiff.medium.filter(c=>c.id!==c1?.id),2);
   const c3=pick([...byDiff.hard,...byDiff.medium].filter(c=>c.id!==c1?.id&&c.id!==c2?.id),3);
   return[c1,c2,c3].filter(Boolean).map(c=>({...c,expires:day,completedBy:[]}));
+};
+
+// ── OFFLINE EVENTS — happen while player is away ────────────────────────────
+// Generated on login based on time away, heat, army, corners
+const generateOfflineReport=(gs,world,hoursAway)=>{
+  if(hoursAway<1)return null;
+  const events=[];
+  const army=gs.army||[];
+  const corners=gs.cornersOwned||[];
+  const hasLookout=army.some(u=>u.id==="lookout");
+  const hasEnforcer=army.some(u=>u.id==="enforcer");
+  const hasLt=army.some(u=>u.id==="lieutenant");
+
+  // Corner activity
+  corners.forEach(bId=>{
+    const boro=getBoro(bId);if(!boro)return;
+    const rivals=Object.entries(world.players||{}).filter(([n,d])=>n!==gs.name&&d.borough===bId);
+    if(rivals.length>0&&Math.random()<0.3){
+      const [rName]=rivals[Math.floor(Math.random()*rivals.length)];
+      if(hasEnforcer||hasLt){
+        events.push(`👁 ${rName} was spotted near your ${boro.short} corner. Your ${hasLt?"lieutenant":"enforcer"} held them off.`);
+      } else {
+        events.push(`⚠ ${rName} circled your ${boro.short} corner while you were out. No army — could have gone badly.`);
+      }
+    }
+    // Random corner income event
+    if(Math.random()<0.2){
+      const bonus=rnd(10,40);
+      events.push(`💰 Your ${boro.short} corner had a good night. +$${bonus} extra.`);
+      // Would actually give cash — handled separately
+    }
+  });
+
+  // Police activity based on heat
+  if(gs.heat>5&&Math.random()<0.4){
+    if(hasLookout){
+      events.push(`🚔 Patrol swept through ${getBoro(gs.armyDeployed||"manhattan")?.name||"the area"}. Your lookout spotted them in time. No bust.`);
+    } else {
+      events.push(`🚔 Cops were active in your area while you slept. Heat may have shifted.`);
+    }
+  }
+
+  // Rival activity
+  const myRivals=Object.keys(world.rivals||{}).filter(k=>k.startsWith(gs.name+":"));
+  if(myRivals.length>0&&Math.random()<0.3){
+    const rivalName=myRivals[0].split(":")[1];
+    events.push(`👊 Word is ${rivalName} was talking about you while you were gone.`);
+  }
+
+  // Random city events
+  const cityEvents=[
+    `🌆 The city kept moving while you slept. Same as always.`,
+    `🌙 Quiet night in your borough. Nobody made a move.`,
+    `📦 A shipment came through. Prices shifted overnight.`,
+    `🗞 The block is talking about something. Check the newspaper.`,
+  ];
+  if(events.length<2)events.push(cityEvents[rnd(0,cityEvents.length-1)]);
+
+  // Upkeep reminder
+  if(army.length>0){
+    const upkeep=getArmyUpkeep(army);
+    events.push(`💪 Army upkeep due: $${upkeep}. Paid on SLEEP.`);
+  }
+
+  return events.slice(0,5); // max 5 offline events
+};
+
+// ── WEEKLY LEADERBOARD ──────────────────────────────────────────────────────
+const LEADERBOARD_CATEGORIES = [
+  {id:"cash",     label:"Most Cash Earned",    icon:"💰", key:"cashEarned"},
+  {id:"pvp",      label:"Most PvP Wins",        icon:"⚔",  key:"pvpWins"},
+  {id:"deals",    label:"Most Deals",           icon:"💊", key:"deals"},
+  {id:"survival", label:"Longest Alive",        icon:"🏴", key:"daysAlive"},
+  {id:"bosses",   label:"Most Boss Kills",      icon:"👹", key:"bossKills"},
+];
+
+const WEEKLY_REWARDS = {
+  cash:     {title:"THE EARNER",   item:"Money Clip",    cash:500},
+  pvp:      {title:"THE PREDATOR", item:"Brass Knuckles",cash:300},
+  deals:    {title:"THE DEALER",   item:"Burner Stash",  cash:400},
+  survival: {title:"THE UNKILLABLE",item:"Scar Tissue",  cash:250},
+  bosses:   {title:"BOSS HUNTER",  item:"Boss Trophy",   cash:600},
+};
+
+// Get real-world week number
+const getWeekNumber=()=>Math.floor(Date.now()/(1000*60*60*24*7));
+
+// ── WORLD EVENTS — fire every 3-4 real days, affect everyone ────────────────
+const WORLD_EVENTS = [
+  { id:"crackdown",
+    title:"NYPD CRACKDOWN",
+    icon:"🚔",
+    boroughs:["manhattan","bronx"],
+    duration:2, // game days
+    effect:{copMult:2.0, bustMult:1.8, heatGainMult:1.5},
+    desc:"The mayor called it in. Heavy police presence in Manhattan and the Bronx. Plainclothes everywhere. Bust chance doubled. Move your product or sit tight.",
+    newspaper:"NYPD launches surge operation in upper Manhattan and the Bronx. Officers say the operation will last 48 hours.",
+    warning:"⚠ Crackdown incoming tomorrow — Manhattan and Bronx. Move product now or stash it.",
+  },
+  { id:"supply_drought",
+    title:"DRY SPELL",
+    icon:"🏜",
+    boroughs:["queens","brooklyn","staten"],
+    duration:1,
+    effect:{supplyDrought:true, priceSpike:1.6},
+    desc:"Supply chain issues. Product is scarce in Queens, Brooklyn, and Staten Island. Prices are spiking. If you have stock, now is the time.",
+    newspaper:"Street-level supply appears disrupted across outer boroughs. Prices for illicit goods reportedly at seasonal highs.",
+    warning:"⚠ Supply drought hitting Queens, Brooklyn, Staten Island tomorrow. Stock up today.",
+  },
+  { id:"shelter_crisis",
+    title:"SHELTER CRISIS",
+    icon:"🏚",
+    boroughs:["bronx","brooklyn","queens"],
+    duration:2,
+    effect:{shelterCapMult:0.4},
+    desc:"City funding cuts. Three shelters operating at reduced capacity. Beds are scarce. If you need a bed tonight, get there early.",
+    newspaper:"Advocates warn of bed shortage at city shelters after funding shortfall. Officials say overflow sites are being arranged.",
+    warning:"⚠ Shelter capacity dropping tomorrow. Bronx, Brooklyn, Queens. Plan ahead.",
+  },
+  { id:"heat_wave",
+    title:"HEAT EMERGENCY",
+    icon:"🌡",
+    boroughs:["manhattan","queens","brooklyn"],
+    duration:2,
+    effect:{warmthDrainMult:0, energyDrainMult:1.4, hungerDrainMult:1.3},
+    desc:"95 degrees and nowhere to go. Warmth isn't a problem — staying energized and fed is. Cooling centers open at shelters. Cops are irritable.",
+    newspaper:"Heat emergency declared. City opens cooling centers at shelters city-wide. Temperatures expected to stay above 90 through tomorrow.",
+    warning:"⚠ Heat wave hitting tomorrow. Warmth stops draining but energy and hunger drain faster.",
+  },
+  { id:"transit_strike",
+    title:"TRANSIT STRIKE",
+    icon:"🚇",
+    boroughs:["manhattan","bronx","queens","brooklyn","staten"],
+    duration:1,
+    effect:{moveCostMult:2.0, metrocardDisabled:true},
+    desc:"MTA workers walked out at 6am. No trains, limited buses. Moving between boroughs costs double energy. MetroCards are worthless today.",
+    newspaper:"MTA workers on strike for second day. Service suspended on all subway lines. Officials urge commuters to work from home.",
+    warning:"⚠ Transit strike tomorrow. Moving boroughs costs 2x energy. MetroCards won't work.",
+  },
+  { id:"cold_snap",
+    title:"COLD SNAP",
+    icon:"🌨",
+    boroughs:["manhattan","bronx","brooklyn","queens","staten"],
+    duration:2,
+    effect:{warmthDrainMult:2.5, shelterDemandMult:1.5},
+    desc:"Temperature dropped 30 degrees overnight. Warmth is draining fast. Shelter beds fill up early. The city gets mean when it's cold.",
+    newspaper:"Temperatures plunging into the teens overnight. Hypothermia risk elevated. City opens emergency warming centers.",
+    warning:"⚠ Cold snap coming. Warmth drains 2.5x faster. Get to a shelter early.",
+  },
+  { id:"block_party",
+    title:"BLOCK PARTY WEEKEND",
+    icon:"🎉",
+    boroughs:["brooklyn","queens"],
+    duration:1,
+    effect:{panhandleMult:2.0, heatGainMult:0.6, npcRepMult:1.5},
+    desc:"Street festival in Brooklyn and Queens. Crowds everywhere, cops are friendly, NPCs are generous. Best panhandle day of the year.",
+    newspaper:"Annual block party draws thousands to Brooklyn and Queens. Community events run through the weekend.",
+    warning:"🎉 Block party tomorrow in Brooklyn and Queens. Great day to panhandle and build rep.",
+  },
+  { id:"city_council",
+    title:"CITY COUNCIL HEARING",
+    icon:"🏛",
+    boroughs:["manhattan"],
+    duration:1,
+    effect:{copMult:0.5, heatGainMult:0.6},
+    desc:"City council is reviewing police conduct complaints. Cops are on their best behavior in Manhattan today. Low heat risk window.",
+    newspaper:"City council holds hearing on police conduct. Officers instructed to de-escalate encounters pending review.",
+    warning:"🏛 Cops laying low in Manhattan tomorrow. Low heat risk window.",
+  },
+];
+
+// Deterministic world event per real-world day (changes every 3 real days)
+const getWorldEvent=(realDay)=>{
+  if(realDay%3!==0)return null; // fires every 3 days
+  const idx=Math.floor(realDay/3)%WORLD_EVENTS.length;
+  return WORLD_EVENTS[idx];
 };
 
 // ── EXPANDED RARE EVENTS ──────────────────────────────────────────────────────
@@ -1506,7 +1873,7 @@ function CharPortrait({gs}){
           <span style={{fontSize:18}}>{id.icon}</span>
           <div>
             <div style={{color,fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,lineHeight:1}}>{gs.name}</div>
-            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}{gs.title?` · ${gs.title}`:""}{gs.isDrifter&&gs.dogName?` 🐕 ${gs.dogName}`:""}</div>
+            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}{gs.title?` · ${gs.title}`:""}{gs.isDrifter&&gs.dogName?` 🐕 ${gs.dogName}`:""}{(()=>{const nt=getNotorietyTitle(gs);return nt&&!gs.title?` · ${nt.icon} ${nt.title}`:null;})()}</div>
           </div>
         </div>
         <div style={{textAlign:"right"}}>
@@ -1814,7 +2181,8 @@ export default function NYC(){
   const [toast,setToast]   =useState(null);      // floating notification
   const [crewMsg,setCrewMsg]=useState(false);    // crew-only chat mode
   const [typingUser,setTypingUser]=useState(null);// typing indicator
-  const gsRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
+  const gsRef=useRef(null);
+  const pinRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
   const chatRef=useRef(null);
   const worldRef=useRef(null);
   const boroRef=useRef(null);
@@ -1834,7 +2202,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
-  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
+  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);cleanStaleCharacters(30).catch(()=>{});}catch(e){console.error(e)}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
@@ -1887,6 +2255,12 @@ export default function NYC(){
       cloudy:"Gray. Quiet. The kind of day where things happen without witnesses.",
     };
     headlines.push(weatherNotes[weather.id]||"Another day out here.");
+    // World event headline
+    const realD=Math.floor(Date.now()/(1000*60*60*24));
+    const todayEv=getWorldEvent(realD);
+    const tomorrowEv=getWorldEvent(realD+1);
+    if(todayEv)headlines.push(todayEv.newspaper);
+    if(tomorrowEv&&tomorrowEv.id!==todayEv?.id)headlines.push("TOMORROW: "+tomorrowEv.warning.replace("⚠ ","").replace("🎉 ","").replace("🏛 ",""));
     // Check for alien incident in world history
     const alienEvent=history.find(h=>h.type==="alien");
     if(alienEvent&&day-( alienEvent.day||0)<=1){
@@ -2072,6 +2446,20 @@ export default function NYC(){
     setPulse(true);setTimeout(()=>setPulse(false),800);
     const g=gsRef.current;if(!g)return;
     // player alerts — attacks, bounties, wires, dominates etc
+    // World event — check and display
+    const _rd=Math.floor(Date.now()/(1000*60*60*24));
+    const _te=getWorldEvent(_rd);
+    if(_te){setWorld(prev=>({...prev,worldEvent:_te,worldEventDay:_rd}));}
+        // Check unread letters
+    // Check rivals
+    const _myRivs=Object.entries(normalized.rivals||{}).filter(([k,v])=>k.startsWith(g.name+":")&&v>=2);
+    if(_myRivs.length>0&&!worldRef.current?.rivals){
+      setTimeout(()=>setFeed(f=>[...f,`⚔ You have ${_myRivs.length} rival${_myRivs.length>1?"s":""}. Type RIVALS to see who.`]),600);
+    }
+    const myLetters=(normalized.letters||[]).filter(l=>l.to===g.name&&!l.read);
+    if(myLetters.length>0){
+      setTimeout(()=>setFeed(f=>[...f,`✉ ${myLetters.length} unread letter${myLetters.length>1?"s":""} — type LETTERS to read.`]),400);
+    }
     const alerts=(normalized.playerAlerts||{})[g.name]||[];
     if(alerts.length>0){
       alerts.forEach(a=>{
@@ -2186,6 +2574,12 @@ export default function NYC(){
         // ── ADDICTION ENGINE ─────────────────────────────────────────────────
         if(!g.isVampire&&!g.isUndoc){
           const sub=CLASS_SUBSTANCE[g.archetype?.id||"veteran"];
+          const addLvl=getAddictionLevel(g.addiction||0);
+          const addFx=addLvl.effects||{};
+          // Apply addiction stat penalties to display (not permanent — just active effects)
+          if(addFx.energyDrain){
+            return{...prev,survival:{...prev.survival,energy:clamp(prev.survival.energy-addFx.energyDrain/60,0,100)}};
+          }
           const addiction=g.addiction||0;
           const daysSinceUse=g.day-(g.lastUsed||0);
           const withdrawThresh=Math.max(1,3-Math.floor(addiction/30));
@@ -2296,8 +2690,9 @@ export default function NYC(){
               `☠ ${g.name} didn't make it. Day ${g.day}. Level ${g.level}. It happens to the best of them.`,
             ];
             const dWs=broadcastActivity(world,_deathMsgs[rnd(0,_deathMsgs.length-1)],"☠");setWorld(dWs);saveWorld(dWs);
-            setFeed(f=>[...f,``,`☠ YOU DIED. Day ${g.day}. Level ${g.level}.`,`Legacy: $${Math.floor(g.cash*0.2)} carries forward.`,`Refresh to start again.`]);
+            setFeed(f=>[...f,``,`☠ YOU DIED. Day ${g.day}. Level ${g.level}.`]);
             setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,time:Date.now()}]};saveWorld(ws);return ws;});
+            setTimeout(()=>setPhase("dead"),2000);
           },10);
         }
         return g;
@@ -2359,7 +2754,10 @@ export default function NYC(){
   const continueGame=(saved)=>{
     setGs(saved);
     const weather=getWeather(saved.day);
-    push(`— WELCOME BACK, ${saved.name} —`,`Day ${saved.day}. Level ${saved.level}. $${saved.cash}.`,`${weather.icon} Today: ${weather.name} — ${weather.desc}`,``,`Type HELP for commands.`);
+    const _lastSeen=(world.players||{})[saved.name]?.lastSeen||Date.now();
+    const _hoursAway=Math.max(0,Math.floor((Date.now()-_lastSeen)/3600000));
+    const _offRpt=_hoursAway>=1?generateOfflineReport(saved,world,_hoursAway):null;
+    push(`— WELCOME BACK, ${saved.name} —`,`Day ${saved.day}. Level ${saved.level}. $${saved.cash}.`,`${weather.icon} Today: ${weather.name} — ${weather.desc}`,...(_offRpt&&_offRpt.length>0?[``,`📋 WHILE YOU WERE AWAY (${_hoursAway}h):`,..._offRpt,``]:[]),``,`Type HELP for commands.`);
     setPhase("game");
   };
 
@@ -2399,6 +2797,7 @@ export default function NYC(){
       dailySells:{},
       contractsCompleted:[],
       contractProgress:{},
+      lifetime:{deals:0,pvpWins:0,panhandles:0,talkCount:0,corners:0,bossKills:0,daysAlive:0,cashEarned:0},
       wantedStars:0,patrolEncountered:false,
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
@@ -2421,6 +2820,7 @@ export default function NYC(){
       isFixer:arch.id==="fixer",
       isRat:arch.id==="rat",
       thralls:[],feedCount:0,feedUsed:false,
+      army:[],armyDeployed:null, // [{id,count,name}]
       informsToday:0,exposedAsRat:false,ratHandles:[],networkEarnings:0,
       wiresSent:0,brokeredDeals:0,
     };
@@ -2476,7 +2876,16 @@ export default function NYC(){
     // first journal entry
     setTimeout(()=>updGs(g=>addJournalEntry(g,`Day 1: ${whyFlavor} Starting over.`)),200);
     // start tutorial for new characters
-    setTimeout(()=>push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`📖 TUTORIAL — ${TUTORIAL_STEPS[0].msg}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`),300);
+    setTimeout(()=>push(
+      ``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📖 DAY ONE`,
+      `You just hit the street. No plan. ${startCash>0?"$"+startCash+" to your name.":"Nothing in your pocket."}`,
+      `The city doesn't explain itself. We'll walk you through the first hour.`,
+      ``,
+      `Step 1: `+TUTORIAL_STEPS[0].msg,
+      TUTORIAL_STEPS[0].hint||"",
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``
+    ),300);
     setTutStep(0);setTutDone(false);
     saveChar(state,pinIn);
     setPhase("game");
@@ -2812,12 +3221,12 @@ export default function NYC(){
     }
     if(C==="HELP"){
       push(`COMMANDS:`,
-        `  LOOK · STATUS · INVENTORY · SCOUT · ARBITRAGE · USE · ADDICTION · NEWSPAPER`,`  HUSTLE · REST · EAT · FIGHT · CLAIM`,
+        `  LOOK · STATUS · INVENTORY · SCOUT · ARBITRAGE · USE · ADDICTION · NEWSPAPER`,`  HUSTLE · REST · EAT · FIGHT · CLAIM · UPGRADE CORNER · ABANDON CORNER`,`  CORNERS (map) · DEFEND`,
         `  BUY [product] [qty] · SELL [product] [qty]`,`  COOK · SELL COOKED [name] [qty]`,
         `  BUY SAFEHOUSE · UPGRADE SAFEHOUSE`,`  STASH [product] · UNSTASH [product] · REST SAFE · STASH CASH · RETRIEVE CASH`,
         `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
         `  FORM CREW [name] · JOIN CREW [name] · LEAVE CREW`,`  CREW · CREWS · DEPOSIT [amt]`,
-        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  CONTRACTS · CONTRACT PROGRESS · WANTED POSTERS`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
+        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  CONTRACTS · CONTRACT PROGRESS · WANTED POSTERS`,`  OFFER [player] [prod] [qty] [price] · TRADES · ACCEPT/DECLINE`,`  WRITE [player] [msg] · LETTERS · TITLE`,`  LEADERBOARD · RIVALS`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
         `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item] · CLIENT (Survivor only)`,
         `  WRITE [message] · READ LETTERS`,
         gs.isJunkie?`  SCORE — find street product cheap`:"",
@@ -2871,8 +3280,14 @@ export default function NYC(){
         queens:"Jackson Heights or Jamaica, more languages in two blocks than most countries have total.",
         staten:"Quieter here. The ferry terminal smell. Seagulls. A borough that always feels slightly left out.",
       };
+      if(worldEvent){push(``,`${worldEvent.icon} WORLD EVENT: ${worldEvent.title}`,worldEvent.desc,``);}
       push(`${b.name} — Day ${gs.day} — ${weather.icon} ${weather.name}`,boroDesc[boro]||"",wPool[rnd(0,wPool.length-1)]);
       updGs(g=>applyXP(g,1,"look"));
+      // Update corner presence — track last visit to each owned corner
+      if(gs.cornersOwned?.includes(boro)){
+        const pvWs={...world,cornerLastVisit:{...(world.cornerLastVisit||{}),[gs.name+":"+boro]:gs.day}};
+        setWorld(pvWs);saveWorld(pvWs);
+      }
       // rare event roll on LOOK
       if(!rareEvent){
         const _hour=gameTime?.hour||12;
@@ -2907,10 +3322,66 @@ export default function NYC(){
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
         gs.isHooker?`Clients today: ${gs.hustleCount||0}/6 · Regulars: ${gs.regulars||0}`:!gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
         `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
-        `Crew: ${gs.crew||"solo"} · Corners: ${gs.cornersOwned.join(", ")||"none"}`,
+        `Crew: ${gs.crew||"solo"}`,
+        gs.army?.length?`Army: ${gs.army.length} units · Power ${getArmyPower(gs.army)} · Upkeep $${getArmyUpkeep(gs.army)}/day · Heat +${getArmyHeatMult(gs.army).toFixed(1)}/day${gs.armyDeployed?" · Deployed: "+getBoro(gs.armyDeployed)?.short:""}`:
+        `No army. HIRE to recruit muscle.`,
+        gs.cornersOwned.length?
+          `Corners (${gs.cornersOwned.length}): `+gs.cornersOwned.map(bId=>{
+            const lvl=world.cornerLevels?.[bId]||0;
+            const lastVisit=world.cornerLastVisit?.[gs.name+":"+bId]||0;
+            const cold=gs.day-lastVisit>CORNER_PRESENCE_DAYS;
+            const inc=getCornerIncome(bId,lvl,gs);
+            return getBoro(bId)?.short+" L"+lvl+" $"+inc+(cold?" ❄":"✓");
+          }).join(" · "):
+          `No corners owned. CLAIM one after leveling up.`,
 );return;
     }
-    if(C==="INVENTORY"){push(`Carrying: ${gs.inventory.join(", ")||"nothing"}.`);return;}
+    const inspM=C.match(/^INSPECT (.+)$/);
+    if(inspM){
+      const iNm=inspM[1].trim().toLowerCase();
+      const found2=gs.inventory.find(i=>i.toLowerCase().includes(iNm));
+      const iDef=found2?BASE_ITEMS.find(d=>d.name.toLowerCase()===found2.toLowerCase()||d.id===found2.toLowerCase()):null;
+      if(!found2){push("Not in your inventory. Type INVENTORY to see what you have.");return;}
+      const sLines=iDef?Object.entries(iDef.stats||{}).filter(([,v])=>v).map(([k,v])=>"  "+k+": +"+(typeof v==="boolean"?"yes":v)):[];
+      push("",(iDef?"["+iDef.rarity.toUpperCase()+"] ":"")+found2,iDef?.desc||"","",...sLines,
+        iDef?.slot==="consumable"?"Single use — USE "+found2+" to consume.":iDef?.slot?"Slot: "+iDef.slot+" — EQUIP "+found2+" to wear.":"",
+        "");return;
+    }
+    const dropM2=C.match(/^DROP (.+)$/);
+    if(dropM2){
+      const dNm=dropM2[1].trim();
+      const dFound=gs.inventory.find(i=>i.toLowerCase().includes(dNm.toLowerCase()));
+      if(!dFound){push("Don't have that.");return;}
+      updGs(g=>({...g,inventory:g.inventory.filter(i=>i!==dFound)}));
+      const dropN={msg:gs.name+" dropped "+dFound+" in "+getBoro(boro)?.name+".",icon:"📦",time:Date.now(),droppedItem:dFound,dropBoro:boro};
+      const dWs={...world,notifications:[...(world.notifications||[]).slice(-29),dropN]};
+      setWorld(dWs);saveWorld(dWs);
+      push("Dropped "+dFound+". Someone in "+getBoro(boro)?.name+" might find it.");return;
+    }
+    if(C==="PICKUP"||C==="PICK UP"){
+      const dropped=(world.notifications||[]).filter(n=>n.droppedItem&&n.dropBoro===boro&&(Date.now()-n.time)<3600000);
+      if(dropped.length===0){push("Nothing dropped here recently. Try SEARCH or SCAVENGE.");return;}
+      const itm=dropped[rnd(0,dropped.length-1)];
+      updGs(g=>({...g,inventory:[...g.inventory,itm.droppedItem]}));
+      const newN=(world.notifications||[]).filter(n=>n!==itm);
+      setWorld({...world,notifications:newN});saveWorld({...world,notifications:newN});
+      push("","📦 Found: "+itm.droppedItem,"","");return;
+    }
+    if(C==="INVENTORY"||C==="INV"){
+      const rC={common:"⬜",uncommon:"🟩",rare:"🟦",legendary:"🟨"};
+      const iLines=gs.inventory.map(i=>{
+        const d=BASE_ITEMS.find(x=>x.name===i||x.id===i);
+        const rc=rC[d?.rarity]||"⬜";
+        const tag=d?.slot==="consumable"?"[USE]":d?.slot?"[EQUIP]":"";
+        const statStr=d?Object.entries(d.stats||{}).filter(([,v])=>v&&v!==0).map(([k,v])=>"+"+k).join(" "):"";
+        return "  "+rc+" "+i+(tag?" "+tag:"")+(statStr?" ("+statStr+")":"");
+      });
+      const eqLines=Object.entries(gs.equipment||{}).filter(([,v])=>v).map(([slot,id])=>{const d=BASE_ITEMS.find(x=>x.id===id);return "  "+slot+": "+(d?.name||id);});
+      push("Inventory ("+gs.inventory.length+" items):",
+        ...iLines,gs.inventory.length===0?"  Nothing. SEARCH or SCAVENGE to find gear.":"",
+        "","Equipped:",...(eqLines.length?eqLines:["  Nothing equipped."]),
+        "","INSPECT [item] · USE [item] · EQUIP [item] · DROP [item] · SCAVENGE");return;
+    }
     if(C==="MARKET"){setTab("market");push(`Market open.`);return;}
     if(C==="NPCS")  {setTab("npcs"); push(`Contacts open.`);return;}
     if(C==="MAP")   {setTab("map");  push(`Map open.`);return;}
@@ -2987,7 +3458,8 @@ export default function NYC(){
         push(`${recipe3.icon} Sold ${qty3}x ${pKey}. +$${total3}.`);return;
       }
       if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder. For cooked: SELL COOKED [name].`);return;}
-      const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5;
+      const runnerBonus=(gs.army||[]).filter(u=>u.id==="runner").length;
+      const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5+runnerBonus;
       if(qty>maxSell){push(`Can't move ${qty} at once. Max ${maxSell} per transaction.`);return;}
       // Daily sell limit — same product, same borough, max 3 transactions
       const sellLogKey=`sells_${boro}_${pKey}`;
@@ -3003,7 +3475,8 @@ export default function NYC(){
       const hg=Math.max(1,Math.round(qty*PRODUCTS[pKey].rm*boroHeatMult));
       // Bust scales with heat, quantity, and borough cop presence
       const copP=getCopPresence(boro,world.copPresence,gs.day)/10;
-      const bustBase=qty>=4?0.15:qty>=2?0.08:0.04; // more units = more risk
+      const hasLookout=(gs.army||[]).some(u=>u.id==="lookout");
+      const bustBase=(qty>=4?0.15:qty>=2?0.08:0.04)*(weEffect.bustMult||1)*(hasLookout?0.7:1);
       const bustChance=(gs.heat>5||copP>0.7)?bustBase*weather.bustMult*(1+copP):0;
       const caught=bustChance>0&&Math.random()<bustChance;
       if(caught){
@@ -3027,6 +3500,7 @@ export default function NYC(){
         product:{...g.product,[pKey]:g.product[pKey]-qty},
         heat:clamp(g.heat+hg,0,10),
         dailySells:{...(g.dailySells||{}),[sellLogKey2]:((g.dailySells||{})[sellLogKey2]||0)+1},
+        lifetime:{...g.lifetime,deals:(g.lifetime?.deals||0)+qty,cashEarned:(g.lifetime?.cashEarned||0)+total},
       },8*qty,"deal"));
       // update world supply data so prices respond
       // Supply tracking — accumulates per borough per product per day
@@ -3300,7 +3774,8 @@ export default function NYC(){
       // Product weight penalty on move
       const moveWeight=getCarryWeight(gs.product);
       const weightPenalty=Math.floor(Math.max(0,moveWeight-MAX_CARRY_WEIGHT)*3);
-      const totalMovePenalty=gs.hasMetrocard?0:10+weather.movePenalty+weightPenalty+(tier2.movePenalty||0);
+      const transitMult=weEffect.moveCostMult||1;
+      const totalMovePenalty=weEffect.metrocardDisabled?Math.round((10+weather.movePenalty+weightPenalty+(tier2.movePenalty||0))*transitMult):gs.hasMetrocard?0:Math.round((10+weather.movePenalty+weightPenalty+(tier2.movePenalty||0))*transitMult);
       if(gs.hasMetrocard&&totalMovePenalty===0)push(`🚇 MetroCard — free ride.`);
       if(gs.survival.energy<totalMovePenalty){push(`Too tired to make that trip. Need ${totalMovePenalty} energy.`);return;}
       // Entry cop check — high cop presence boroughs can stop you
@@ -3322,24 +3797,85 @@ export default function NYC(){
       setWorld(ws);saveWorld(ws);return;
     }
 
-    // CLAIM
+    // CLAIM — take a corner (must fight owner first if occupied)
     if(C==="CLAIM"){
-      const cur=world.corners?.[boro];if(cur===gs.name){push(`You already own this.`);return;}
-      if(gs.stats.hustle+gs.level<8){push(`Not enough rep yet.`);return;}
-      if(cur){push(`${cur} owns this. ATTACK them first.`);return;}
-      let ws=addWorldHistory(world,"corner",gs.name,`${gs.name} claimed ${getBoro(boro)?.name} corner`,boro);
-      ws=notifyPlayers(ws,gs.name,`🚩 ${gs.name} just claimed ${getBoro(boro)?.name} corner.`);
-      const _cornerMsgs=[
-        `${gs.name} just claimed the ${getBoro(boro)?.name} corner. It's theirs now.`,
-        `${getBoro(boro)?.name} corner changed hands. ${gs.name} put their flag on it.`,
-        `${gs.name} is running ${getBoro(boro)?.name}. Corner secured. Don't test it.`,
-        `New corner owner in ${getBoro(boro)?.name}. ${gs.name} made their move.`,
+      const cur=world.corners?.[boro];
+      if(cur===gs.name){
+        // Already own it — show status
+        const lvl=world.cornerLevels?.[boro]||0;
+        const lastVisit=world.cornerLastVisit?.[gs.name+":"+boro]||0;
+        const daysSince=gs.day-lastVisit;
+        const cold=daysSince>CORNER_PRESENCE_DAYS;
+        const inc=getCornerIncome(boro,lvl,gs);
+        push("","🚩 "+b.name.toUpperCase()+" CORNER — YOURS",
+          "Level: "+lvl+" of 3 · Daily income: $"+inc+(cold?" (COLD — visit more)":""),
+          "Upgrade cost: "+(lvl<3?"$"+CORNER_UPGRADE_COST[lvl+1]:"MAX LEVEL"),
+          cold?"⚠ You haven't been here in "+daysSince+" days. Corner going cold.":"Last visit: Day "+lastVisit+". Active.",
+          "","UPGRADE CORNER — spend cash to increase income","ABANDON CORNER — release it");
+        return;
+      }
+      if(cur){
+        // Occupied — need to beat owner
+        push("🚩 "+cur+" owns this corner.","You need to beat them in a fight first.","ATTACK "+cur+" while in this borough — then CLAIM.");
+        return;
+      }
+      // Claim requirement — hustle+level gate
+      if(gs.stats.hustle+gs.level<8){push("Not repped up enough to claim a corner. Keep leveling.");return;}
+      // Heat check — can't claim if too hot
+      if(gs.heat>7){push("Too hot right now. Cool down before claiming corners. Cops are watching.");return;}
+      // Claim it
+      let ws=addWorldHistory(world,"corner",gs.name,gs.name+" claimed "+getBoro(boro)?.name+" corner",boro);
+      ws=notifyPlayers(ws,gs.name,"🚩 "+gs.name+" just claimed "+getBoro(boro)?.name+" corner.");
+      const _cMsgs=[
+        gs.name+" just claimed the "+getBoro(boro)?.name+" corner. It's theirs now.",
+        getBoro(boro)?.name+" corner changed hands. "+gs.name+" put their flag on it.",
+        gs.name+" is running "+getBoro(boro)?.name+". Corner secured. Don't test it.",
       ];
-      ws=broadcastActivity(ws,_cornerMsgs[rnd(0,_cornerMsgs.length-1)],"🚩");
+      ws=broadcastActivity(ws,_cMsgs[rnd(0,_cMsgs.length-1)],"🚩");
       if(ws.corners?.[boro]&&ws.corners[boro]!==gs.name)trackContract('corner_steal');
-      ws={...ws,corners:{...ws.corners,[boro]:gs.name}};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
-      updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro]},30,"claim"));
-      push(`You claimed ${b.name} corner.`);journalEvent('firstCorner',boro);return;
+      ws={...ws,
+        corners:{...ws.corners,[boro]:gs.name},
+        cornerLevels:{...(ws.cornerLevels||{}),[boro]:0},
+        cornerLastVisit:{...(ws.cornerLastVisit||{}),[gs.name+":"+boro]:gs.day},
+      };
+      setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
+      updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro],lifetime:{...g.lifetime,corners:(g.lifetime?.corners||0)+1}},30,"claim"));
+      const baseInc=getCornerIncome(boro,0,gs);
+      push("","🚩 CORNER CLAIMED: "+b.name,
+        "Daily income: $"+baseInc+"/day (paid on SLEEP)",
+        "Keep showing up — you need to visit every "+CORNER_PRESENCE_DAYS+" days or it goes cold.",
+        "UPGRADE CORNER to increase income (costs $"+CORNER_UPGRADE_COST[1]+")",
+        "Others can take this by beating you in a fight here.","");
+      journalEvent('firstCorner',boro);return;
+    }
+
+    // UPGRADE CORNER — spend cash to level up income
+    if(C==="UPGRADE CORNER"||C==="UPGRADE"){
+      if(!gs.cornersOwned?.includes(boro)){push("You don't own the "+b.name+" corner.");return;}
+      const lvl=world.cornerLevels?.[boro]||0;
+      if(lvl>=3){push("Corner is already max level. Income: $"+getCornerIncome(boro,3,gs)+"/day.");return;}
+      const cost=CORNER_UPGRADE_COST[lvl+1];
+      if(gs.cash<cost){push("Need $"+cost+" to upgrade. Have $"+gs.cash+".");return;}
+      const newLvl=lvl+1;
+      const ws={...world,cornerLevels:{...(world.cornerLevels||{}),[boro]:newLvl}};
+      setWorld(ws);saveWorld(ws);
+      updGs(g=>({...g,cash:g.cash-cost}));
+      const newInc=getCornerIncome(boro,newLvl,gs);
+      push("","🚩 CORNER UPGRADED",""+b.name+" corner → Level "+newLvl,
+        "New daily income: $"+newInc+"/day",
+        newLvl<3?"Next upgrade: $"+CORNER_UPGRADE_COST[newLvl+1]:"MAX LEVEL reached.","");
+      return;
+    }
+
+    // ABANDON CORNER — release ownership
+    if(C==="ABANDON CORNER"||C==="ABANDON"){
+      if(!gs.cornersOwned?.includes(boro)){push("You don't own this corner.");return;}
+      const ws={...world,corners:{...(world.corners||{})}};
+      delete ws.corners[boro];
+      setWorld(ws);saveWorld(ws);
+      updGs(g=>({...g,cornersOwned:g.cornersOwned.filter(b=>b!==boro)}));
+      push("You walked away from the "+b.name+" corner. It's open now.");
+      return;
     }
     if(C==="FIGHT"){
       // pick random street enemy
@@ -3355,6 +3891,23 @@ export default function NYC(){
       resolveCombat(gs,eType,
         (loot)=>{const isBossWin=ENEMIES[enemyType]?.boss;
       trackContract(isBossWin?'boss_win':'fight_win');
+      if(isBossWin)updGs(g=>({...g,lifetime:{...g.lifetime,bossKills:(g.lifetime?.bossKills||0)+1}}));
+            // Boss drops loot
+      if(isBossWin){
+        const bossDrops={
+          boss_iceman:  ["Police Scanner","Encrypted Phone","Burner Phone"],
+          boss_duchess: ["Deal Ledger","Brass Knuckles","Cuban Link"],
+          boss_prophet: ["Ray's Flask","Street Notebook","Pain Pills"],
+          boss_ghost:   ["Shadow Hood","Lock Picks","Night Vision Monocle"],
+          boss_mama:    ["Marta's Kit","Pawn Shop Watch","Gold Rings"],
+          boss_cole:    ["Army Jacket","Dog Tags","Spiked Bat"],
+          boss_captain: ["Police Scanner","Kevlar Vest","The Piece"],
+        };
+        const drops=bossDrops[enemyType]||["Street Bandage"];
+        const drop=drops[rnd(0,drops.length-1)];
+        updGs(g=>({...g,inventory:[...g.inventory,drop]}));
+        setTimeout(()=>push("","📦 LOOT: "+drop,"Taken from "+ENEMIES[enemyType].name+".",""),200);
+      }
       const endMsgs=isBossWin?[ENEMIES[enemyType].winMsg||"Boss down."]:["Over. You walk away.","Done. They will not try that again.","You end it before it gets worse."];
       push("",endMsgs[rnd(0,endMsgs.length-1)]);
       if(isBossWin){
@@ -3377,6 +3930,19 @@ export default function NYC(){
     const atkM=C.match(/^ATTACK (.+)$/);
     if(atkM){
       const tName=raw.slice(7).trim();const tData=world.players?.[tName];
+      if(!tData){push(tName+" is not in this world.");return;}
+      // Check if target has army deployed here
+      if(tData.armyDeployed===boro){
+        const tArmy=tData.army||[];
+        if(tArmy.length>0){push("⚠ "+tName+" has "+tArmy.length+" unit"+(tArmy.length>1?"s":"")+" deployed in "+b.name+". Defense +"+getArmyDefenseBonus(tArmy)+". Expect resistance.");}
+      }
+      if(tData.armyDeployed===boro){
+        const tArmy=tData.army||[];
+        if(tArmy.length>0)push("⚠ "+tName+" has army deployed in "+b.name+". Defense +"+getArmyDefenseBonus(tArmy)+". Expect resistance.");
+      }
+      if(world.corners?.[boro]===tName&&(Date.now()-(tData.lastSeen||0))<120000&&tData.borough===boro){
+        push("⚠ "+tName+" is online and defending their "+getBoro(boro)?.name+" corner. They know you're coming.");
+      }
       if(!tData){push(`Don't know ${tName}.`);return;}
       if(tData.borough!==boro){push(`${tName} isn't in ${b.name}.`);return;}
       if(tName===gs.name){push(`Can't attack yourself.`);return;}
@@ -3400,6 +3966,11 @@ export default function NYC(){
       const cornerStolen=won&&world.corners?.[boro]===tName;
      const tBounty=world.bounties?.[tName];
         const bAmt2=tBounty&&typeof tBounty==="object"?tBounty.amount:tBounty||0;
+        // Chance to steal an item on PvP win
+        if(won&&(tData.inventory||[]).length>0&&Math.random()<0.3){
+          const stealable=(tData.inventory||[]).filter(i=>!["Oregon Trail Medal","Rope","Waterproof Bag","Raft Materials"].includes(i));
+          if(stealable.length>0){const si2=stealable[rnd(0,stealable.length-1)];updGs(g=>({...g,inventory:[...g.inventory,si2]}));setTimeout(()=>push("📦 Also grabbed: "+si2+" from "+tName+"."),150);}
+        }
         if(won&&bAmt2>0){
           const bc3={...world.bounties};delete bc3[tName];
           const bcW3=broadcastActivity({...world,bounties:bc3},[gs.name+" collected $"+bAmt2+" bounty on "+tName+".",tName+"'s bounty cleared. "+gs.name+" got $"+bAmt2+"."][rnd(0,2)]||gs.name+" collected the bounty.","💰");
@@ -3411,9 +3982,31 @@ export default function NYC(){
         corners:{...world.corners,...(cornerStolen?{[boro]:gs.name}:{})},
         playerAlerts:{...(world.playerAlerts||{}),[tName]:[...((world.playerAlerts||{})[tName]||[]),
           {msg:`⚠ ${gs.name} attacked you in ${b.name}. Attack roll ${totalAttack}. ${won?`Lost $${stolen}.`:"They missed."}`,time:Date.now()}]}};
-      setWorld(ws);saveWorld(ws);
-      if(won){
-        updGs(g=>applyXP({...g,cash:g.cash+stolen,heat:clamp(g.heat+hg,0,10),survival:{...g.survival,health:clamp(g.survival.health-selfDmg,0,100)},cornersOwned:cornerStolen?[...g.cornersOwned,boro]:g.cornersOwned},25,"fight"));
+      // Track rivals — attacked same player twice = rivalry
+      const rivalKey=gs.name+":"+tName;
+      const attackCount=((world.rivals||{})[rivalKey]||0)+1;
+      const newRivals={...(world.rivals||{}),[rivalKey]:attackCount};
+      if(attackCount===2){
+        setTimeout(()=>push("","⚔ RIVALRY DECLARED","You and "+tName+" are now rivals. Beating them gives 2x XP and cash.","They've been notified.",""),300);
+        const rivWs2={...world,rivals:newRivals};
+        const rivWs3=notifyPlayers(rivWs2,gs.name,"⚔ "+gs.name+" has declared you a rival. Watch your back.");
+        const ws={...rivWs3,
+          pvpLog:[...(rivWs3.pvpLog||[]).slice(-29),{attacker:gs.name,victim:tName,won,stolen,boro,time:Date.now()}],
+          playerAlerts:{...(rivWs3.playerAlerts||{}),[tName]:[...((rivWs3.playerAlerts||{})[tName]||[]),{msg:"⚠ "+gs.name+" attacked you in "+b.name+". "+( won?"Lost $"+stolen+".":"They missed."),time:Date.now()}]},
+          rivals:newRivals,
+        };
+        setWorld(ws);saveWorld(ws);
+        if(won){
+          const _isRival=attackCount>=2;
+          const _rMult=_isRival?2:1;
+          updGs(g=>applyXP({...g,
+            cash:g.cash+stolen*_rMult,
+            heat:clamp(g.heat+hg,0,10),
+            survival:{...g.survival,health:clamp(g.survival.health-selfDmg,0,100)},
+            cornersOwned:cornerStolen?[...g.cornersOwned,boro]:g.cornersOwned,
+            lifetime:{...(g.lifetime||{}),pvpWins:(g.lifetime?.pvpWins||0)+1},
+          },25*_rMult,"fight"));
+          if(_isRival)push("⚔ RIVAL BONUS: 2x XP and cash.");
         let wsh=addWorldHistory(world,"pvp",gs.name,`${gs.name} robbed ${tName} in ${getBoro(boro)?.name} (d20=${attackRoll}, +$${stolen})`,boro);
         wsh=notifyPlayers(wsh,gs.name,`🔴 ${gs.name} rolled ${attackRoll} attacking ${tName} in ${getBoro(boro)?.name}. +$${stolen}.`);
         const _pvpWinMsgs=[
@@ -3570,6 +4163,7 @@ export default function NYC(){
         push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``,`💡 ${hotTip[rnd(0,hotTip.length-1)]}`);
       } else {
         trackContract('talk');
+      updGs(g=>({...g,lifetime:{...g.lifetime,talkCount:(g.lifetime?.talkCount||0)+1}}));
       push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``);
       }
       setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));
@@ -3584,6 +4178,76 @@ export default function NYC(){
       push(`Mental +8. Rep with ${npc.name} up.`);return;}
 
     // DECLARE WAR [crew]
+    // OFFER [player] [product] [qty] [price] — trade offer
+    const offerM=C.match(/^OFFER ([A-Za-z0-9_]+) (\w+) (\d+) (\d+)$/);
+    if(offerM){
+      const [,tName,prod,qtyS,priceS]=offerM;
+      const qty=parseInt(qtyS);const price=parseInt(priceS);
+      if(tName.toLowerCase()===gs.name.toLowerCase()){push("Can't trade with yourself.");return;}
+      if(!PRODUCTS[prod.toLowerCase()]&&!RECIPES[prod.toLowerCase()]){push("Unknown product: "+prod+". Try: weed, pills, powder.");return;}
+      const pKey=prod.toLowerCase();
+      const held=(gs.product[pKey]||0)+(gs.cooked?.[pKey]||0);
+      if(held<qty){push("You only have "+held+" "+pKey+".");return;}
+      if(!world.players?.[tName]){push(tName+" is not in this world right now.");return;}
+      const offer={id:Math.random().toString(36).slice(2),from:gs.name,to:tName,product:pKey,qty,price,boro,time:Date.now(),expires:Date.now()+300000}; // 5 min expiry
+      const offerWs={...world,tradeOffers:{...(world.tradeOffers||{}),[offer.id]:offer}};
+      const offerWs2=notifyPlayers(offerWs,gs.name,`💱 ${gs.name} is offering ${qty}x ${pKey} for $${price}. Type ACCEPT ${offer.id} to take it.`);
+      setWorld(offerWs2);saveWorld(offerWs2);
+      push("","💱 TRADE OFFER SENT",""+qty+"x "+pKey+" → "+tName+" for $"+price,`Offer ID: ${offer.id}`,"Expires in 5 minutes. They need to type ACCEPT "+offer.id,"");
+      return;
+    }
+    // ACCEPT [offer id] — accept a trade offer
+    const acceptM=C.match(/^ACCEPT ([A-Za-z0-9]+)$/);
+    if(acceptM&&!["RAY","SMOKE","CARLOS","DEE","MARIA"].includes(acceptM[1].toUpperCase())){
+      const offerId=acceptM[1];
+      const offer=(world.tradeOffers||{})[offerId];
+      if(!offer){push("No trade offer found with that ID. Check TRADES.");return;}
+      if(offer.to!==gs.name){push("That offer is not for you.");return;}
+      if(Date.now()>offer.expires){push("That offer expired.");const ew={...world,tradeOffers:{...(world.tradeOffers||{})}};delete ew.tradeOffers[offerId];setWorld(ew);saveWorld(ew);return;}
+      if(gs.cash<offer.price){push("You need $"+offer.price+" to accept. Have $"+gs.cash+".");return;}
+      const seller=world.players?.[offer.from];
+      // Execute trade — buyer pays, gets product
+      updGs(g=>({...g,cash:g.cash-offer.price,
+        product:{...g.product,[offer.product]:(g.product[offer.product]||0)+offer.qty},
+      }));
+      // Notify seller and remove offer
+      const newOffers={...(world.tradeOffers||{})};delete newOffers[offerId];
+      const tradeWs={...world,tradeOffers:newOffers};
+      const tradeWs2=notifyPlayers(tradeWs,gs.name,`💱 ${gs.name} accepted your offer. $${offer.price} incoming. Trade complete.`);
+      const tradeWs3=broadcastActivity(tradeWs2,`💱 ${offer.from} and ${gs.name} just traded ${offer.qty}x ${offer.product} for $${offer.price}.`,"💱");
+      setWorld(tradeWs3);saveWorld(tradeWs3);
+      // Fixer gets 10% if they brokered it (were in same boro as either party)
+      const fixers=Object.entries(world.players||{}).filter(([n,d])=>{
+        const pGs=world.players[n];return pGs?.archId==="fixer"&&(pGs.borough===offer.boro||pGs.borough===boro);
+      });
+      push("","💱 TRADE COMPLETE","Got "+offer.qty+"x "+offer.product+" from "+offer.from+".","Paid $"+offer.price+".",
+        fixers.length>0?"The Fixer takes 10% for brokering. That's the deal.":"","");
+      return;
+    }
+    // DECLINE [offer id]
+    const declineM=C.match(/^DECLINE ([A-Za-z0-9]+)$/);
+    if(declineM){
+      const offer=(world.tradeOffers||{})[declineM[1]];
+      if(!offer){push("No offer found.");return;}
+      const nO={...(world.tradeOffers||{})};delete nO[declineM[1]];
+      const dWs={...world,tradeOffers:nO};
+      const dWs2=notifyPlayers(dWs,gs.name,`💱 ${gs.name} declined your trade offer.`);
+      setWorld(dWs2);saveWorld(dWs2);
+      push("Trade declined.");return;
+    }
+    // TRADES — show incoming trade offers
+    if(C==="TRADES"||C==="OFFERS"){
+      const myOffers=Object.values(world.tradeOffers||{}).filter(o=>o.to===gs.name&&Date.now()<o.expires);
+      const myOut=Object.values(world.tradeOffers||{}).filter(o=>o.from===gs.name&&Date.now()<o.expires);
+      push("","💱 TRADE OFFERS","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        myOffers.length?"INCOMING:":"No incoming offers.",
+        ...myOffers.map(o=>`  ${o.from}: ${o.qty}x ${o.product} for $${o.price} · ACCEPT ${o.id} or DECLINE ${o.id}`),
+        myOut.length?"
+OUTGOING:":"",
+        ...myOut.map(o=>`  → ${o.to}: ${o.qty}x ${o.product} for $${o.price}`),
+        "","OFFER [player] [product] [qty] [price] to make a trade.");
+      return;
+    }
     const warM=C.match(/^DECLARE WAR (.+)$/);
     if(warM){
       if(!gs.crew){push("Not in a crew.");return;}
@@ -3616,6 +4280,22 @@ export default function NYC(){
       push("🤝 Peace called with "+pTarget+".");return;
     }
     // WAR STATUS
+    if(C==="RIVALS"||C==="MY RIVALS"){
+      const myRivals=Object.entries(world.rivals||{})
+        .filter(([k,v])=>k.startsWith(gs.name+":"))
+        .map(([k,v])=>({name:k.split(":")[1],attacks:v}));
+      const theirRivals=Object.entries(world.rivals||{})
+        .filter(([k,v])=>k.endsWith(":"+gs.name))
+        .map(([k,v])=>({name:k.split(":")[0],attacks:v}));
+      push("","⚔ RIVALS","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        myRivals.length?"People you've beefed with:":"No rivals yet.",
+        ...myRivals.map(r=>`  ${r.name} — ${r.attacks} attack${r.attacks>1?"s":""} · ${r.attacks>=2?"RIVAL — 2x bonus if you beat them":"1 more attack to declare rivalry"}`),
+        theirRivals.length?"
+People gunning for you:":"",
+        ...theirRivals.map(r=>`  ${r.name} has attacked you ${r.attacks} time${r.attacks>1?"s":""}`),
+        "","Beat your rivals for 2x XP and cash.");
+      return;
+    }
     if(C==="WAR STATUS"||C==="WARS"){
       const myW=world.crews?.[gs.crew]||{};
       const wars=myW.wars||[];
@@ -3666,7 +4346,24 @@ export default function NYC(){
         });
         updGs(g=>{const na={...g.activeQuests};expiredQuests.forEach(([qid])=>delete na[qid]);return{...g,activeQuests:na};});
       }
-      const income=gs.cornersOwned.reduce((s)=>s+rnd(20,50),0);
+      // Corner income — tiered by borough, level, presence
+      let income=0;const coldCorners=[];const hotCorners=[];
+      gs.cornersOwned.forEach(bId=>{
+        const lvl=world.cornerLevels?.[bId]||0;
+        const lastVisit=world.cornerLastVisit?.[gs.name+":"+bId]||0;
+        const daysSince=gs.day-lastVisit;
+        const cold=daysSince>CORNER_PRESENCE_DAYS;
+        const hasLt=(gs.army||[]).some(u=>u.id==="lieutenant");
+        if(cold&&!hasLt){coldCorners.push(getBoro(bId)?.short||bId);}
+        else if(cold&&hasLt){} // lieutenant keeps it running
+        else{
+          const earned=getCornerIncome(bId,lvl,gs);
+          income+=earned;
+          // Passive heat from high-value corners
+          const heatDrain=CORNER_HEAT_DRAIN[bId]||0.1;
+          updGs(g=>({...g,heat:clamp(g.heat+heatDrain,0,10)}));
+        }
+      });
       const thrallIncome=(gs.thralls||[]).length*30;
       const networkIncome=gs.isFixer&&hasSkill(gs,"network_effect")?Object.keys(world.players||{}).length*5:0;
       // reset rat daily infos
@@ -3683,6 +4380,24 @@ export default function NYC(){
       const safePassive=Object.entries(world.safehouses||{}).filter(([,s])=>s.owner===gs.name||(gs.crew&&s.crewOwner===gs.crew)).length*rnd(5,10);
       // Check survive-type contracts on sleep
       trackContract('sleep_check',{heat:gs.heat,warmth:gs.survival.warmth,hunger:gs.survival.hunger});
+      // Army upkeep — pay daily or units desert
+      const _army=gs.army||[];
+      const _upkeep=getArmyUpkeep(_army);
+      const _heatAdd=getArmyHeatMult(_army);
+      if(_army.length>0){
+        if(gs.cash>=_upkeep){
+          updGs(g=>({...g,cash:g.cash-_upkeep,heat:clamp(g.heat+_heatAdd,0,10),lifetime:{...g.lifetime,daysAlive:(g.lifetime?.daysAlive||0)+1}}));
+          if(_upkeep>0)setTimeout(()=>push("💪 Army paid: -$"+_upkeep+". "+(_heatAdd>0?"Heat +"+_heatAdd.toFixed(1)+" from having muscle on the street.":"")),200);
+        } else {
+          // Can't pay — units desert
+          const canAfford=_army.filter((u,i)=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return (unit?.upkeep||0)<=gs.cash;});
+          updGs(g=>({...g,army:canAfford,heat:clamp(g.heat+_heatAdd*0.5,0,10),lifetime:{...g.lifetime,daysAlive:(g.lifetime?.daysAlive||0)+1}}));
+          setTimeout(()=>push("","⚠ COULDN'T MAKE PAYROLL",""+(_army.length-canAfford.length)+" unit"+((_army.length-canAfford.length)>1?"s":"")+" deserted. Pay your people.",""),200);
+        }
+      } else {
+        updGs(g=>({...g,lifetime:{...g.lifetime,daysAlive:(g.lifetime?.daysAlive||0)+1}}));
+      }
+      setTimeout(()=>checkNotoriety(gsRef.current,updGs,push),500);
       const nextDay=gs.day+1;const nextWeather=getWeather(nextDay);
       // junkie habit cost
       let habitCost=0;let habitMsg="";
@@ -3745,7 +4460,7 @@ export default function NYC(){
         paper.personal,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
-        `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners: +$"+income+". ":""}`+
+        `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners: +$"+income+(coldCorners.length?" ("+coldCorners.join(",")+": COLD)":"")+". ":""}`+
         `${crewBonus>0?`Crew added $${crewBonus}. `:""}`+
         `${safePassive>0?`Safe houses: +$${safePassive}. `:""}`+
         `${commBonus>0?`Community network: +$${commBonus}. `:""}`+
@@ -3755,9 +4470,144 @@ export default function NYC(){
         habitMsg||"",
         `${nextWeather.icon} ${nextWeather.name} today — ${nextWeather.desc}`,
         ``,
-      );return;
+      );
+      // Weekly winner check
+      const _wk2=getWeekNumber();const _prev2=_wk2-1;const _lbd=world.leaderboard||{};
+      if(_lbd[_prev2]&&world.leaderboardWeek!==_wk2){
+        LEADERBOARD_CATEGORIES.forEach(cat=>{
+          const _ents=Object.values(_lbd[_prev2]||{}).filter(e=>e&&typeof e==="object"&&e.name&&e[cat.id]!=null);
+          if(_ents.length>0){const _win=_ents.sort((a,b)=>(b[cat.id]||0)-(a[cat.id]||0))[0];
+            if(_win&&_win.name===gs.name){const rwd=WEEKLY_REWARDS[cat.id];if(rwd){
+              updGs(g=>({...g,cash:g.cash+rwd.cash,inventory:[...(g.inventory||[]),rwd.item],title:g.title||rwd.title}));
+              setTimeout(()=>push("","🏆 WEEKLY WINNER: "+cat.label,"You topped the leaderboard!","Reward: "+rwd.title+" + $"+rwd.cash+" + "+rwd.item,""),600);
+              const bWs=broadcastActivity(world,gs.name+" won the weekly "+cat.label+"! "+cat.icon+" "+rwd.title,"🏆");
+              setWorld(p=>({...p,...bWs,leaderboardWeek:_wk2}));saveWorld({...world,...bWs,leaderboardWeek:_wk2});
+            }}
+          }
+        });
+      }
+      if(coldCorners.length>0){
+        push("","⚠ COLD CORNERS: "+coldCorners.join(", "),"You haven't visited in "+CORNER_PRESENCE_DAYS+"+ days. No income until you show up.","");
+      }
+      return;
     }
 
+    // HIRE [unit] — recruit army unit
+    if(C==="HIRE"||C==="ARMY"||C==="MY ARMY"){
+      const army=gs.army||[];
+      const slots=getArmySlots(army);
+      const power=getArmyPower(army);
+      const upkeep=getArmyUpkeep(army);
+      const combatB=getArmyCombatBonus(army);
+      const defenseB=getArmyDefenseBonus(army);
+      const heatDaily=getArmyHeatMult(army);
+      push("","💪 YOUR STREET ARMY","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        army.length?"Roster ("+army.length+" units, "+slots+"/"+MAX_ARMY_SIZE+" slots):":"No army yet.",
+        ...army.map(u=>{const unit=ARMY_UNITS.find(x=>x.id===u.id)||{};return "  "+unit.icon+" "+unit.name+" — $"+unit.upkeep+"/day upkeep · Power "+unit.power;}),
+        army.length?"Stats: Combat +"+combatB+" · Defense +"+defenseB+" · Daily upkeep $"+upkeep+" · Heat +"+heatDaily.toFixed(1)+"/day":"",
+        "","AVAILABLE TO HIRE:",
+        ...ARMY_UNITS.filter(u=>getArmySlots(army)+u.slots<=MAX_ARMY_SIZE).map(u=>"  HIRE "+u.name.toUpperCase().replace(/ /g,"_")+" — $"+u.cost+" (upkeep $"+u.upkeep+"/day) · "+u.desc),
+        slots>=MAX_ARMY_SIZE?"Army at max capacity ("+MAX_ARMY_SIZE+" slots).":"Slots used: "+slots+"/"+MAX_ARMY_SIZE,
+        "","FIRE [unit] to dismiss. DEPLOY [borough] to station army there. ARMY STATUS for battlefield info.");
+      return;
+    }
+    const hireMx=C.match(/^HIRE (.+)$/);
+    if(hireMx){
+      const unitName=hireMx[1].toLowerCase().replace(/_/g," ");
+      const unit=ARMY_UNITS.find(u=>u.name.toLowerCase()===unitName||u.id===unitName.replace(/ /g,"_"));
+      if(!unit){push("Unknown unit. HIRE to see available units: lookout, runner, enforcer, lieutenant, street fixer.");return;}
+      const army=gs.army||[];
+      const slots=getArmySlots(army);
+      if(slots+unit.slots>MAX_ARMY_SIZE){push("Not enough slots. "+unit.name+" needs "+unit.slots+" slot"+(unit.slots>1?"s":"")+". Current: "+slots+"/"+MAX_ARMY_SIZE+".");return;}
+      if(gs.cash<unit.cost){push("Need $"+unit.cost+" to hire "+unit.name+". Have $"+gs.cash+".");return;}
+      const newMember={id:unit.id,name:unit.name,hiredDay:gs.day};
+      updGs(g=>({...g,cash:g.cash-unit.cost,army:[...(g.army||[]),newMember]}));
+      // Big army = cops notice
+      const newArmy=[...(gs.army||[]),newMember];
+      const newPower=getArmyPower(newArmy);
+      if(newPower>=8){
+        push("",""+unit.icon+" "+unit.name+" hired. -$"+unit.cost+".",
+          "⚠ Your operation is getting large. Police will take notice. Expect increased heat.",
+          "Army power: "+newPower+". Daily upkeep: $"+getArmyUpkeep(newArmy)+". Daily heat: +"+getArmyHeatMult(newArmy).toFixed(1),"");
+      } else {
+        push("",""+unit.icon+" "+unit.name+" hired. -$"+unit.cost+".",
+          "Army power: "+newPower+". Daily upkeep: $"+getArmyUpkeep(newArmy)+". Heat drain: +"+getArmyHeatMult(newArmy).toFixed(1)+"/day","");
+      }
+      return;
+    }
+    // FIRE [unit] — dismiss an army member
+    const fireMx=C.match(/^FIRE (.+)$/);
+    if(fireMx&&!["FIGHT","FEED"].includes(fireMx[1].toUpperCase())){
+      const unitName=fireMx[1].toLowerCase().replace(/_/g," ");
+      const army=gs.army||[];
+      const idx=army.findIndex(u=>{const unit=ARMY_UNITS.find(x=>x.id===u.id);return unit&&unit.name.toLowerCase()===unitName;});
+      if(idx<0){push("No "+unitName+" in your army.");return;}
+      const fired=army[idx];const firedUnit=ARMY_UNITS.find(x=>x.id===fired.id)||{};
+      const newArmy=[...army.slice(0,idx),...army.slice(idx+1)];
+      updGs(g=>({...g,army:newArmy}));
+      push(firedUnit.icon+" "+firedUnit.name+" dismissed. They walk. No hard feelings — probably.","Army power now: "+getArmyPower(newArmy)+". Upkeep: $"+getArmyUpkeep(newArmy)+"/day.");
+      return;
+    }
+    // DEPLOY [borough] — station army in a borough for corner protection
+    const deployMx=C.match(/^DEPLOY (.+)$/);
+    if(deployMx){
+      const army=gs.army||[];
+      if(army.length===0){push("No army to deploy. HIRE units first.");return;}
+      const target=BOROUGHS.find(bx=>bx.id===deployMx[1].toLowerCase()||bx.name.toLowerCase().includes(deployMx[1].toLowerCase())||bx.short.toLowerCase()===deployMx[1].toLowerCase());
+      if(!target){push("Unknown borough.");return;}
+      updGs(g=>({...g,armyDeployed:target.id}));
+      const _dPower=getArmyPower(gs.army||[]);
+      if(_dPower>=6){
+        const _dWs=broadcastActivity(world,gs.name+" deployed "+_dPower+"-power army to "+target.name+". That borough is locked down.","💪");
+        setWorld(_dWs);saveWorld(_dWs);
+      }
+      push("","💪 ARMY DEPLOYED to "+target.name,
+        "Your "+army.length+" unit"+(army.length>1?"s are":"is")+" stationed in "+target.name+".",
+        "Corners here are defended. Rival attacks face +"+getArmyDefenseBonus(army)+" defense.",
+        "Cops in "+target.name+" will notice faster. Heat gain +"+getArmyHeatMult(army).toFixed(1)+"/day there.","");
+      return;
+    }
+    // CORNERS — corner map
+    if(C==="CORNERS"||C==="CORNER MAP"){
+      push("","🚩 CORNER MAP","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ...BOROUGHS.map(bx=>{
+          const ow=world.corners?.[bx.id];const lv=world.cornerLevels?.[bx.id]||0;
+          const ic=getCornerIncome(bx.id,lv,gs);const isMe=ow===gs.name;
+          const lv2=ow?world.cornerLastVisit?.[ow+":"+bx.id]||0:0;
+          const cld=ow&&(gs.day-lv2)>CORNER_PRESENCE_DAYS;
+          if(!ow)return bx.short+": UNCLAIMED — up to $"+getCornerIncome(bx.id,3,gs)+"/day at max level";
+          return bx.short+": "+ow+(isMe?" (YOU)":"")+" L"+lv+" $"+ic+"/day"+(cld?" ❄ cold":"");
+        }),
+        "","Your corners: "+(gs.cornersOwned.length?gs.cornersOwned.map(b=>getBoro(b)?.short).join(", "):"none"),
+        "CLAIM · UPGRADE CORNER · ATTACK [player] to contest");
+      return;
+    }
+    // RECOVERY — addiction recovery arc with Carmen
+    if(C==="RECOVERY"||C==="CARMEN"){
+      if((gs.addiction||0)<40){push("You don't need this yet. Keep it that way.");return;}
+      const carmenRep=gs.carmenRep||0;
+      const dialogue=CARMEN_DIALOGUE[Math.min(carmenRep,CARMEN_DIALOGUE.length-1)];
+      push("","🌿 CARMEN'S DROP-IN CENTER","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "Carmen (recovery counselor):",`"${dialogue.line}"`,
+        "","You can come back here every day. Each visit helps.",
+        carmenRep>=3?"Your addiction is dropping faster now.":"Keep showing up. It takes time.",
+        carmenRep>=5?"[Recovery Track complete — addiction recovers 2x faster permanently]":"",
+        "","Type RECOVERY again tomorrow to check in.");
+      // Reduce addiction on visit
+      const reduction=carmenRep>=5?8:carmenRep>=3?5:3;
+      updGs(g=>({...g,
+        addiction:Math.max(0,( g.addiction||0)-reduction),
+        carmenRep:(g.carmenRep||0)+1,
+        lastRecovery:g.day,
+      }));
+      if((gs.addiction||0)-reduction<=0){
+        push("","🌿 CLEAN","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+          "Addiction: 0. You did it.",
+          "Carmen nods. Doesn't say much. You both know what this took.","");
+        updGs(g=>({...g,title:g.title||"THE RECOVERED",notorietyTitle:g.notorietyTitle||"survivor"}));
+      }
+      return;
+    }
     // SCORE — junkie unique command (find product at street price)
     if(C==="SCORE"){
       if(!gs.isJunkie){push(`That's not your world.`);return;}
@@ -3867,7 +4717,8 @@ export default function NYC(){
       const charmBonus=Math.floor((gs.stats.charm||5)/3);
       const weatherBonus=weather.id==="rain"||weather.id==="storm"?2:weather.id==="heatwave"?-3:0;
       const repeatPenalty=panToday*2;
-      const maxEarned=Math.max(1,base+dogBonus+charmBonus+weatherBonus-repeatPenalty);
+      const panEventMult=weEffect.panhandleMult||1;
+      const maxEarned=Math.max(1,Math.round((base+dogBonus+charmBonus+weatherBonus-repeatPenalty)*panEventMult));
       const success=Math.random()>(0.25+panToday*0.1);
       if(success){
         const earned=rnd(Math.max(1,maxEarned-3),maxEarned);
@@ -3879,6 +4730,7 @@ export default function NYC(){
            "Guy in a suit walks past three times before the dog gets him. $"+earned+"."][rnd(0,2)]:
           PANHANDLE_MSGS[rnd(0,PANHANDLE_MSGS.length-1)];
         trackContract('panhandle',{success:true});
+        updGs(g=>({...g,lifetime:{...g.lifetime,panhandles:(g.lifetime?.panhandles||0)+1}}));
         updGs(g=>applyXP({...g,cash:g.cash+earned,panhandleCount:(g.panhandleCount||0)+1,
           survival:{...g.survival,mental:clamp((g.survival.mental||70)-mentalCost,0,100),energy:clamp(g.survival.energy-energyCost,0,100)}},gs.isDrifter?3:2,"hustle"));
         push(panMsg,`+$${earned}. Mental -${mentalCost}. Energy -${energyCost}.`,panToday>=2?`People are recognizing you. Returns dropping.`:"");
@@ -3937,6 +4789,54 @@ export default function NYC(){
       return;
     }
 
+    // SCAVENGE — borough-specific deep search with cooldown
+    if(C==="SCAVENGE"){
+      const now2=Date.now();
+      const lastScav=gs.lastScavenge||0;
+      const cooldown=3600000;
+      if(now2-lastScav<cooldown){
+        const minLeft=Math.ceil((cooldown-(now2-lastScav))/60000);
+        push("You already searched this area. Wait "+minLeft+" more minutes.");return;
+      }
+      if(gs.survival.energy<25){push("Too exhausted to search properly. REST first.");return;}
+      const boroLoot={
+        manhattan:[
+          {w:20,fn:()=>{const a=rnd(30,80);updGs(g=>({...g,cash:g.cash+a}));return "Midtown trash has money in it. $"+a+" in a dropped bag."}},
+          {w:15,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Police Scanner"]}));return "Back of a cab. Police scanner left on the seat."}},
+          {w:15,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Brass Knuckles"]}));return "Alley off 9th Ave. Someone's insurance policy. You take it."}},
+          {w:25,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Street Bandage"]}));return "Pharmacy dumpster. Sealed kit. Still good."}},
+          {w:25,fn:()=>{const a=rnd(15,40);updGs(g=>({...g,cash:g.cash+a}));return "Office coat pocket. $"+a+". Conference room souvenir."}},
+        ],
+        brooklyn:[
+          {w:25,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Army Jacket"]}));return "Bed-Stuy donation bin. Army jacket. You take it."}},
+          {w:25,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Crowbar"]}));return "Construction site off Atlantic. Crowbar leaning against the fence."}},
+          {w:25,fn:()=>{const a=rnd(20,50);updGs(g=>({...g,cash:g.cash+a}));return "Nostrand Ave alley. $"+a+" in a coffee can."}},
+          {w:25,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Hot Meal (Container)"]}));return "Community kitchen side door. Hot container. Still warm."}},
+        ],
+        bronx:[
+          {w:33,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Tire Iron"]}));return "Stripped car on Morris Ave. Tire iron left behind."}},
+          {w:33,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Army Ration"]}));return "Old VA supply box. Army ration, sealed."}},
+          {w:34,fn:()=>{const a=rnd(10,35);updGs(g=>({...g,cash:g.cash+a}));return "$"+a+" in coins outside the station."}},
+        ],
+        queens:[
+          {w:33,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Lucky Coin"]}));return "Flushing market alley. Old coin. Heavy. You keep it."}},
+          {w:33,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Hip Flask"]}));return "Jackson Heights stoop. Flask left behind. Still has something in it."}},
+          {w:34,fn:()=>{const a=rnd(25,60);updGs(g=>({...g,cash:g.cash+a}));return "Restaurant alley. $"+a+" left in a cash register."}},
+        ],
+        staten:[
+          {w:30,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Spiked Bat"]}));return "Abandoned auto shop. Bat with nails. Yours now."}},
+          {w:30,fn:()=>{updGs(g=>({...g,inventory:[...g.inventory,"Old MetroCard"]}));return "Ferry terminal lost and found. MetroCard. Might have rides."}},
+          {w:40,fn:()=>{const a=rnd(8,25);updGs(g=>({...g,cash:g.cash+a}));return "$"+a+" in a jar near the greenway. Someone's emergency fund."}},
+        ],
+      };
+      const pool=boroLoot[boro]||boroLoot.brooklyn;
+      const totalW=pool.reduce((s,e)=>s+e.w,0);
+      let roll=Math.random()*totalW,result="Nothing worth taking here.";
+      for(const e of pool){roll-=e.w;if(roll<=0){result=e.fn();break;}}
+      updGs(g=>({...g,lastScavenge:now2,survival:{...g.survival,energy:clamp(g.survival.energy-30,0,100)}}));
+      push("","🔍 SCAVENGE — "+b.name,"",result,"","Energy -30. Cooldown 1 hour. SEARCH for quick finds anytime.");
+      return;
+    }
     // SEARCH — scavenge for found objects
     if(C==="SEARCH"){
       const now=gs.day;
@@ -3987,6 +4887,38 @@ export default function NYC(){
       return;
     }
 
+    // WRITE [player] [message] — send letter to specific player
+    // or WRITE [message] — world log entry
+    const writePlayerM=raw.match(/^WRITE ([A-Za-z0-9_]+) (.+)$/i);
+    if(writePlayerM&&world.players?.[writePlayerM[1]]&&writePlayerM[1]!==gs.name){
+      const toName=writePlayerM[1];const letterText=writePlayerM[2];
+      const letter={id:Math.random().toString(36).slice(2),from:gs.name,to:toName,text:letterText,day:gs.day,boro,time:Date.now(),read:false};
+      const ws={...world,letters:[...(world.letters||[]).slice(-49),letter]};
+      const ws2=notifyPlayers(ws,gs.name,`✉ Letter from ${gs.name}: "${letterText.slice(0,60)}${letterText.length>60?"...":""}"`);
+      setWorld(ws2);saveWorld(ws2);
+      push("","✉ LETTER SENT","To: "+toName,"""+letterText+""","They'll get it when they log in.","");return;
+    }
+    // LETTERS — check your mail
+    if(C==="LETTERS"||C==="MAIL"||C==="READ LETTERS"){
+      const myLetters=(world.letters||[]).filter(l=>l.to===gs.name||(!l.to));
+      const unread=myLetters.filter(l=>l.to===gs.name&&!l.read);
+      const worldLog=(world.letters||[]).filter(l=>!l.to).slice(-5);
+      if(unread.length>0){
+        push("","✉ YOUR MAIL","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+          ...unread.map(l=>`From ${l.from} · Day ${l.day} · ${getBoro(l.boro)?.short||"?"}:
+  "${l.text}"`),
+          "");
+        // Mark as read
+        const updLetters=(world.letters||[]).map(l=>l.to===gs.name?{...l,read:true}:l);
+        const ws={...world,letters:updLetters};setWorld(ws);saveWorld(ws);
+      } else {
+        push("No unread letters.");
+      }
+      if(worldLog.length>0){
+        push("— LETTERS FROM THE STREET —",...worldLog.map(l=>`${l.from} · Day ${l.day} · ${getBoro(l.boro)?.short||"?"}: "${l.text}"`));
+      }
+      return;
+    }
     // WRITE — letter home / inner life log
     if(C==="WRITE"){
       push(`What do you want to write? Type your message then hit ENTER.`,`It goes into the world log. Other players can READ LETTERS.`,`Usage: WRITE [your message]`);
@@ -4028,6 +4960,25 @@ export default function NYC(){
     }
 
     // RETIRE — prestige system
+    // DELETE ACCOUNT — permanent character deletion
+    if(C==="DELETE ACCOUNT"){
+      push("","⚠ DELETE ACCOUNT","This will permanently delete your character.","Type CONFIRM DELETE to proceed. This cannot be undone.","");
+      return;
+    }
+    if(C==="CONFIRM DELETE"){
+      push("Deleting character...");
+      const deleted = await deleteCharacter(gs.name, pinRef.current||"");
+      if(deleted){
+        // Remove from world.players
+        const dp={...world.players};delete dp[gs.name];
+        const dws={...world,players:dp};setWorld(dws);saveWorld(dws);
+        setTimeout(()=>{setGs(null);setPhase("character");},1500);
+        push("","Character deleted. Starting fresh.","");
+      } else {
+        push("Deletion failed. Check your PIN and try again.");
+      }
+      return;
+    }
     if(C==="RETIRE"){
       if(gs.level<PRESTIGE_LEVEL){push(`Need Level ${PRESTIGE_LEVEL} to retire. You're Level ${gs.level}.`);return;}
       const pLvl=Math.min((gs.prestige||0)+1,PRESTIGE_BADGES.length-1);
@@ -4219,6 +5170,38 @@ export default function NYC(){
     }
 
     // USE — intentionally get high
+    const useItemM=C.match(/^USE (.+)$/);
+    if(useItemM){
+      const itemName=useItemM[1].trim();
+      const inInv=gs.inventory.find(i=>i.toLowerCase()===itemName.toLowerCase()||i.toLowerCase().includes(itemName.toLowerCase()));
+      if(!inInv){push("You don't have "+itemName+" in your inventory.");return;}
+      const itemDef=BASE_ITEMS.find(i=>i.name.toLowerCase()===inInv.toLowerCase()||i.id.toLowerCase()===inInv.toLowerCase());
+      const eff=itemDef?.effect||{};
+      let used=false;let msg="";
+      if(eff.heal){
+        updGs(g=>({...g,survival:{...g.survival,health:Math.min(100,g.survival.health+eff.heal)},inventory:g.inventory.filter((_,i)=>i!==g.inventory.indexOf(inInv))}));
+        msg="Used "+inInv+". Health +"+eff.heal+".";used=true;
+      } else if(eff.hunger){
+        updGs(g=>({...g,survival:{...g.survival,hunger:Math.min(100,g.survival.hunger+eff.hunger),mental:Math.min(100,(g.survival.mental||70)+(eff.mental||0))},inventory:g.inventory.filter((_,i2)=>i2!==g.inventory.indexOf(inInv))}));
+        msg="Used "+inInv+". Hunger +"+eff.hunger+(eff.mental?" Mental +"+eff.mental:"")+".";used=true;
+      } else if(eff.energy){
+        updGs(g=>({...g,survival:{...g.survival,energy:Math.min(100,g.survival.energy+eff.energy)},inventory:g.inventory.filter((_,i3)=>i3!==g.inventory.indexOf(inInv))}));
+        msg="Used "+inInv+". Energy +"+eff.energy+".";used=true;
+      } else if(eff.heatReset){
+        updGs(g=>({...g,heat:Math.max(0,g.heat-eff.heatReset),inventory:g.inventory.filter((_,i4)=>i4!==g.inventory.indexOf(inInv))}));
+        msg="Used Disguise Kit. Heat -"+eff.heatReset+". You look different enough.";used=true;
+      } else if(eff.freeMove){
+        updGs(g=>({...g,hasMetrocard:true,inventory:g.inventory.filter((_,i5)=>i5!==g.inventory.indexOf(inInv))}));
+        msg="MetroCard loaded. Next MOVE is free.";used=true;
+      } else {
+        // Equippable item — try equipping
+        if(itemDef?.slot&&itemDef.slot!=="consumable"){
+          push("Type EQUIP "+inInv+" to equip this item.");return;
+        }
+        push("Can't use "+inInv+" directly. Check INVENTORY for options.");return;
+      }
+      if(used)push("",msg,"");return;
+    }
     if(C==="USE"){
       if(gs.isVampire){push(`FEED is your equivalent.`);return;}
       if(gs.isUndoc){push(`You don't use. You survive.`);return;}
@@ -4252,15 +5235,20 @@ export default function NYC(){
       const lvl=getAddictionLevel(gs.addiction||0);
       const daysSince=gs.day-(gs.lastUsed||0);
       const withdrawThresh=Math.max(1,3-Math.floor((gs.addiction||0)/30));
+      const addFx=lvl.effects||{};
+      const penStr=Object.entries(addFx).filter(([k])=>["hustle","charm","toughness","streetiq"].includes(k)).map(([k,v])=>k+": "+v).join("  ");
       push(`${sub?.icon} ADDICTION — ${sub?.name}`,
         `Level: ${lvl.icon} ${lvl.name} (${gs.addiction||0}/100)`,
-        lvl.desc,
+        `  ${lvl.desc}`,
+        penStr?`  Active stat penalties: ${penStr}`:"  No stat penalties yet.",
+        ``,
         `Last used: Day ${gs.lastUsed||0} (${daysSince} day${daysSince!==1?"s":""} ago)`,
-        `Withdrawal triggers after: ${withdrawThresh} day${withdrawThresh!==1?"s":""} clean`,
-        daysSince>=withdrawThresh&&(gs.addiction||0)>20?"⚠ Currently in withdrawal.":"Clear for now.",
-        "",
-        "USE to intentionally use. Addiction grows with product handling.",
-        "Recovery: -1 addiction per 2 days clean.");
+        `Withdrawal after: ${withdrawThresh} day${withdrawThresh!==1?"s":""} clean`,
+        daysSince>=withdrawThresh&&(gs.addiction||0)>20?"⚠ Currently in withdrawal.":"  Clear for now.",
+        ``,
+        (gs.addiction||0)>=40?"RECOVERY command to find Carmen's drop-in center.":"",
+        (gs.addiction||0)>=80?"  Carmen can help. You just have to show up.":"",
+        "USE to intentionally use. Addiction grows with product handling.");
       return;
     }
 
@@ -5058,6 +6046,51 @@ export default function NYC(){
         "","Collect by winning FIGHT against the target.");
       return;
     }
+    // TITLE — show notoriety and street reputation
+    // LEADERBOARD — weekly standings
+    if(C==="LEADERBOARD"||C==="RANKINGS"||C==="BOARD"){
+      const wk=getWeekNumber();
+      const lb=world.leaderboard?.[wk]||{};
+      const players=Object.values(lb).filter(e=>typeof e==="object"&&e.name);
+      push("","🏆 WEEKLY LEADERBOARD","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "Resets every Monday. Top player in each category wins a title + cash + item.",
+        "");
+      LEADERBOARD_CATEGORIES.forEach(cat=>{
+        const sorted=players.filter(p=>p[cat.id]!=null).sort((a,b)=>(b[cat.id]||0)-(a[cat.id]||0)).slice(0,3);
+        push(cat.icon+" "+cat.label+":",
+          ...sorted.map((p,i)=>`  ${["🥇","🥈","🥉"][i]} ${p.name}${p.name===gs.name?" (you)":""}: ${p[cat.id]||0}`),
+          sorted.length===0?"  No entries yet — play to rank up":"");
+      });
+      const myEntry=lb[gs.name]||{};
+      push("","YOUR STATS THIS WEEK:",
+        ...LEADERBOARD_CATEGORIES.map(cat=>`  ${cat.icon} ${cat.label}: ${myEntry[cat.id]||0}`),
+        "","Updates each time you SLEEP. Win a category for titles and rewards.");
+      return;
+    }
+    if(C==="TITLE"||C==="MY TITLE"||C==="REPUTATION"){
+      const nt=getNotorietyTitle(gs);
+      const l=gs.lifetime||{};
+      push("","🏆 STREET REPUTATION","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        gs.title?`Earned title: ${gs.title}`:"No special title yet.",
+        nt?`Notoriety: ${nt.icon} ${nt.title}`:"Notoriety: None yet — keep playing.",
+        nt?nt.desc:"Titles unlock after Day 10 based on how you play.",
+        "",
+        "YOUR LIFETIME STATS:",
+        `  Days alive: ${l.daysAlive||0}`,
+        `  Deals completed: ${l.deals||0}`,
+        `  PvP wins: ${l.pvpWins||0}`,
+        `  Boss kills: ${l.bossKills||0}`,
+        `  NPC conversations: ${l.talkCount||0}`,
+        `  Panhandles: ${l.panhandles||0}`,
+        `  Cash earned lifetime: $${l.cashEarned||0}`,
+        "",
+        "TITLES YOU CAN EARN:",
+        ...NOTORIETY_TITLES.map(t=>{
+          const earned=t.test(l,gs);
+          return `${earned?"✓":"○"} ${t.icon} ${t.title} — ${t.desc}`;
+        }));
+      return;
+    }
     if(C==="VISION"){
       if(!gs.isSchizo){push("You don't see visions. Type LOOK.");return;}
       const hasVisionSkill=(gs.skills||[]).includes("the_knowing");
@@ -5339,17 +6372,65 @@ export default function NYC(){
     <style>{FONTS}</style>
     <div style={{minHeight:"100vh",background:"#0d0f0f",color:"#c0c0b8",padding:"20px 16px",overflowY:"auto",fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:660,margin:"0 auto",paddingTop:12}}>
-        <div style={{fontFamily:"'VT323',monospace",fontSize:42,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 16px #e9c46a55",marginBottom:3}}>CHARACTER CREATION</div>
-        <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:22}}>WHO ARE YOU OUT HERE?</div>
-        <div style={{fontSize:9,color:"#aaa",letterSpacing:2,marginBottom:10}}>// SELECT ARCHETYPE</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7,marginBottom:22,gridAutoRows:"1fr"}}>
-          {ARCHETYPES.map(a=><div key={a.id} onClick={()=>setSelA(a.id)} style={{border:`1px solid ${selA===a.id?a.color:"#1a1a1a"}`,background:selA===a.id?`${a.color}0b`:"#090909",padding:"11px 9px",cursor:"pointer",transition:"all 0.2s",boxShadow:selA===a.id?`0 0 16px ${a.color}22`:"none"}}>
-            <div style={{fontSize:18,marginBottom:4}}>{a.icon}</div>
-            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:13,color:a.color,letterSpacing:2,marginBottom:4}}>{a.name}</div>
-            <div style={{fontSize:8,color:"#444",lineHeight:1.5,marginBottom:7}}>{a.desc}</div>
-            <div style={{borderTop:"1px solid #111",paddingTop:5}}>{Object.entries(a.stats).map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:7,marginBottom:1}}><span style={{color:"#666"}}>{k.toUpperCase()}</span><span style={{color:selA===a.id?a.color:"#252525"}}>{v}</span></div>)}</div>
-            <div style={{marginTop:5,fontSize:7,color:"#666"}}>STARTS: {a.gear.join(" · ")}</div>
-            {a.special&&<div style={{marginTop:4,fontSize:7,color:"#1e4e3a",borderTop:"1px solid #111",paddingTop:3,lineHeight:1.4}}>{a.special}</div>}
+        <div style={{fontFamily:"'VT323',monospace",fontSize:42,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 16px #e9c46a55",marginBottom:3}}>HOBO QUEST</div>
+        <div style={{fontSize:9,color:"#555",letterSpacing:3,marginBottom:24}}>NEW YORK CITY · SURVIVAL RPG · MULTIPLAYER</div>
+
+        {/* Expanded class preview — selected class gets full card */}
+        {selA&&(()=>{
+          const a=ARCHETYPES.find(x=>x.id===selA);if(!a)return null;
+          const sub=CLASS_SUBSTANCE[a.id];
+          const classStories={
+            veteran:"Two tours. Honorable discharge. Eighteen months trying to find work before the savings ran out. The bottle got cheaper than therapy. You know every steam vent in midtown by name.",
+            schemer:"You had a good run. Three years of careful cons, careful people, careful escapes. Then one target didn't stay fooled. Now you're starting over with smarter enemies and the same brain that got you here.",
+            ghost:"Nobody knows your real name. That's on purpose. The people who knew it were the problem. You've been invisible for eight months. Invisible is fine. Invisible is survival.",
+            hustler:"The market is wherever you are. Buy low, sell high, move fast, don't get caught. You've been running this math since you were fourteen. The numbers always work out. Usually.",
+            junkie:"Hard mode. You know it. The habit cost you the apartment, the job, the people. You're still here though. That counts for something. You just need to make it one more day than yesterday.",
+            undocumented:"Three thousand miles to get here. The city doesn't know you exist, which means it can't stop you either. You move through it like water. You've survived worse than New York.",
+            vampire:"You arrived in 1987. The city has changed six times since then. You haven't. The hunger is manageable if you're strategic about it. The problem is you've become strategic about everything.",
+            fixer:"You know a guy for everything. Plumber. Lawyer. Somebody who can make a problem disappear. That network took twenty years to build. The problem is you owe most of them favors now.",
+            rat:"You work both sides. DEA has a file on you. So does the crew you're informing on. The math keeps working as long as nobody compares notes. You've gotten very good at that.",
+            drifter:"You and the dog. That's it. That's everything. The dog's name is [name]. You've been together three years and the dog has never once judged any decision you've made. That matters more than you'd expect.",
+            schizo:"The city has been speaking to you specifically. You've been writing it down. Seventeen notebooks. The pattern is almost visible. Today might be the day it resolves.",
+            hooker:"You know exactly what this city costs and exactly what you can charge for it. The transaction is yours. Everything else is noise.",
+          };
+          return <div style={{marginBottom:20,border:`1px solid ${a.color}33`,background:`${a.color}06`,padding:16}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+              <div style={{fontSize:32}}>{a.icon}</div>
+              <div>
+                <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:20,color:a.color,letterSpacing:3}}>{a.name}</div>
+                <div style={{fontSize:8,color:"#555",letterSpacing:1}}>{a.desc}</div>
+              </div>
+            </div>
+            <div style={{fontSize:9,color:"#888",lineHeight:1.7,marginBottom:12,borderLeft:`2px solid ${a.color}33`,paddingLeft:12,fontStyle:"italic"}}>
+              {classStories[a.id]?.replace("[name]",["Biscuit","Smoke","Patches","Duke","Gus","Lucky"][Math.floor(Math.random()*6)])||a.desc}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+              <div>
+                <div style={{fontSize:7,color:"#333",letterSpacing:2,marginBottom:6}}>STATS</div>
+                {Object.entries(a.stats).map(([k,v])=><div key={k} style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                  <span style={{fontSize:8,color:"#555"}}>{k}</span>
+                  <div style={{display:"flex",gap:2}}>
+                    {[1,2,3,4,5,6,7,8,9,10].map(n=><div key={n} style={{width:5,height:5,background:n<=v?a.color:"#1a1a1a"}}/>)}
+                  </div>
+                </div>)}
+              </div>
+              <div>
+                <div style={{fontSize:7,color:"#333",letterSpacing:2,marginBottom:6}}>SUBSTANCE</div>
+                <div style={{fontSize:9,color:"#888",marginBottom:8}}>{sub?.icon} {sub?.name}</div>
+                <div style={{fontSize:7,color:"#333",letterSpacing:2,marginBottom:6}}>STARTS WITH</div>
+                {a.gear.map(g=><div key={g} style={{fontSize:8,color:"#555",marginBottom:2}}>· {g}</div>)}
+              </div>
+            </div>
+            {a.special&&<div style={{fontSize:8,color:a.color+"88",borderTop:`1px solid ${a.color}22`,paddingTop:8,lineHeight:1.6}}>{a.special}</div>}
+          </div>;
+        })()}
+
+        <div style={{fontSize:9,color:"#333",letterSpacing:2,marginBottom:10}}>// CHOOSE YOUR CLASS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5,marginBottom:20}}>
+          {ARCHETYPES.map(a=><div key={a.id} onClick={()=>setSelA(a.id===selA?null:a.id)} style={{border:`1px solid ${selA===a.id?a.color:"#141414"}`,background:selA===a.id?`${a.color}12`:"#080808",padding:"10px 8px",cursor:"pointer",transition:"all 0.15s",boxShadow:selA===a.id?`0 0 20px ${a.color}22`:"none",textAlign:"center"}}>
+            <div style={{fontSize:20,marginBottom:3}}>{a.icon}</div>
+            <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:11,color:selA===a.id?a.color:"#444",letterSpacing:1}}>{a.name}</div>
+            <div style={{fontSize:7,color:"#2a2a2a",marginTop:2}}>$\{a.startCash}</div>
           </div>)}
         </div>
         {/* BACKSTORY QUESTIONS */}
@@ -5464,6 +6545,59 @@ export default function NYC(){
   </>);
 
   // ── GAME ──────────────────────────────────────────────────────────────────
+  // ── DEATH SCREEN ──────────────────────────────────────────────────────────
+  if(phase==="dead")return(<>
+    <style>{FONTS}</style>
+    <div style={{minHeight:"100vh",background:"#050505",color:"#c0c0b8",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Share Tech Mono',monospace"}}>
+      <div style={{maxWidth:480,width:"100%"}}>
+        <div style={{fontFamily:"'VT323',monospace",fontSize:72,color:"#e63946",textShadow:"0 0 40px #e6394688",letterSpacing:4,lineHeight:1,marginBottom:4}}>YOU DIED</div>
+        <div style={{fontSize:9,color:"#333",letterSpacing:4,marginBottom:24}}>END OF THE LINE</div>
+        {gs&&<div style={{borderLeft:"2px solid #1a1a1a",paddingLeft:16,marginBottom:24}}>
+          <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:gs.archetype?.color||"#888",letterSpacing:2,marginBottom:4}}>
+            {gs.archetype?.icon} {gs.name}
+          </div>
+          <div style={{fontSize:9,color:"#444",marginBottom:16}}>{gs.archetype?.name}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px",marginBottom:16}}>
+            {[["Days Survived",gs.day],["Level Reached",gs.level],["Cash at Death","$"+(gs.cash||0)],
+              ["Total Earned","$"+(gs.lifetime?.cashEarned||0)],["PvP Wins",gs.lifetime?.pvpWins||0],
+              ["Deals",gs.lifetime?.deals||0],["Boss Kills",gs.lifetime?.bossKills||0],
+              ["Heat at Death",Math.round(gs.heat||0)+"/10"],
+              ["Addiction",getAddictionLevel(gs.addiction||0).name],
+              ["Corners Held",(gs.cornersOwned||[]).length],
+            ].map(([label,val])=><div key={label}>
+              <div style={{fontSize:7,color:"#222",letterSpacing:1}}>{label.toUpperCase()}</div>
+              <div style={{fontSize:11,color:"#555",fontFamily:"'VT323',monospace"}}>{val}</div>
+            </div>)}
+          </div>
+          {(gs.title||gs.notorietyTitle)&&<div style={{marginBottom:12}}>
+            {gs.title&&<div style={{fontSize:8,color:"#e9c46a",letterSpacing:2}}>TITLE: {gs.title}</div>}
+          </div>}
+          {(gs.addiction||0)>60&&<div style={{fontSize:8,color:"#e63946",marginBottom:12,fontStyle:"italic"}}>
+            {getAddictionLevel(gs.addiction).name} at death. The habit outlasted everything else.
+          </div>}
+          <div style={{marginTop:8,fontSize:9,color:"#2a2a2a",lineHeight:1.6,fontStyle:"italic",borderTop:"1px solid #0d0d0d",paddingTop:12}}>
+            {(()=>{
+              const d=gs.day;const l=gs.level;
+              if(l>=8)return "Made it to Level "+l+". "+d+" days. The city takes everyone eventually. Just slower for some.";
+              if(d>=15)return d+" days is more than most. The street remembers.";
+              if((gs.lifetime?.pvpWins||0)>=3)return "Took "+(gs.lifetime?.pvpWins||0)+" people down before going down. That counts.";
+              return "Day "+d+". Level "+l+". The city keeps moving. It always does.";
+            })()}
+          </div>
+        </div>}
+        <div style={{display:"flex",gap:8}}>
+          <div onClick={()=>{setGs(null);setPhase("character");}} style={{flex:1,padding:"12px 0",background:"#e9c46a12",border:"1px solid #e9c46a44",color:"#e9c46a",textAlign:"center",cursor:"pointer",fontSize:10,letterSpacing:2,fontFamily:"'Bebas Neue',sans-serif"}}>
+            NEW CHARACTER
+          </div>
+          <div onClick={()=>setPhase("login")} style={{flex:1,padding:"12px 0",background:"transparent",border:"1px solid #1a1a1a",color:"#444",textAlign:"center",cursor:"pointer",fontSize:10,letterSpacing:2,fontFamily:"'Bebas Neue',sans-serif"}}>
+            LOAD CHARACTER
+          </div>
+        </div>
+        <div style={{fontSize:7,color:"#111",textAlign:"center",marginTop:16}}>Your legend is on the Wall of Dead.</div>
+      </div>
+    </div>
+  </>);
+
   if(phase==="game"&&gs){
     const arch=gs.archetype;
     const weather=getWeather(gs.day);
@@ -5587,6 +6721,7 @@ export default function NYC(){
               return <div key={i} style={{fontSize:div?10:13,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#d4c9b0",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.8,minHeight:s===""?7:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
             })}
             <span style={{color:"#e9c46a",animation:"blink 1.3s infinite",fontSize:12}}>█</span>
+              {worldEvent&&<span style={{fontSize:8,color:"#e9c46a55",marginRight:6}} title={worldEvent.title}>{worldEvent.icon}</span>}
               {gs&&gs.crew&&(world.crews?.[gs.crew]?.wars||[]).length>0&&(
                 <span style={{fontSize:8,color:"#e63946",letterSpacing:1,fontFamily:"'Share Tech Mono',monospace",marginLeft:8}}>⚔ AT WAR</span>
               )}
@@ -5596,7 +6731,7 @@ export default function NYC(){
         {/* RIGHT */}
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden",width:185,flexShrink:0}}>
           <div style={{display:"flex",borderBottom:"1px solid #111",background:"#080808"}}>
-            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":id==="chat"&&unread>0?"#e63946":"#252525",borderBottom:tab===id?"2px solid #e9c46a":id==="chat"&&unread>0?"2px solid #e63946":"2px solid transparent",animation:id==="chat"&&unread>0?"wanted 1s infinite":"none",cursor:"pointer",minWidth:24}}>{label}</div>)}
+            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["lb","🏆"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":id==="chat"&&unread>0?"#e63946":"#252525",borderBottom:tab===id?"2px solid #e9c46a":id==="chat"&&unread>0?"2px solid #e63946":"2px solid transparent",animation:id==="chat"&&unread>0?"wanted 1s infinite":"none",cursor:"pointer",minWidth:24}}>{label}</div>)}
           </div>
           <div style={{flex:1,padding:9,overflowY:"auto"}}>
 
@@ -5608,7 +6743,7 @@ export default function NYC(){
                 <span style={{color:gs.rep[b.id]>0?b.color:"#191919"}}>{"█".repeat(Math.min(gs.rep[b.id],5))}{"░".repeat(Math.max(5-gs.rep[b.id],0))}</span>
               </div>)}
               {others.length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// ONLINE</div>
-              {others.map(p=><div key={p.name} style={{fontSize:7,marginBottom:2,display:"flex",justifyContent:"space-between"}}><span style={{color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name} · {getBoro(p.borough)?.short}</span>{p.heat>=9&&<span style={{color:"#e63946",fontSize:6}}>🚨</span>}</div>)}</>}
+              {others.map(p=><div key={p.name} style={{fontSize:7,marginBottom:2,display:"flex",justifyContent:"space-between"}}><span style={{color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name}{p.notorietyTitle?(" · "+(NOTORIETY_TITLES.find(t=>t.id===p.notorietyTitle)?.icon||"")):"" } · {getBoro(p.borough)?.short}</span>{p.heat>=9&&<span style={{color:"#e63946",fontSize:6}}>🚨</span>}</div>)}</>}
               {Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0).length>0&&<>
                 <div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// BOUNTIES</div>
                 {Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0).map(([n,b])=>{
@@ -5643,7 +6778,78 @@ export default function NYC(){
             {tab==="market"&&<MktPanel bId={boro} day={gs.day} prod={mProd} setProd={setMProd} qty={mQty} setQty={setMQty} onBuy={panelBuy} onSell={panelSell} playerProd={gs.product} weather={weather} worldSupply={world.supply}/>}
             {tab==="skills"&&<SkillPanel gs={gs} onUnlock={unlockSkill}/>}
             {tab==="quests"&&<QuestPanel gs={gs} npcs={npcs} onAccept={acceptQuest} onComplete={completeQuest} onAbandon={abandonQuest} boro={boro}/>}
-            {tab==="gear"&&<GearPanel gs={gs} onUnequip={unequipSlot} onEquip={(slot)=>{
+            {tab==="gear"&&<div style={{padding:8}}>
+              <div style={{fontSize:7,color:"#444",letterSpacing:2,marginBottom:8}}>// EQUIPMENT</div>
+              {/* Visual character with slots */}
+              <div style={{display:"flex",gap:8,marginBottom:8}}>
+                {/* Silhouette */}
+                <div style={{width:80,flexShrink:0,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                  {/* Head slot */}
+                  {(()=>{const slot="head";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                  return <div style={{width:40,height:40,border:`1px solid ${item?rc[item.rarity]||"#333":"#1a1a1a"}`,background:item?"#0a0a0a":"#060606",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:item?10:6,color:item?rc[item.rarity]:"#222"}}
+                    onClick={()=>push("","HEAD: "+(item?.name||"Empty"),item?.desc||"Nothing equipped.",item?Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>"  +"+k+" "+v).join(", "):"Type EQUIP [item] to equip something.","")}
+                    title={item?.name||"Head slot"}>
+                    {item?"🎭":"👤"}
+                  </div>;})()}
+                  {/* Body */}
+                  <div style={{fontSize:28,lineHeight:1,color:"#1a1a1a",margin:"4px 0",fontFamily:"monospace"}}>
+                    {(()=>{const bodyItem=gs.equipment?.chest?getItemById(gs.equipment.chest):null;return bodyItem?"🥼":"👕";})()}
+                  </div>
+                  {/* Feet */}
+                  {(()=>{const slot="feet";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                  return <div style={{fontSize:item?12:8,color:item?rc[item.rarity]:"#1a1a1a",cursor:"pointer"}} onClick={()=>push("FEET: "+(item?.name||"Empty"))} title={item?.name||"Feet"}>
+                    {item?"👟":"⬜"}
+                  </div>;})()}
+                </div>
+                {/* Slot details */}
+                <div style={{flex:1}}>
+                  {["head","chest","hands","feet","weapon","accessory"].map(slot=>{
+                    const itemId=gs.equipment?.[slot];
+                    const item=itemId?getItemById(itemId):null;
+                    const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                    const color=item?rc[item.rarity]||"#333":"#1a1a1a";
+                    return <div key={slot} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,padding:"3px 5px",border:`1px solid ${item?"#1a1a1a":"#0d0d0d"}`,background:"#060606",cursor:"pointer"}}
+                      onClick={()=>{if(item)push("","["+item.rarity.toUpperCase()+"] "+item.name,item.desc||"","Stats: "+Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>"+"+k+" "+v).join(", "),"UNEQUIP "+item.name+" to remove.");}}
+                    >
+                      <div style={{fontSize:7,color:"#222",width:42,letterSpacing:1,flexShrink:0}}>{slot.toUpperCase()}</div>
+                      <div style={{flex:1,fontSize:7,color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                        {item?item.name:"—"}
+                      </div>
+                      {item&&<div style={{fontSize:6,color:"#333"}}>{Object.entries(item.stats||{}).filter(([,v])=>v&&v!==0).slice(0,2).map(([k,v])=>"+"+v+" "+k.slice(0,3)).join(" ")}</div>}
+                    </div>;
+                  })}
+                </div>
+              </div>
+              {/* Addiction bar */}
+              {(gs.addiction||0)>0&&(()=>{
+                const al=getAddictionLevel(gs.addiction||0);
+                const pct=((gs.addiction||0)/100)*100;
+                return <div style={{marginTop:8,marginBottom:8}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
+                    <div style={{fontSize:7,color:"#333",letterSpacing:1}}>ADDICTION</div>
+                    <div style={{fontSize:7,color:al.color}}>{al.icon} {al.name}</div>
+                  </div>
+                  <div style={{height:4,background:"#111",borderRadius:2}}>
+                    <div style={{height:"100%",width:pct+"%",background:al.color,borderRadius:2,transition:"width 0.3s"}}/>
+                  </div>
+                  {(gs.addiction||0)>=40&&<div style={{fontSize:6,color:"#333",marginTop:2}}>Type RECOVERY to find Carmen's drop-in center</div>}
+                </div>;
+              })()}
+              {/* Total gear stats */}
+              {(()=>{
+                const eq=getItemStats(gs.equipment||{});
+                const statKeys=Object.entries(eq).filter(([,v])=>v&&v!==0);
+                if(statKeys.length===0)return null;
+                return <div style={{borderTop:"1px solid #0d0d0d",paddingTop:6,marginTop:4}}>
+                  <div style={{fontSize:7,color:"#222",letterSpacing:1,marginBottom:4}}>TOTAL BONUSES</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                    {statKeys.map(([k,v])=><div key={k} style={{fontSize:7,color:"#2a9d8f",padding:"1px 5px",border:"1px solid #0d2a1e"}}>+{v} {k}</div>)}
+                  </div>
+                </div>;
+              })()}
+              <div style={{marginTop:8,fontSize:7,color:"#1a1a1a"}}>EQUIP [item] · UNEQUIP [slot] · INVENTORY</div>
+            </div>}
+            {tab==="gear_OLD"&&<GearPanel gs={gs} onUnequip={unequipSlot} onEquip={(slot)=>{
   // equip from inventory via panel - find first unequipped item for that slot
   const item=gs.inventory.map(n=>BASE_ITEMS.find(b=>b.name===n||b.id===n)).find(i=>i&&i.slot===slot&&gs.equipment?.[slot]!==i.id);
   if(!item){push(`No ${slot} item in inventory.`);return;}
@@ -5756,6 +6962,30 @@ export default function NYC(){
               </div>
             </div>}
             {tab==="crews"&&<CrewPanel gs={gs} world={world} onJoin={joinCrewPanel}/>}
+            {tab==="lb"&&<div style={{padding:8,color:"#e9c46a"}}>
+              <div style={{fontSize:7,color:"#444",letterSpacing:2,marginBottom:8}}>// WEEKLY LEADERBOARD</div>
+              {(()=>{
+                const wk=getWeekNumber();
+                const lb=world.leaderboard?.[wk]||{};
+                const players=Object.values(lb).filter(e=>typeof e==="object"&&e.name);
+                return <div>
+                  {LEADERBOARD_CATEGORIES.map(cat=>{
+                    const sorted=players.filter(p=>p[cat.id]!=null).sort((a,b)=>(b[cat.id]||0)-(a[cat.id]||0)).slice(0,3);
+                    return <div key={cat.id} style={{marginBottom:10}}>
+                      <div style={{fontSize:7,color:"#555",letterSpacing:1,marginBottom:3}}>{cat.icon} {cat.label.toUpperCase()}</div>
+                      {sorted.length===0&&<div style={{fontSize:7,color:"#333"}}>No entries yet</div>}
+                      {sorted.map((p,i)=><div key={p.name} style={{fontSize:7,color:p.name===gs.name?"#e9c46a":"#888",marginBottom:2,display:"flex",justifyContent:"space-between"}}>
+                        <span>{["🥇","🥈","🥉"][i]} {p.name}{p.name===gs.name?" ★":""}</span>
+                        <span style={{color:"#555"}}>{p[cat.id]||0}</span>
+                      </div>)}
+                    </div>;
+                  })}
+                  <div style={{fontSize:6,color:"#333",marginTop:8,borderTop:"1px solid #111",paddingTop:6}}>
+                    Resets Monday. Winner gets title + cash + item.
+                  </div>
+                </div>;
+              })()}
+            </div>}
             {tab==="journal"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
               <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// {gs.name.toUpperCase()}'s JOURNAL</div>
               {/* backstory summary */}
@@ -5898,7 +7128,19 @@ export default function NYC(){
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
           <span style={{color:"#f4d03f",fontSize:13,flexShrink:0}}>▶</span>
-          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="command  ·  /message to chat  ·  //message for crew" autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#f4d03f",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
+          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder={(()=>{
+              if(!gs)return "command  ·  /message to chat";
+              if(gs.survival.health<30)return "⚠ Health critical — REST or EAT";
+              if(gs.heat>7)return "🚔 Heat critical — LAY LOW · SKIP TOWN · HIDE";
+              if(gs.survival.hunger<20)return "🍽 Starving — EAT or BODEGA";
+              if(gs.survival.energy<15)return "😴 Exhausted — REST or SLEEP";
+              if(gs.survival.mental<20)return "🧠 Mental breaking — MENTAL · CONFESS";
+              if((gs.addiction||0)>=80)return "💊 "+getAddictionLevel(gs.addiction).name+" — RECOVERY to find Carmen";
+              if(gs.day===1&&(gs.tutStep||0)<7)return "Day 1 — follow tutorial steps";
+              const contracts=world.contracts||[];const myC=gs.contractsCompleted||[];const pending=contracts.filter(c=>!myC.includes(c.id));
+              if(pending.length>0)return "📋 "+pending.length+" contracts active — CONTRACTS";
+              return "command  ·  /message to chat  ·  //crew";
+            })()} autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#f4d03f",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
           <div onClick={()=>inputRef.current?.focus()} style={{fontSize:8,color:"#666",padding:"4px 8px",border:"1px solid #1a1a1a",cursor:"pointer",flexShrink:0}}>ENTER ↵</div>
         </div>
 
