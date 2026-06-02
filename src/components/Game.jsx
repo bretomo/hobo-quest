@@ -645,22 +645,7 @@ const LEVEL_STAT_GROWTH = {
   hustler:      ["hustle","streetiq","hustle","charm","hustle","streetiq","hustle","charm","streetiq","hustle"],
   junkie:       ["charm","streetiq","charm","hustle","streetiq","charm","toughness","hustle","charm","streetiq"],
   undocumented: ["streetiq","hustle","charm","streetiq","toughness","hustle","streetiq","charm","hustle","streetiq"],
-  hooker:       [
-    {id:"regulars",      name:"Regulars",      level:1,cost:1,desc:"Build a client list. Each SLEEP adds 1 regular who pays automatically next day.",effect:{regularIncome:20}},
-    {id:"read_the_room", name:"Read the Room", level:2,cost:1,desc:"Instantly sense if someone is a cop. SCOUT tells you heat with 90% accuracy.",  effect:{copSense:true}},
-    {id:"negotiator",    name:"Negotiator",    level:3,cost:1,desc:"CLIENT pays 30% more. You know exactly what you're worth.",                       effect:{clientBonus:0.3}},
-    {id:"the_stroll",    name:"The Stroll",    level:4,cost:2,desc:"Unlock Manhattan/Queens night economy. Double clients available after 8pm.",       effect:{strollUnlock:true}},
-    {id:"protection",    name:"Protection",    level:5,cost:2,desc:"A contact watches your back. Cop harassment events 50% less likely.",              effect:{protectionBonus:true}},
-    {id:"madame",        name:"Madame",        level:6,cost:2,desc:"Recruit NPCs to work for you. Passive income +$30/day per NPC.",                   effect:{madameBonus:30}},
-    {id:"alibi",         name:"Alibi",         level:7,cost:3,desc:"Clients are powerful. One call drops heat to 0 once per day.",                     effect:{alibiBonus:true}},
-    {id:"own_it",        name:"Own It",        level:8,cost:3,desc:"Max charm. NPCs trust you instantly. First TALK always gives max rep.",             effect:{ownItBonus:true}},
-  ],
-  hooker:       [
-    {id:"pepper_spray",  name:"Pepper Spray",  cooldown:3, desc:"Auto-hit. Enemy -3 attack for 2 rounds. Never leaves home without it.",
-      fn:(gs,enemy)=>{return{log:["💄 PEPPER SPRAY. Right in the eyes. "+enemy.name+" stumbles."],enemyDmg:rnd(3,6),selfDmg:0,autoHit:true,blindEnemy:true,stunRounds:2};}},
-    {id:"heel_strike",   name:"Heel Strike",   cooldown:4, desc:"Stiletto heel. Guaranteed 2d6. Concussive. Never underestimate the footwear.",
-      fn:(gs,enemy)=>{const r=rollStr(6,2);return{log:["💄 HEEL STRIKE. "+r.total+" damage. "+enemy.name+" did not see that coming."],enemyDmg:r.total+mod(gs.stats?.charm||5),selfDmg:0,autoHit:true};}},
-  ],
+  hooker:       ["charm","hustle","charm","streetiq","charm","toughness","hustle","charm","streetiq","hustle"],
   schizo:       [
     {id:"pattern_recognition",name:"Pattern Recognition",level:1,cost:1,desc:"LOOK visions 30% more likely to yield real cash.",effect:{visionBonus:0.3}},
     {id:"voice_guidance",    name:"Voice Guidance",     level:2,cost:1,desc:"Chaos engine good outcomes increase by 10%.",         effect:{goodChaos:0.1}},
@@ -1104,6 +1089,7 @@ const BASE_ITEMS = [
 ];
 
 const getItemById=id=>BASE_ITEMS.find(i=>i.id===id);
+const addJournalEntry=(g,entry)=>({...g,journal:[...(g.journal||[]).slice(-49),entry]});
 
 // ── D&D COMBAT ENGINE ─────────────────────────────────────────────────────────
 // Dice roller
@@ -1301,14 +1287,14 @@ const getNotorietyTitle=(gs)=>{
   return matches[matches.length-1]||null; // last = highest tier
 };
 
-const checkNotoriety=(gs,updGs,push)=>{
+const checkNotoriety=(gs,updGs,push,worldRef,saveWorld)=>{
   const earned=getNotorietyTitle(gs);
   if(!earned)return;
   const already=gs.notorietyTitle===earned.id;
   if(!already){
     updGs(g=>({...g,notorietyTitle:earned.id}));
-    const notWs=broadcastActivity(worldRef.current||defWorld(),gs.name+" earned the notoriety title: "+earned.icon+" "+earned.title+".","🏆");
-    if(worldRef.current)saveWorld(notWs);
+    const notWs=broadcastActivity((worldRef&&worldRef.current)||defWorld(),gs.name+" earned the notoriety title: "+earned.icon+" "+earned.title+".","🏆");
+    if(worldRef&&worldRef.current&&saveWorld)saveWorld(notWs);
     push("",""+earned.icon+" NOTORIETY EARNED: "+earned.title,""+earned.desc,"Type TITLE to see all your stats.","");
   }
 };
@@ -1833,6 +1819,23 @@ function BoroMap({active,onSelect,world,weather,day}){
   </div>;
 }
 // ── CHARACTER PORTRAIT GENERATOR ─────────────────────────────────────────────
+
+// ── PORTRAIT FRAMES ─────────────────────────────────────────────────────────
+const PORTRAIT_FRAMES = {
+  veteran:      ["┌──────────┐","│  🎖      │","│  [{}]    │","│  ~~~     │","└──────────┘"],
+  schemer:      ["┌──────────┐","│  🃏      │","│  [{}]    │","│  ...     │","└──────────┘"],
+  ghost:        ["┌──────────┐","│  🌫      │","│  [{}]    │","│  ·  ·    │","└──────────┘"],
+  hustler:      ["┌──────────┐","│  💵      │","│  [{}]    │","│  $$$     │","└──────────┘"],
+  junkie:       ["┌──────────┐","│  💉      │","│  [{}]    │","│  :::     │","└──────────┘"],
+  undocumented: ["┌──────────┐","│  🌐      │","│  [{}]    │","│  ---     │","└──────────┘"],
+  vampire:      ["┌──────────┐","│  🧛      │","│  [{}]    │","│  ▓▓▓     │","└──────────┘"],
+  fixer:        ["┌──────────┐","│  🔧      │","│  [{}]    │","│  ===     │","└──────────┘"],
+  rat:          ["┌──────────┐","│  🐀      │","│  [{}]    │","│  ~~~     │","└──────────┘"],
+  hooker:       ["┌──────────┐","│  💄      │","│  [{}]    │","│  ♦♦♦     │","└──────────┘"],
+  schizo:       ["┌──────────┐","│  🌀      │","│  [{}]    │","│  ???     │","└──────────┘"],
+  drifter:      ["┌──────────┐","│  🐕      │","│  [{}]    │","│  ___     │","└──────────┘"],
+};
+
 const RARITY_SYMBOL = {common:"·",uncommon:"◆",rare:"★",legendary:"⚡"};
 
 // Archetype visual identity — emoji icon + accent pattern
@@ -3208,10 +3211,8 @@ export default function NYC(){
       return;
     }
     const b=getBoro(boro);
-    const b=getBoro(boro);
-const weEffect=world.worldEvent?.effect||{};   // ADD
-const regularIncome=(gs.regulars||0)*20;        // ADD  
-const weather=getWeather(gs.day);
+    const weEffect=world.worldEvent?.effect||{};
+    const regularIncome=(gs.regulars||0)*20;
     const weather=getWeather(gs.day);
 
     // ABILITIES — show archetype combat abilities
@@ -4400,7 +4401,7 @@ const weather=getWeather(gs.day);
       } else {
         updGs(g=>({...g,lifetime:{...g.lifetime,daysAlive:(g.lifetime?.daysAlive||0)+1}}));
       }
-      setTimeout(()=>checkNotoriety(gsRef.current,updGs,push),500);
+      setTimeout(()=>checkNotoriety(gsRef.current,updGs,push,worldRef,saveWorld),500);
       const nextDay=gs.day+1;const nextWeather=getWeather(nextDay);
       // junkie habit cost
       let habitCost=0;let habitMsg="";
@@ -4419,15 +4420,13 @@ const weather=getWeather(gs.day);
         if(_newLvl.name!==_oldLvl.name&&newAddiction<(g.addiction||0)){
           setTimeout(()=>push(`${CLASS_SUBSTANCE[g.archetype?.id||'veteran']?.icon} Addiction easing: ${_oldLvl.name} → ${_newLvl.name} (${newAddiction}/100)`),300);
         }
-        return{...g,day:nextDay,addiction:newAddiction,hustleCount:0,hustleBoroLast:"",hustleBoros:{},
+        return{...g,day:nextDay,addiction:newAddiction,
           cash:g.cash-habitCost+income+crewBonus+safePassive+commBonus,
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
-        dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
-        contractsCompleted:[],contractProgress:{},
-        dayJobDone:false,hasMetrocard:false,
-
+          dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
+          contractsCompleted:[],contractProgress:{},
           informsToday:0,patrolEncountered:false,feedUsed:false};
       });
       // reset shelter checkins for new day
@@ -5868,8 +5867,9 @@ const weather=getWeather(gs.day);
       if(!safe||(safe.owner!==gs.name&&safe.crewOwner!==gs.crew)){push(`No safe house here. BUY SAFEHOUSE $500 first.`);return;}
       const toStash=Math.max(0,gs.cash-100); // keep $100 on you
       if(toStash<=0){push(`Nothing to stash.`);return;}
+      const afterStash=gs.cash-toStash;
       updGs(g=>({...g,cash:g.cash-toStash,cashStash:(g.cashStash||0)+toStash}));
-      push(`💰 Stashed $${toStash} in safe house.`,`Carrying $${gs.cash-toStash}. Below the target line.`);return;
+      push(`💰 Stashed $${toStash} in safe house.`,`Carrying $${afterStash}. Below the target line.`);return;
     }
 
     // RETRIEVE CASH
@@ -6764,7 +6764,7 @@ const weather=getWeather(gs.day);
               {(()=>{
                 const myBounty=world.bounties?.[gs.name];
                 const myAmt=myBounty&&typeof myBounty==="object"?myBounty.amount:myBounty||0;
-                if(!myAmt>0)return null;
+                if(!(myAmt>0))return null;
                 return <div style={{marginTop:8,padding:"8px",border:"2px solid #e63946",background:"#0a0000",textAlign:"center"}}>
                   <div style={{fontSize:9,color:"#e63946",letterSpacing:3,fontFamily:"'Bebas Neue',sans-serif"}}>⚠ WANTED DEAD OR ALIVE ⚠</div>
                   <div style={{fontSize:18,color:"#e9c46a",fontFamily:"'Bebas Neue',sans-serif",margin:"4px 0"}}>{gs.name}</div>
