@@ -166,6 +166,7 @@ const NPCS = [
     "Ray has been on this bench, or one like it, for going on eleven years. He looks at you the way someone looks at a photograph of themselves from before everything changed.",
     "He moves over without being asked. 'You got that look,' he says. 'New to the street or new to this block? Sit down before someone clocks you standing there thinking.'",
     "He doesn't ask your name. Out here, that's a form of respect.",
+    "Sometimes, late at night, he talks about the Oregon Trail. His daughter loved that game.",
   ]},
   {id:"smoke", name:"Smoke", role:"Corner dealer", b:"brooklyn", icon:"💨", lines:[
     "Smoke sees you coming from half a block away. That's how he stays employed.",
@@ -225,6 +226,31 @@ const NPC_QUESTS = {
       reward:{cash:0, rep:5, mental:30, xp:100, unlock:"Ray becomes permanent crew member. +$20/day."},
       failPenalty:{rep:-3, mental:-20},
       completionFlavor:`You come back. Ray is already asleep on his bench. You leave a note. Some things don't need saying out loud.`,
+    },
+  ],
+  // ── SECRET QUEST — unlocks at Level 8+ after all Ray quests complete ──
+  ray_secret: [
+    {
+      id:"ray_secret_q1", npc:"ray", tier:4, repRequired:10,
+      title:"Caulk the Wagon",
+      secret:true, // hidden from QUESTS until eligible
+      levelRequired:8,
+      briefing:`Ray is quiet for a long time. Then: "I used to read the Oregon Trail to my daughter. Every night before bed. She always tried to ford the river." He looks at the Hudson. "Nobody fords the Hudson anymore. Everyone takes the bridge." He looks at you. "You've survived everything this city threw at you. I want to see you try something stupid." He slides you a piece of paper. A list of supplies.`,
+      task:"Gather the supplies and ford the Hudson. CAULK WAGON to begin when ready.",
+      requireItems:["Rope","Waterproof Bag","Raft Materials"],
+      requireLevel:8,
+      duration:7,
+      reward:{
+        cash:0,
+        xp:500,
+        rep:10,
+        mental:50,
+        item:"Oregon Trail Medal",
+        title:"The Fordist",
+        unlock:"Permanent title [THE FORDIST] shown next to your name forever.",
+      },
+      failPenalty:{rep:-2,cash:-50},
+      completionFlavor:`Ray stands at the bank of the Hudson watching. You make it across. You're soaked, half-dead, and laughing. When you come back he has tears in his eyes. "My daughter would have loved you," he says. He doesn't say anything else. He doesn't need to.`,
     },
   ],
   smoke: [
@@ -548,6 +574,110 @@ const SHELTERS = {
 // Winter doubles capacity (day 270-365 and 0-90 proxy via day%365)
 const shelterBeds=(bId,day)=>{const base=SHELTERS[bId]?.beds||8;const d=day%365;return(d<90||d>270)?base*2:base;};
 
+// ── DAY LABOR JOBS ───────────────────────────────────────────────────────────
+const DAY_LABOR_JOBS = [
+  { id:"trucks",   name:"Loading Trucks",        location:"bronx",     pay:[45,65],  energy:55, heat:0,  desc:"Hunts Point market. 4am start. Cash in hand by noon. No ID required.",
+    flavor:["The foreman hands you a number. You don't give your name. Nobody asks.",
+            "Eight hours of boxes. Your back disagrees. Your wallet doesn't.",
+            "The guys on the dock know you're not a regular. They don't care. You work, you get paid."],
+    classBonus:{veteran:15, undocumented:-10}, failChance:0.05 },
+  { id:"dishes",   name:"Washing Dishes",        location:"manhattan", pay:[35,50],  energy:45, heat:0,  desc:"Restaurant back kitchen. Cash at the end of the shift. No questions.",
+    flavor:["You're invisible back here. That's fine. You prefer it.",
+            "The chef doesn't speak much English. You don't either, in the ways that matter. You work well together.",
+            "You eat whatever comes back from the tables. It's the best meal you've had all week."],
+    classBonus:{schemer:-5, hustler:-5}, failChance:0.05 },
+  { id:"moving",   name:"Moving Furniture",      location:"brooklyn",  pay:[55,80],  energy:65, heat:0,  desc:"Cash job off Craigslist. Two guys and a truck. You're the third guy.",
+    flavor:["Four flights. No elevator. The couch doesn't fit. You make it fit.",
+            "The family tips you an extra $20. The look on their face when you carry the refrigerator alone.",
+            "You learn more about a stranger's life in three hours of moving their stuff than most people learn in years."],
+    classBonus:{veteran:20, junkie:-15}, failChance:0.1,
+    statCheck:{stat:"toughness",dc:4} },
+  { id:"handyman", name:"Handyman Work",         location:"queens",    pay:[50,75],  energy:50, heat:0,  desc:"Painting, fixing, whatever needs doing. The building super pays cash.",
+    flavor:["The tenant watches you work. Offers you lunch. You say yes.",
+            "You fix three things that weren't on the list. The super notices. Says come back next week.",
+            "Quiet work. Honest work. You forget for a few hours what you are out here."],
+    classBonus:{fixer:20, veteran:10}, failChance:0.05 },
+  { id:"demo",     name:"Demolition Crew",       location:"bronx",     pay:[60,90],  energy:70, heat:0,  desc:"Tearing down a building on Jerome. Day rate, cash, no paperwork.",
+    flavor:["Sledgehammer work. Your arms will hurt tomorrow. The money's good.",
+            "The foreman is running an unofficial operation. You don't ask. He doesn't tell.",
+            "You find $40 in cash inside a wall you're tearing down. Nobody saw. It's yours."],
+    classBonus:{veteran:25, junkie:-20}, failChance:0.1,
+    statCheck:{stat:"toughness",dc:5} },
+  { id:"delivery", name:"Food Delivery",         location:"manhattan", pay:[30,55],  energy:35, heat:0,  desc:"Someone's app, someone's bike. Deliver food, get paid per run. No ID.",
+    flavor:["You learn every shortcut in Midtown in two hours.",
+            "The tips are unpredictable. The people are indifferent. The movement is freeing.",
+            "Nobody looks at you. That's either freedom or erasure. Today it feels like freedom."],
+    classBonus:{ghost:15, hustler:10, rat:10}, failChance:0.05 },
+  { id:"cleanup",  name:"Street Cleanup Crew",   location:"brooklyn",  pay:[40,55],  energy:45, heat:-1, desc:"City contractor. Orange vest, grabber stick. Paid daily, no ID for day workers.",
+    flavor:["You wear the vest and suddenly nobody bothers you. It's like a costume.",
+            "The foreman is a good guy. Tells you to come back tomorrow.",
+            "Hard not to think about what the city throws away."],
+    classBonus:{undocumented:15}, failChance:0.05 },
+];
+
+// ── BODEGA ITEMS ──────────────────────────────────────────────────────────────
+const BODEGA_ITEMS = {
+  coffee:     { name:"Coffee",          price:2,  desc:"Bodega coffee. Hot. Gets you moving.", effect:{energy:20,mental:5}, addictive:false },
+  sandwich:   { name:"Sandwich",        price:6,  desc:"Deli sandwich. Real food.",             effect:{hunger:40,energy:10}, addictive:false },
+  chips:      { name:"Chips",           price:2,  desc:"Bag of chips. Junk food hunger fix.",  effect:{hunger:15}, addictive:false },
+  water:      { name:"Water",           price:1,  desc:"Bottled water. You need this.",        effect:{hunger:10,health:5}, addictive:false },
+  beer:       { name:"Beer",            price:4,  desc:"40oz. Takes the edge off.",            effect:{warmth:10,mental:8,energy:-5}, addictive:true, substance:"alcohol" },
+  cigarettes: { name:"Cigarettes",      price:5,  desc:"Pack of loosies. Mental reset.",      effect:{mental:10,health:-3}, addictive:true, substance:"cigarettes" },
+  coffee_xl:  {name:"Large Coffee",    price:4,  desc:"Double cup. Night shift fuel.",        effect:{energy:35,mental:8}, addictive:false },
+  soup:       { name:"Cup of Soup",     price:3,  desc:"Warm. Salt. Better than nothing.",     effect:{hunger:25,warmth:10}, addictive:false },
+  metrocard:  { name:"MetroCard",       price:3,  desc:"Single ride. Gets you where you're going.", effect:{energy:0}, special:"transit", addictive:false },
+  aspirin:    { name:"Aspirin",         price:3,  desc:"Dollar store bottle. Takes the edge off pain.", effect:{health:10,mental:5}, addictive:false },
+  energydrink:{ name:"Energy Drink",   price:3,  desc:"It'll work. For a few hours.",         effect:{energy:40,health:-5}, addictive:false },
+  hotdog:     { name:"Hot Dog",         price:2,  desc:"Street cart. Mustard. You know what you're getting.", effect:{hunger:20}, addictive:false },
+};
+
+// ── DYNAMIC NPC DIALOGUE ──────────────────────────────────────────────────────
+// Additional dialogue lines unlocked by rep level
+const NPC_DEEP_DIALOGUE = {
+  ray: {
+    5:  ["Ray tells you about his first winter on the street. 1987. 'The cold back then had opinions,' he says.",
+         "'You know what I miss?' He doesn't wait for an answer. 'Having somewhere to put things. A shelf. A drawer.'",
+         "He shows you a photograph. Old. Worn at the edges. A woman and a girl. He puts it away before you can ask."],
+    8:  ["'I had a partner. Twenty-two years. She left six months before I ended up out here. I think about the timing sometimes.'",
+         "Ray talks about the job he had. Something in logistics. 'I was good at it,' he says. 'That's the part that stays with you. When you're good at something and then you're not.'",
+         "'My daughter writes,' he says. 'To this address I gave her. A friend of mine collects them. I read them when I can.' He looks at the river."],
+    10: ["'You're going to make it,' Ray says. Not as comfort. As observation. 'I know what that looks like now. After all these years, I know.'",
+         "'When you get out of this, don't look back at it like it didn't happen. It happened. Carry it differently.'"],
+  },
+  smoke: {
+    5:  ["'I used to want to be a teacher,' Smoke says. He's not looking at you. 'Third grade. Something about that age.'",
+         "'You know what the margins are on this? Terrible. I'm basically breaking even after overhead. But what overhead, right?' He laughs at his own joke.",
+         "'Brooklyn changed,' Smoke says. 'Used to be you knew everyone on the block. Now I don't know half these people.'"],
+    8:  ["'I got a son. Seven years old. Lives with his mother in Crown Heights. I drop money every week. She lets me see him sometimes.'",
+         "'The thing about this work,' Smoke says, 'is you can't tell anyone what you actually do all day. So you're always lying. Even when you're not.'"],
+    10: ["'I want out,' he says, quiet enough that you almost don't hear it. 'I've wanted out for three years. You know how that is.'"],
+  },
+  dee: {
+    5:  ["'I've worked intake at three shelters,' Dee says. 'Families, then women's only, now this. Each one teaches you something different about what people need.'",
+         "'We had a man stay here eighteen months once. Never left the borough. Finally got housing. Sends me a card every Christmas.'",
+         "'The hardest part,' Dee says, 'is the paperwork. Not the people. The people I can do. The paperwork is designed to defeat you.'"],
+    8:  ["'I burned out twice. Left this work completely. Both times something pulled me back. I don't know if that's a calling or a bad habit.'",
+         "'I've thought about opening my own place. Something small. No rules about who can come in. No curfew. Just — a place.'"],
+    10: ["'You've been out here a while now. I want you to know — what you've survived, that's not nothing. Most people don't have any idea.'"],
+  },
+  rico: {
+    5:  ["'You think I like this?' Rico says. 'I'm doing what I know how to do. Same as everybody.'",
+         "'My mother lives three blocks from here. She doesn't know. I keep it that way.'",
+         "'Queens raised me,' Rico says. 'I owe it something. I just don't know what.'"],
+    8:  ["'I had a deal once. Straight work, good money, uptown. Got passed over. White kid with a resume got it. That was the moment I understood something.'",
+         "'I'm tired,' Rico says. Just that. He doesn't follow it up."],
+    10: ["'You're one of the few people I actually trust out here. I don't say that for nothing.'"],
+  },
+  marta: {
+    5:  ["'I was an ER nurse for eleven years,' Marta says. 'I left because I couldn't stomach what the system does to people who can't pay.'",
+         "'I've set thirty-seven broken bones in the field. Never lost anyone to a break. The infections are what you have to watch.'",
+         "'You'd be surprised what you can fix with what's available. The body wants to heal. You just have to give it a path.'"],
+    8:  ["'I had a patient last year. Nineteen years old. Smart kid. In school. One bad winter and everything collapsed.' She's quiet for a moment. 'He's okay now. But it was close.'",
+         "'I take home $0 from this. My husband doesn't complain anymore. He understands. Eventually people understand.'"],
+    10: ["'Come see me anytime. Not just when you're hurt. Sometimes people just need someone to check on them.'"],
+  },
+};
+
 // ── PANHANDLE outcomes by borough ─────────────────────────────────────────────
 const PANHANDLE_BASE = {bronx:4,brooklyn:6,manhattan:14,queens:7,staten:5};
 const PANHANDLE_MSGS = [
@@ -584,6 +714,10 @@ const SEARCH_FINDS = [
   {type:"nothing", desc:"Someone got here first. You can tell by the disturbed trash, the way nothing of value is left. You're not the only one who knows these spots.", value:null},
   {type:"nothing", desc:"Three rats scatter when you move the cardboard. They look at you like you interrupted something. Maybe you did.", value:null},
   {type:"nothing", desc:"An hour of looking. Nothing. Some days the city gives you nothing and you just have to accept that and keep moving.", value:null},
+  // Quest items findable via SEARCH
+  {type:"questitem", desc:"A coil of thick rope behind the loading dock. Heavy duty. Could hold something important.", value:null, item:"Rope", prob:0.15},
+  {type:"questitem", desc:"A waterproof dry bag — the kind kayakers use — left near the waterfront. Still sealed.", value:null, item:"Waterproof Bag", prob:0.1},
+  {type:"questitem", desc:"Enough lumber and rope scraps near the Staten Island ferry terminal to build something. Something that might float.", value:null, item:"Raft Materials", prob:0.08, boroOnly:"staten"},
 ];
 
 const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
@@ -794,6 +928,11 @@ const BASE_ITEMS = [
   {id:"shadow_clk",  name:"Shadow Cloak",          slot:"chest",     rarity:"legendary", stats:{heat:-2,toughness:2,charm:1},  desc:"Darkness made fabric.", classes:["vampire","ghost"]},
   {id:"dog_tags",    name:"Dog Tags",              slot:"accessory", rarity:"uncommon",  stats:{toughness:1,mental:5},         desc:"Never take them off.", classes:["veteran"]},
   {id:"fake_id",     name:"Fake ID",               slot:"accessory", rarity:"uncommon",  stats:{heat:-1,charm:1},              desc:"Someone else's problem.", classes:["schemer","rat","undocumented"]},
+  // ── OREGON TRAIL QUEST ITEMS ──────────────────────────────────────────────
+  {id:"rope",        name:"Rope",                  slot:"accessory", rarity:"uncommon",  stats:{hustle:1},                     desc:"Heavy duty. Could hold a lot.", quest:true},
+  {id:"wpbag",       name:"Waterproof Bag",         slot:"accessory", rarity:"rare",      stats:{},                             desc:"Keeps things dry. Crucial.", quest:true},
+  {id:"raft_mat",    name:"Raft Materials",         slot:"accessory", rarity:"rare",      stats:{},                             desc:"Lashed together from whatever you could find. Probably fine.", quest:true},
+  {id:"oregon_medal",name:"Oregon Trail Medal",     slot:"accessory", rarity:"legendary", stats:{charm:3,toughness:2,mental:20,hustle:2}, desc:"You forded the Hudson. Nobody believes you.", quest:true},
 ];
 
 const getItemById=id=>BASE_ITEMS.find(i=>i.id===id);
@@ -1201,7 +1340,7 @@ function CharPortrait({gs}){
           <span style={{fontSize:18}}>{id.icon}</span>
           <div>
             <div style={{color,fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,lineHeight:1}}>{gs.name}</div>
-            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}</div>
+            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}{gs.title?` · ${gs.title}`:""}</div>
           </div>
         </div>
         <div style={{textAlign:"right"}}>
@@ -1377,6 +1516,11 @@ function QuestPanel({gs,npcs,onAccept,onComplete,onAbandon,boro}){
 
     {active.length===0&&available.length===0&&<>
       <div style={{color:"#888",fontSize:8,marginBottom:6}}>No quests available right now.</div>
+              {gs?.level>=8&&(gs?.completedQuests||[]).includes("ray_q3")&&!(gs?.completedQuests||[]).includes("ray_secret_q1")&&!(gs?.activeQuests||{})["ray_secret_q1"]&&(
+                <div style={{marginTop:8,padding:"5px 7px",border:"1px solid #e9c46a22",background:"#e9c46a05",fontSize:7,color:"#e9c46a88",fontStyle:"italic"}}>
+                  💡 Ray has been quiet lately. Something about the Oregon Trail. ACCEPT RAY 4.
+                </div>
+              )}
       <div style={{color:"#999",fontSize:7,lineHeight:1.6}}>Build rep by talking to NPCs.
 Each NPC has 3 quest tiers.
 Min rep: 2 / 5 / 8 per tier.</div>
@@ -1942,9 +2086,11 @@ export default function NYC(){
       backstory:backstory||{},journal:[],
       xpMult:driveOpt?.xpMult||1.0,
       activeQuests:{},completedQuests:[],questProgress:{},
+      title:"",
       wantedStars:0,patrolEncountered:false,
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
+      dayJobDone:false, hasMetrocard:false,
       addiction:0, lastUsed:-1, withdrawalDay:0, highActive:false,
       hustleCount:0,       // times hustled today
       hustleBoroLast:"",   // last borough hustled in
@@ -2288,8 +2434,8 @@ export default function NYC(){
         `  BUY SAFEHOUSE · UPGRADE SAFEHOUSE`,`  STASH [product] · UNSTASH [product] · REST SAFE · STASH CASH · RETRIEVE CASH`,
         `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
         `  FORM CREW [name] · JOIN CREW [name] · LEAVE CREW`,`  CREW · CREWS · DEPOSIT [amt]`,
-        `  WANTED · WEATHER · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
-        `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,
+        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
+        `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item]`,
         `  WRITE [message] · READ LETTERS`,
         gs.isJunkie?`  SCORE — find street product cheap`:"",
         gs.isVampire?`  FEED · MESMERIZE [npc] · MIST [borough] · DOMINATE [player] · THRALL [npc] · NIGHT MARKET · THIRST`:"",
@@ -2342,6 +2488,7 @@ export default function NYC(){
         `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
         !gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
+        `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
         `Crew: ${gs.crew||"solo"} · Corners: ${gs.cornersOwned.join(", ")||"none"}`,
 );return;
     }
@@ -2512,10 +2659,60 @@ export default function NYC(){
     }
     if(C==="EAT"){
       if(gs.isVampire){push(`Food does nothing for you. FEED to restore health.`);return;}
-      if(gs.cash<5){push(`Broke. Hustle first.`);return;}
+      if(gs.cash<2){push(`Broke. Can't even afford bodega prices.`);return;}
       const sp=Math.min(15,gs.cash);
       updGs(g=>({...g,cash:g.cash-sp,survival:{...g.survival,hunger:clamp(g.survival.hunger+sp*3,0,100)}}));
-      push(`Grabbed food. -$${sp}. Hunger up.`);return;
+      push(`Grabbed something from the bodega. -$${sp}. Hunger up.`);return;
+    }
+
+    // BODEGA — browse and buy bodega items
+    if(C==="BODEGA"){
+      push(``,`🏪 BODEGA — ${getBoro(boro)?.name}`,``,
+        ...Object.entries(BODEGA_ITEMS).map(([key,item])=>`  ${item.name.padEnd(16)} $${item.price}  ${item.desc}`),
+        ``,`BUY [item] to purchase. e.g. BUY COFFEE · BUY BEER · BUY METROCARD`);
+      return;
+    }
+
+    // BUY [bodega item] — override to check bodega first
+    const bodbuyM=C.match(/^BUY (COFFEE|SANDWICH|CHIPS|WATER|BEER|CIGARETTES|ASPIRIN|SOUP|METROCARD|ENERGYDRINK|HOTDOG|LARGE COFFEE|ENERGY DRINK|HOT DOG|LARGE)$/);
+    if(bodbuyM){
+      const itemKey=Object.keys(BODEGA_ITEMS).find(k=>
+        k===bodbuyM[1].toLowerCase()||
+        BODEGA_ITEMS[k].name.toLowerCase()===bodbuyM[1].toLowerCase()||
+        BODEGA_ITEMS[k].name.toLowerCase().includes(bodbuyM[1].toLowerCase())
+      );
+      const bItem=itemKey?BODEGA_ITEMS[itemKey]:null;
+      if(bItem){
+        if(gs.cash<bItem.price){push(`Need $${bItem.price}. Have $${gs.cash}.`);return;}
+        updGs(g=>{
+          let ng={...g,cash:g.cash-bItem.price};
+          const eff=bItem.effect||{};
+          if(eff.hunger!==undefined)ng={...ng,survival:{...ng.survival,hunger:Math.min(100,ng.survival.hunger+(eff.hunger||0))}};
+          if(eff.energy!==undefined)ng={...ng,survival:{...ng.survival,energy:Math.min(100,ng.survival.energy+(eff.energy||0))}};
+          if(eff.warmth!==undefined)ng={...ng,survival:{...ng.survival,warmth:Math.min(100,ng.survival.warmth+(eff.warmth||0))}};
+          if(eff.health!==undefined)ng={...ng,survival:{...ng.survival,health:clamp(ng.survival.health+(eff.health||0),0,100)}};
+          if(eff.mental!==undefined)ng={...ng,survival:{...ng.survival,mental:Math.min(100,(ng.survival.mental||70)+(eff.mental||0))}};
+          // addiction from beer/cigarettes
+          if(bItem.addictive){
+            const archSub=CLASS_SUBSTANCE[ng.archetype?.id||"veteran"];
+            if(archSub?.name===bItem.substance||bItem.substance==="cigarettes"){
+              ng={...ng,addiction:Math.min(100,ng.addiction+2)};
+            }
+          }
+          // metrocard — next move free energy
+          if(bItem.special==="transit")ng={...ng,hasMetrocard:true};
+          return ng;
+        });
+        const bMsgs={
+          coffee:["You take the first sip standing at the counter. It's bad coffee. It's also exactly what you needed.","The bodega guy knows your order. You didn't tell him. He just knows."],
+          beer:["The 40 goes down warm. The block softens a little.","You find a stoop. Sit. The city moves around you without caring."],
+          cigarettes:["First drag in how long? You exhale slowly. Something in your chest unclenches.","You smoke half and put the rest behind your ear for later."],
+          metrocard:["You tap through the turnstile. The train is running. Small miracle.","Underground. Nobody can see you down here. Sometimes that's exactly what you need."],
+        };
+        const bMsg=bMsgs[itemKey]?bMsgs[itemKey][rnd(0,bMsgs[itemKey].length-1)]:null;
+        push(`🏪 ${bItem.name} — $${bItem.price}`,bMsg||bItem.desc,`${Object.entries(bItem.effect||{}).filter(([,v])=>v!==0).map(([k,v])=>`${k} ${v>0?"+":""}${v}`).join(" · ")}`);
+        return;
+      }
     }
     if(C==="SCOUT"){
       push(`Intel — ${b.name} ${weather.icon}:`,
@@ -2542,7 +2739,8 @@ export default function NYC(){
       // Product weight penalty on move
       const moveWeight=getCarryWeight(gs.product);
       const weightPenalty=Math.floor(Math.max(0,moveWeight-MAX_CARRY_WEIGHT)*3);
-      const totalMovePenalty=10+weather.movePenalty+weightPenalty+(tier2.movePenalty||0);
+      const totalMovePenalty=gs.hasMetrocard?0:10+weather.movePenalty+weightPenalty+(tier2.movePenalty||0);
+      if(gs.hasMetrocard&&totalMovePenalty===0)push(`🚇 MetroCard — free ride.`);
       if(gs.survival.energy<totalMovePenalty){push(`Too tired to make that trip. Need ${totalMovePenalty} energy.`);return;}
       // Entry cop check — high cop presence boroughs can stop you
       const destCopPresence=getCopPresence(t.id,world.copPresence,gs.day);
@@ -2673,7 +2871,27 @@ export default function NYC(){
     const tlkM=C.match(/^TALK (.+)$/);
     if(tlkM){const nN=tlkM[1].toLowerCase();const npc=npcs.find(n=>n.name.toLowerCase()===nN||n.id===nN);
       if(!npc){push(`Don't know ${tlkM[1]}.`);return;}if(npc.b!==boro){push(`${npc.name} isn't here. Try ${getBoro(npc.b)?.name}.`);return;}
-      push(...npc.lines);setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));
+      // dynamic dialogue based on rep
+      const npcRep=npc.rep||0;
+      const deepLines=NPC_DEEP_DIALOGUE[npc.id];
+      let dialogueLine=npc.lines[rnd(0,npc.lines.length-1)];
+      if(deepLines){
+        if(npcRep>=10&&deepLines[10]){dialogueLine=deepLines[10][rnd(0,deepLines[10].length-1)];}
+        else if(npcRep>=8&&deepLines[8]){dialogueLine=deepLines[8][rnd(0,deepLines[8].length-1)];}
+        else if(npcRep>=5&&deepLines[5]){dialogueLine=deepLines[5][rnd(0,deepLines[5].length-1)];}
+      }
+      // shelter tip if talking to Dee
+      if(npc.id==="dee"&&npcRep>=3){
+        const hotTip=["The Bronx shelter has eight empty beds tonight. Word.",
+          "Rico's been quiet in Queens. Good time to move product if you need to.",
+          "There's a free meal at St. Anthony's at 6pm. Bring whoever you know.",
+          "The Captain was spotted uptown two nights ago. Haven't heard since.",
+          `Cops ran a sweep on ${getBoro(boro)?.name} last night. Should be quiet today.`];
+        push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``,`💡 ${hotTip[rnd(0,hotTip.length-1)]}`);
+      } else {
+        push(``,`${npc.icon} ${npc.name}:`,dialogueLine,``);
+      }
+      setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));
       updGs(g=>{
         const newProg={...g.questProgress};
         Object.keys(g.activeQuests||{}).forEach(qid=>{
@@ -2682,7 +2900,7 @@ export default function NYC(){
         });
         return applyXP({...g,survival:{...g.survival,mental:clamp((g.survival.mental||70)+8,0,100)},questProgress:newProg},5,"talk");
       });
-      push(`Mental health up a little.`);return;}
+      push(`Mental +8. Rep with ${npc.name} up.`);return;}
 
     // MSG
     const msgM=raw.match(/^[Mm][Ss][Gg] (.+)$/);
@@ -2759,6 +2977,7 @@ export default function NYC(){
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
+        dayJobDone:false,hasMetrocard:false,
 
           informsToday:0,patrolEncountered:false,feedUsed:false};
       });
@@ -2844,6 +3063,59 @@ export default function NYC(){
       return;
     }
 
+    // WORK — show available day labor jobs
+    if(C==="WORK"){
+      const todayJobs=DAY_LABOR_JOBS.filter(j=>!j.location||j.location===boro||Math.random()<0.5);
+      if(!todayJobs.length){push(`No day work available here today. Try another borough.`);return;}
+      push(``,`💼 DAY LABOR — ${getBoro(boro)?.name}`,`Cash jobs, no ID required.`,``,...todayJobs.map(j=>{
+        const bonus=j.classBonus?.[gs.archetype?.id]||0;
+        const pay=`$${j.pay[0]+bonus}-$${j.pay[1]+bonus}`;
+        return `  ${j.name} · ${pay} · ${j.energy} energy · TAKE [${j.id}]`;
+      }),``,`Type TAKE [job] to take a shift.`);
+      return;
+    }
+
+    // TAKE [job] — take a day labor job
+    const takeM=C.match(/^TAKE (.+)$/);
+    if(takeM){
+      const jobId=takeM[1].toLowerCase().replace(/ /g,"_");
+      const job=DAY_LABOR_JOBS.find(j=>j.id===jobId||j.name.toLowerCase().includes(takeM[1].toLowerCase()));
+      if(!job){push(`Unknown job. Type WORK to see what's available.`);return;}
+      if(gs.dayJobDone){push(`You've already worked today. Rest and come back tomorrow.`);return;}
+      if(gs.survival.energy<job.energy-10){push(`Too tired for a full shift. REST first.`);return;}
+      // stat check if required
+      if(job.statCheck){
+        const roll20=roll(20);const statVal=gs.stats?.[job.statCheck.stat]||5;
+        const total=roll20+Math.floor(statVal/2);
+        if(total<job.statCheck.dc){
+          push(`You tried to take the ${job.name} shift.`,`${job.statCheck.stat.toUpperCase()} check: d20=${roll20}+${Math.floor(statVal/2)}=${total} vs DC${job.statCheck.dc}`,`Didn't work out. Too rough today.`);
+          updGs(g=>({...g,survival:{...g.survival,energy:clamp(g.survival.energy-15,0,100)},dayJobDone:true}));return;
+        }
+      }
+      // pay
+      const bonus=job.classBonus?.[gs.archetype?.id]||0;
+      const base=rnd(job.pay[0],job.pay[1]);
+      const pay=Math.max(20,base+bonus);
+      const flavor=job.flavor[rnd(0,job.flavor.length-1)];
+      // roll for fail
+      if(Math.random()<(job.failChance||0)){
+        push(`You showed up for the ${job.name} shift.`,`Didn't work out — wrong time, wrong place.`,`You head back. $0. Day's energy gone.`);
+        updGs(g=>({...g,survival:{...g.survival,energy:clamp(g.survival.energy-job.energy,0,100)},dayJobDone:true}));return;
+      }
+      push(``,`💼 ${job.name}`,flavor,``,`Day's work done. +$${pay}. Energy -${job.energy}.`);
+      if(job.heat<0)push(`Heat -1. Legitimate work has its advantages.`);
+      updGs(g=>applyXP({...g,
+        cash:g.cash+pay,
+        heat:clamp(g.heat+(job.heat||0),0,10),
+        dayJobDone:true,
+        survival:{...g.survival,
+          energy:clamp(g.survival.energy-job.energy,0,100),
+          hunger:clamp(g.survival.hunger-15,0,100), // hard work makes you hungry
+        },
+      },15,"hustle"));
+      return;
+    }
+
     // PANHANDLE
     if(C==="PANHANDLE"){
       if(gs.isUndoc){push(`Too risky. You can't draw that kind of attention.`);return;}
@@ -2923,6 +3195,17 @@ export default function NYC(){
         });
         return{...g,questProgress:newProg};
       });
+      // quest item finds
+      if(find.type==="questitem"){
+        const boroOk=!find.boroOnly||find.boroOnly===boro;
+        if(boroOk&&Math.random()<(find.prob||0.1)){
+          if(!gs.inventory.includes(find.item)){
+            updGs(g=>({...g,inventory:[...g.inventory,find.item]}));
+            push(`${find.desc}`,`Found: ${find.item}`);
+            return;
+          }
+        }
+      }
       if(find.type==="cash"){
         const amt=rnd(find.value[0],find.value[1]);
         updGs(g=>applyXP({...g,cash:g.cash+amt,lastSearch:now,survival:{...g.survival,mental:clamp((g.survival.mental||70)+mentalBoost,0,100)}},6,"scout"));
@@ -3438,6 +3721,28 @@ export default function NYC(){
     if(acceptM){
       const npcId=acceptM[1].toLowerCase();
       const tier=parseInt(acceptM[2]);
+      // Special handling for secret quest
+      if(npcId==="ray"&&tier===4){
+        const secretQ=NPC_QUESTS.ray_secret?.[0];
+        if(!secretQ){push(`No secret quest found.`);return;}
+        if(gs.level<8){push(`You're not ready for that yet. Level 8 required. You're Level ${gs.level}.`);return;}
+        if(!(gs.completedQuests||[]).includes("ray_q3")){push(`Complete all of Ray's quests first.`);return;}
+        if((gs.activeQuests||{})[secretQ.id]){push(`Already on that quest.`);return;}
+        if((gs.completedQuests||[]).includes(secretQ.id)){push(`Already completed. You forded the Hudson. That's enough.`);return;}
+        const npcRay=npcs.find(n=>n.id==="ray");
+        if(!npcRay||(npcRay.rep||0)<10){push(`Ray needs to trust you completely. Max out his rep first.`);return;}
+        updGs(g=>({...g,activeQuests:{...(g.activeQuests||{}),[secretQ.id]:{...secretQ,startDay:g.day}},questProgress:{...(g.questProgress||{}),[secretQ.id]:{searches:0,fights:0,npcsVisited:[],visited:[]}}}));
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `🎯 SECRET QUEST UNLOCKED`,
+          `"Caulk the Wagon"`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          ``,secretQ.briefing,``,
+          `Gather: Rope · Waterproof Bag · Raft Materials`,
+          `Then type CAULK WAGON at the waterfront.`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        journalEvent('questStart',"Caulk the Wagon");
+        return;
+      }
       const questList=NPC_QUESTS[npcId];
       if(!questList){push(`No quests from ${acceptM[1]}.`);return;}
       const quest=questList[tier-1];
@@ -3872,6 +4177,254 @@ export default function NYC(){
       });
       push(...lines,``,`Weight limit: ${MAX_CARRY_WEIGHT} units total.`);return;
     }
+
+    // ── HEAT REDUCTION COMMANDS ──────────────────────────────────────────────
+
+    // LAY LOW — spend time lying low, costs a day's energy, reduces heat
+    if(C==="LAY LOW"){
+      if(gs.survival.energy<30){push(`Too tired. REST first.`);return;}
+      const heatDrop=rnd(1,3);
+      const energyCost=40;
+      const msgs=[
+        "You pull your hood up and stay off the main blocks all day. Nobody sees you.",
+        "You find a spot — library, church basement, laundromat — and you wait. By evening the block feels different.",
+        "You move borough to borough, never staying long enough to matter. Heat drops.",
+        "You crash at different spots all day. Keep moving. Stay invisible.",
+        "You swap your jacket, change your hat, take the long way everywhere. Old tradecraft.",
+      ];
+      updGs(g=>({...g,
+        heat:clamp(g.heat-heatDrop,0,10),
+        survival:{...g.survival,energy:clamp(g.survival.energy-energyCost,0,100)},
+      }));
+      push(`🫥 ${msgs[rnd(0,msgs.length-1)]}`,`Heat -${heatDrop}. Energy -${energyCost}.`);
+      return;
+    }
+
+    // CHANGE UP — change appearance, costs cash, bigger heat drop
+    if(C==="CHANGE UP"){
+      const cost=40;
+      if(gs.cash<cost){push(`Need $${cost} for new clothes, haircut, different look.`);return;}
+      const heatDrop=rnd(2,4);
+      const msgs=[
+        "New jacket from the thrift store on Flatbush. Different shoes. You don't look like yourself anymore. That's the point.",
+        "You get a cut at the barbershop on 149th. Pay cash. The barber doesn't ask questions. Regulars don't ask questions either.",
+        "Goodwill run. Everything you're wearing goes in a bag. New look, new block presence.",
+        "You change everything — jacket, hat, shoes. Walk different. Talk different. Cops are looking for who you were, not who you are now.",
+      ];
+      updGs(g=>({...g,
+        cash:g.cash-cost,
+        heat:clamp(g.heat-heatDrop,0,10),
+      }));
+      push(`👔 ${msgs[rnd(0,msgs.length-1)]}`,`-$${cost}. Heat -${heatDrop}.`);
+      return;
+    }
+
+    // SKIP TOWN — move to a random adjacent borough, significant heat drop
+    if(C==="SKIP TOWN"){
+      if(gs.survival.energy<25){push(`Too tired to move right now.`);return;}
+      const b2=getBoro(boro);
+      const adj=b2?.adjacent||[];
+      if(!adj.length){push(`Nowhere to go from here.`);return;}
+      const dest=adj[rnd(0,adj.length-1)];
+      const heatDrop=rnd(2,4);
+      setBoro(dest);
+      updGs(g=>({...g,
+        heat:clamp(g.heat-heatDrop,0,10),
+        survival:{...g.survival,energy:clamp(g.survival.energy-25,0,100)},
+        patrolEncountered:false,
+      }));
+      const ws={...world,players:{...(world.players||{}),[gs.name]:{level:gs.level,borough:dest,lastSeen:Date.now(),heat:Math.round(Math.max(0,gs.heat-heatDrop)),archId:gs.archetype?.id||'veteran'}}};
+      setWorld(ws);saveWorld(ws);
+      push(`🚇 You get out. Head to ${getBoro(dest)?.name}.`,`Different block. Different energy. Heat -${heatDrop}.`);
+      return;
+    }
+
+    // LIE LOW — stay in safe house for the day, maximal heat drop
+    if(C==="LIE LOW"){
+      const safe=world.safehouses?.[boro];
+      const ownsIt=safe&&(safe.owner===gs?.name||safe.ownerLower===gs?.name?.toLowerCase()||safe.crewOwner===gs?.crew);
+      if(!ownsIt){push(`Need a safe house here to lie low. BUY SAFEHOUSE first.`);return;}
+      const heatDrop=2+(safe.level||1);
+      updGs(g=>({...g,
+        heat:clamp(g.heat-heatDrop,0,10),
+        survival:{...g.survival,energy:Math.min(100,g.survival.energy+20),warmth:100},
+        patrolEncountered:false,
+        wanted:g.heat-heatDrop<7?false:g.wanted,
+      }));
+      push(`🏠 You lock the door and stay off the street all day.`,
+        `Nobody knows where you are. That's the whole point.`,
+        `Heat -${heatDrop}. Warmed up. Energy restored a little.`);
+      return;
+    }
+
+    // CONFESS — go to Dee at the shelter, costs nothing, small heat drop + mental boost
+    // (represents connecting with social services, getting your name off active lists)
+    if(C==="CONFESS"){
+      const dee=npcs.find(n=>n.id==="dee");
+      if(!dee){push(`Can't find Dee right now.`);return;}
+      if(dee.rep<3){push(`Dee doesn't know you well enough yet. TALK to her first.`);return;}
+      const heatDrop=1;
+      updGs(g=>applyXP({...g,
+        heat:clamp(g.heat-heatDrop,0,10),
+        survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)},
+      },8,"talk"));
+      setNpcs(prev=>prev.map(n=>n.id==="dee"?{...n,rep:Math.min(10,n.rep+1)}:n));
+      push(`You find Dee at the shelter. Tell her what's been happening.`,
+        `She listens without judgment. That's rarer than it sounds.`,
+        `"Come back if it gets worse," she says. You think you will.`,
+        `Heat -${heatDrop}. Mental health up. Rep with Dee up.`);
+      return;
+    }
+
+    // HEAT command — alias for WANTED STATUS
+    if(C==="HEAT"){
+      const tier=getWantedTier(Math.round(gs.heat));
+      const weight=getCarryWeight(gs.product);
+      const overCash=gs.cash>MAX_CARRY_CASH;
+      const overWeight=weight>MAX_CARRY_WEIGHT;
+      push(`🚔 HEAT: ${Math.round(gs.heat)}/10 — ${"★".repeat(tier.stars)||"☆"} ${tier.name}`,
+        tier.desc,
+        `Cop presence here: ${getCopPresence(boro,world.copPresence,gs.day)}/10`,
+        tier.cantEnter.length?`Borough restrictions: ${tier.cantEnter.join(", ").toUpperCase()}`:`No borough restrictions`,
+        ``,
+        `Ways to cool down:`,
+        `  LAY LOW (-1-3 heat, costs energy)`,
+        `  CHANGE UP (-2-4 heat, costs $40)`,
+        `  SKIP TOWN (move borough, -2-4 heat)`,
+        `  LIE LOW (safe house, -${2+(world.safehouses?.[boro]?.level||1)} heat)`,
+        `  HIDE/BRIBE/TALK (during patrol encounters)`,
+        `  SLEEP (-2 heat per night)`,
+        overCash?`⚠ Carrying $${gs.cash} — you're a robbery target`:"",
+        overWeight?`⚠ Carrying ${weight.toFixed(1)} weight units — you're visible`:"");
+      return;
+    }
+
+    // ── OREGON TRAIL SECRET QUEST ─────────────────────────────────────────────
+
+    // CAULK WAGON — attempt to ford the Hudson River
+    if(C==="CAULK WAGON"||C==="FORD THE RIVER"||C==="CAULK THE WAGON"){
+      // Check eligibility
+      const raySecretQ=(gs.activeQuests||{})["ray_secret_q1"];
+      if(!raySecretQ){
+        if(gs.level>=8&&(gs.completedQuests||[]).includes("ray_q3")){
+          push(`Ray mentioned something about the Hudson. Go TALK to Ray in Manhattan.`);
+        } else {
+          push(`You don't know what that means yet.`);
+        }
+        return;
+      }
+      if(boro!=="manhattan"&&boro!=="brooklyn"){
+        push(`You need to be at the Hudson. Head to Manhattan or Brooklyn waterfront.`);return;
+      }
+      // Check supplies
+      const hasRope=gs.inventory.includes("Rope");
+      const hasBag=gs.inventory.includes("Waterproof Bag");
+      const hasRaft=gs.inventory.includes("Raft Materials");
+      if(!hasRope||!hasBag||!hasRaft){
+        const missing=[];
+        if(!hasRope)missing.push("Rope (SEARCH or BUY ITEM rope)");
+        if(!hasBag)missing.push("Waterproof Bag (SEARCH or BUY ITEM waterproof bag)");
+        if(!hasRaft)missing.push("Raft Materials (SEARCH in Staten Island)");
+        push(`You need supplies first:`, ...missing.map(m=>`  · ${m}`));return;
+      }
+
+      // The attempt — D&D style with multiple phases
+      push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `🚣 THE HUDSON FORD`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `You drag the raft to the water's edge at 2am. The city glitters across the river.`,
+        `Ray watches from the bank. He doesn't say anything.`,
+        ``,
+        `You push off.`,
+        ``);
+
+      // Multi-phase crossing with dice rolls
+      const toughness=gs.stats?.toughness||5;
+      const hustle=gs.stats?.hustle||5;
+      const streetiq=gs.stats?.streetiq||5;
+      const phase1=roll(20)+Math.floor(toughness/2); // physical endurance
+      const phase2=roll(20)+Math.floor(streetiq/2);  // navigating the current
+      const phase3=roll(20)+Math.floor(hustle/2);    // final push
+
+      setTimeout(()=>{
+        push(`Phase 1 — The Current`,
+          `Toughness check: d20=${phase1-Math.floor(toughness/2)} +${Math.floor(toughness/2)} = ${phase1} vs DC 12`,
+          phase1>=12?`The current hits hard but you hold the rope. You're through the worst of it.`:`The current nearly takes you. You lose the bag. Health -15.`);
+      },500);
+      setTimeout(()=>{
+        push(``,`Phase 2 — Navigation`,
+          `Street IQ check: d20=${phase2-Math.floor(streetiq/2)} +${Math.floor(streetiq/2)} = ${phase2} vs DC 10`,
+          phase2>=10?`You read the water right. Stay out of the shipping lanes.`:`You drift south. Takes longer. Energy -20.`);
+      },1000);
+      setTimeout(()=>{
+        push(``,`Phase 3 — The Final Push`,
+          `Hustle check: d20=${phase3-Math.floor(hustle/2)} +${Math.floor(hustle/2)} = ${phase3} vs DC 8`,
+          phase3>=8?`You make it. You drag yourself up the bank on the other side. Breathing hard.`:`The raft gives out twenty yards from shore. You swim for it.`);
+      },1500);
+
+      const success=phase1>=12||phase2>=10||phase3>=8; // need at least 2 of 3
+      const fullSuccess=phase1>=12&&phase2>=10&&phase3>=8;
+
+      setTimeout(()=>{
+        if(fullSuccess){
+          push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `✓ YOU FORDED THE HUDSON.`,
+            ``,
+            `Perfect crossing. Ray is still watching from the Manhattan bank.`,
+            `You can see him from here. Small. Smiling.`,
+            ``,
+            `He'll tell that story for years.`,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        } else if(success){
+          push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `✓ YOU MADE IT ACROSS.`,
+            ``,
+            `Not pretty. Not clean. But across.`,
+            `That's the whole point.`,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        } else {
+          push(``,`✗ The Hudson wins this one.`,
+            `You're pulled out downstream. Alive. Barely.`,
+            `Ray meets you at the bank. "Try again when you're ready." He means it.`,``);
+        }
+
+        if(success){
+          // Complete quest and award
+          const newActive={...(gs.activeQuests||{})};
+          delete newActive["ray_secret_q1"];
+          const medal={...getItemById("oregon_medal"),name:"Oregon Trail Medal"};
+          updGs(g=>applyXP({...g,
+            cash:g.cash,
+            activeQuests:newActive,
+            completedQuests:[...(g.completedQuests||[]),"ray_secret_q1"],
+            inventory:[...g.inventory,"Oregon Trail Medal"],
+            title:"THE FORDIST",
+            survival:{...g.survival,
+              health:clamp(g.survival.health-(fullSuccess?5:25),1,100),
+              mental:Math.min(100,(g.survival.mental||70)+50),
+              energy:clamp(g.survival.energy-40,0,100),
+            },
+          },500,"quest"));
+          setNpcs(prev=>prev.map(n=>n.id==="ray"?{...n,rep:10}:n));
+          // Announce to world
+          const ws2=notifyPlayers(world,gs.name,`🏅 ${gs.name} FORDED THE HUDSON RIVER. The Oregon Trail lives.`);
+          const ws3=addWorldHistory(ws2,"legend",gs.name,`${gs.name} caulked the wagon and forded the Hudson River. Level ${gs.level}.`,boro);
+          setWorld(ws3);saveWorld(ws3);setWMsgs(ws3.messages||[]);
+          setTimeout(()=>push(``,`🏅 AWARD: Oregon Trail Medal`,`🏅 TITLE: THE FORDIST`,`+500 XP · +50 mental · Ray's rep maxed.`,`Your name will be on the Wall of Legends.`,``),200);
+        } else {
+          updGs(g=>({...g,survival:{...g.survival,health:clamp(g.survival.health-30,1,100),energy:clamp(g.survival.energy-30,0,100)}}));
+        }
+      },2000);
+      return;
+    }
+
+    // ACCEPT for secret quest — needs level check
+    // Override ACCEPT to check for secret quest
+    // (normal ACCEPT handles this but we add level gate)
+
+    // BUY ITEM — allow purchasing quest items
+    // Already handled in BUY ITEM command — rope/bag/raft findable via SEARCH
 
     // MENTAL — check mental health status
     if(C==="MENTAL"){
