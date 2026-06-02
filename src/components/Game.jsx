@@ -646,26 +646,8 @@ const LEVEL_STAT_GROWTH = {
   junkie:       ["charm","streetiq","charm","hustle","streetiq","charm","toughness","hustle","charm","streetiq"],
   undocumented: ["streetiq","hustle","charm","streetiq","toughness","hustle","streetiq","charm","hustle","streetiq"],
   hooker:       ["charm","hustle","charm","streetiq","charm","toughness","hustle","charm","streetiq","hustle"],
-  schizo:       [
-    {id:"pattern_recognition",name:"Pattern Recognition",level:1,cost:1,desc:"LOOK visions 30% more likely to yield real cash.",effect:{visionBonus:0.3}},
-    {id:"voice_guidance",    name:"Voice Guidance",     level:2,cost:1,desc:"Chaos engine good outcomes increase by 10%.",         effect:{goodChaos:0.1}},
-    {id:"unpredictable",     name:"Unpredictable",      level:3,cost:1,desc:"In combat: erratic movement. +2 attack, enemy -2 AC.", effect:{erraticCombat:true}},
-    {id:"the_knowing",       name:"The Knowing",        level:4,cost:2,desc:"VISION command gives true player location once per day.",effect:{trueVision:true}},
-    {id:"blessed_chaos",     name:"Blessed Chaos",      level:5,cost:2,desc:"Good chaos outcomes increase to 40% of chaos events.", effect:{blessedChaos:true}},
-    {id:"street_prophet",    name:"Street Prophet",     level:6,cost:2,desc:"NPCs give you items or cash during TALK.",             effect:{prophetBonus:true}},
-    {id:"beyond_fear",       name:"Beyond Fear",        level:7,cost:3,desc:"Cops hesitate. Wanted threshold effectively +2.",       effect:{fearless:true}},
-    {id:"full_revelation",   name:"Full Revelation",    level:8,cost:3,desc:"At Shattered mental health, all stats +3.",            effect:{revelation:true}},
-  ],
-  drifter:      [
-    {id:"good_boy",      name:"Good Boy",      level:1, cost:1, desc:"Dog gives +15 charm to all NPC interactions.",    effect:{charmBonus:2}},
-    {id:"begging_eyes",  name:"Begging Eyes",  level:2, cost:1, desc:"PANHANDLE earns 50% more. People give to the dog.",effect:{panhandleBonus:0.5}},
-    {id:"guard_dog",     name:"Guard Dog",     level:3, cost:1, desc:"GUARD command. Dog watches your stash while you sleep.",effect:{guardBonus:true}},
-    {id:"dog_scout",     name:"Dog Scout",     level:4, cost:2, desc:"SCOUT DOG — dog runs ahead, returns with cop intel.", effect:{scoutBonus:true}},
-    {id:"pack_bond",     name:"Pack Bond",     level:5, cost:2, desc:"Mental health never drops below 20 while your dog is with you.",effect:{mentalFloor:20}},
-    {id:"street_vet",    name:"Street Vet",    level:6, cost:2, desc:"NPCs trust you faster. +1 rep per TALK.",            effect:{repBonus:1}},
-    {id:"two_of_us",     name:"Two of Us",     level:7, cost:3, desc:"Dog joins combat. +3 attack, enemy -2 AC.",          effect:{dogCombat:true}},
-    {id:"famous_dog",    name:"Famous Dog",    level:8, cost:3, desc:"Dog is famous. PANHANDLE earns 2x in home borough.", effect:{famousBonus:true}},
-  ],
+  schizo:       ["hustle","streetiq","charm","toughness","hustle","streetiq","hustle","charm","streetiq","hustle"],
+  drifter:      ["charm","hustle","charm","toughness","hustle","charm","streetiq","hustle","charm","toughness"],
   vampire:      ["charm","toughness","charm","streetiq","toughness","charm","hustle","toughness","charm","streetiq"],
   fixer:        ["streetiq","charm","hustle","streetiq","charm","streetiq","hustle","charm","streetiq","hustle"],
   rat:          ["streetiq","streetiq","charm","hustle","streetiq","charm","streetiq","toughness","hustle","streetiq"],
@@ -4011,6 +3993,7 @@ export default function NYC(){
             lifetime:{...(g.lifetime||{}),pvpWins:(g.lifetime?.pvpWins||0)+1},
           },25*_rMult,"fight"));
           if(_isRival)push("⚔ RIVAL BONUS: 2x XP and cash.");
+        }
         let wsh=addWorldHistory(world,"pvp",gs.name,`${gs.name} robbed ${tName} in ${getBoro(boro)?.name} (d20=${attackRoll}, +$${stolen})`,boro);
         wsh=notifyPlayers(wsh,gs.name,`🔴 ${gs.name} rolled ${attackRoll} attacking ${tName} in ${getBoro(boro)?.name}. +$${stolen}.`);
         const _pvpWinMsgs=[
@@ -4057,9 +4040,7 @@ export default function NYC(){
           const done=myCompleted.includes(c.id);
           const diff=c.diff==="hard"?"🔴":c.diff==="medium"?"🟡":"🟢";
           const reward="$"+(c.reward.cash||0)+(c.reward.xp?" +"+c.reward.xp+"XP":"")+(c.reward.rep?" +"+c.reward.rep+"rep":"")+(c.reward.heat?" heat"+c.reward.heat:"")+(c.reward.mental?" +mental":"");
-          return `${done?"✓":"○"} ${diff} ${c.title}
-   ${c.desc}
-   Reward: ${reward}`;
+          return (done?"✓":"○")+" "+diff+" "+c.title+"\n   "+c.desc+"\n   Reward: "+reward;
         }),
         "",
         "Progress tracked automatically. Complete tasks today.",
@@ -4906,8 +4887,7 @@ export default function NYC(){
       const worldLog=(world.letters||[]).filter(l=>!l.to).slice(-5);
       if(unread.length>0){
         push("","✉ YOUR MAIL","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-          ...unread.map(l=>`From ${l.from} · Day ${l.day} · ${getBoro(l.boro)?.short||"?"}:
-  "${l.text}"`),
+          ...unread.map(l=>"From "+l.from+" · Day "+l.day+" · "+(getBoro(l.boro)?.short||"?")+':\n  "'+l.text+'"'),
           "");
         // Mark as read
         const updLetters=(world.letters||[]).map(l=>l.to===gs.name?{...l,read:true}:l);
@@ -5451,8 +5431,7 @@ export default function NYC(){
       if(active.length>0){
         push(`— ACTIVE QUESTS —`,...active.map(q=>{
           const daysLeft=q.startDay+(q.duration||3)-gs.day;
-          return `  ${q.npc.toUpperCase()} — "${q.title}" (${Math.max(0,daysLeft)}d left)
-    ${q.task}`;
+          return "  "+q.npc.toUpperCase()+" — \""+q.title+"\" ("+Math.max(0,daysLeft)+"d left)\n    "+q.task;
         }));
       }
       if(available.length>0){
