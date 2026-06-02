@@ -4966,16 +4966,16 @@ export default function NYC(){
     }
     if(C==="CONFIRM DELETE"){
       push("Deleting character...");
-      const deleted = await deleteCharacter(gs.name, pinRef.current||"");
-      if(deleted){
-        // Remove from world.players
-        const dp={...world.players};delete dp[gs.name];
-        const dws={...world,players:dp};setWorld(dws);saveWorld(dws);
-        setTimeout(()=>{setGs(null);setPhase("character");},1500);
-        push("","Character deleted. Starting fresh.","");
-      } else {
-        push("Deletion failed. Check your PIN and try again.");
-      }
+      deleteCharacter(gs.name, pinRef.current||"").then(deleted=>{
+        if(deleted){
+          const dp={...world.players};delete dp[gs.name];
+          const dws={...world,players:dp};setWorld(dws);saveWorld(dws);
+          setTimeout(()=>{setGs(null);setPhase("character");},1500);
+          push("","Character deleted. Starting fresh.","");
+        } else {
+          push("Deletion failed. Check your PIN and try again.");
+        }
+      }).catch(()=>push("Deletion failed. Try again."));
       return;
     }
     if(C==="RETIRE"){
