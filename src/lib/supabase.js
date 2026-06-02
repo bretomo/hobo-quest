@@ -101,6 +101,20 @@ export async function saveCharacter(gs, pin) {
 
 // ── REAL-TIME SUBSCRIPTIONS ───────────────────────────────────
 
+// Direct message send — bypasses full saveWorld for speed
+export async function sendChatMessage(message) {
+  // First get current messages
+  const { data } = await supabase.from('world').select('messages').eq('id', 1).single()
+  const current = data?.messages || []
+  const newMessages = [...current.slice(-49), message]
+  const { error } = await supabase
+    .from('world')
+    .update({ messages: newMessages, updated_at: new Date().toISOString() })
+    .eq('id', 1)
+  if (error) throw error
+  return newMessages
+}
+
 export function subscribeToWorld(callback) {
   return supabase
     .channel('world-changes')
