@@ -1415,7 +1415,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
- useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
+  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w){}catch{}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
@@ -1443,30 +1443,61 @@ export default function NYC(){
     if(entry)updGs(g=>addJournalEntry(g,entry));
   };
 
-  // auto-sync 30s
+  // ── REAL-TIME WORLD SYNC ──────────────────────────────────────────────────
+  const handleWorldUpdate=(fresh)=>{
+    if(!fresh)return;
+    const prevMsgCount=(wMsgs||[]).length;
+    const newMsgs=fresh.messages||[];
+    setWorld(fresh);
+    setWMsgs(newMsgs);
+    // auto scroll chat if open
+    setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
+    // count unread from others
+    if(newMsgs.length>prevMsgCount&&tab!=="chat"){
+      const newOnes=newMsgs.slice(prevMsgCount);
+      const fromOthers=newOnes.filter(m=>m.from!==gsRef.current?.name);
+      if(fromOthers.length>0)setUnread(u=>u+fromOthers.length);
+    }
+    setPulse(true);setTimeout(()=>setPulse(false),800);
+    const g=gsRef.current;if(!g)return;
+    // player alerts — attacks, bounties, wires, dominates etc
+    const alerts=(fresh.playerAlerts||fresh.player_alerts||{})[g.name]||[];
+    if(alerts.length>0){
+      alerts.forEach(a=>{
+        const msg=typeof a==="string"?a:a.msg;
+        if(msg)setFeed(p=>[...p,``,`📨 ${msg}`,``]);
+      });
+      // clear alerts after reading
+      const ws={...fresh,
+        playerAlerts:{...(fresh.playerAlerts||{}), [g.name]:[]},
+        player_alerts:{...(fresh.player_alerts||{}),[g.name]:[]},
+      };
+      setWorld(ws);saveWorld(ws);
+    }
+    // corner stolen alert
+    (g.cornersOwned||[]).forEach(bId=>{
+      if(fresh.corners?.[bId]&&fresh.corners[bId]!==g.name)
+        setFeed(p=>[...p,`⚠ ${fresh.corners[bId]} took your ${getBoro(bId)?.name} corner while you were away.`]);
+    });
+  };
+
+  // Real-time subscription (instant updates)
   useEffect(()=>{
+    let channel;
+    try{
+      channel=subscribeToWorld((fresh)=>handleWorldUpdate(fresh));
+    }catch(e){console.error("Realtime sub error",e);}
+    // Fallback poll every 8 seconds (covers any missed real-time events)
     const iv=setInterval(async()=>{
       try{
-        const w2=await loadWorld();if(!w2)return;
-        const fresh=w2;
-        setWorld(fresh);setWMsgs(fresh.messages||[]);
-        setPulse(true);setTimeout(()=>setPulse(false),800);
-        const g=gsRef.current;if(!g)return;
-        const alerts=(fresh.playerAlerts||{})[g.name]||[];
-        if(alerts.length>0){alerts.forEach(a=>setFeed(p=>[...p,a.msg]));
-          const ws={...fresh,playerAlerts:{...(fresh.playerAlerts||{}),[g.name]:[]}};setWorld(ws);saveWorld(ws);}
-        (g.cornersOwned||[]).forEach(bId=>{
-          if(fresh.corners?.[bId]&&fresh.corners[bId]!==g.name)
-            setFeed(p=>[...p,`⚠ ${fresh.corners[bId]} took your ${bId} corner.`]);
-        });
-        // weather change alert
-        const dayW=getWeather(g.day);
-        if(fresh.weatherDay!==g.day){
-          setFeed(p=>[...p,``,`${dayW.icon} Weather: ${dayW.name.toUpperCase()} — ${dayW.desc}`,``]);
-        }
+        const w2=await loadWorld();
+        if(w2)handleWorldUpdate(w2);
       }catch{}
-    },30000);
-    return()=>clearInterval(iv);
+    },8000);
+    return()=>{
+      clearInterval(iv);
+      if(channel)try{unsubscribe(channel);}catch{}
+    };
   },[]);
 
   // survival tick 60s — weather affects drain rates
@@ -2416,7 +2447,7 @@ export default function NYC(){
     // MSG
     const msgM=raw.match(/^[Mm][Ss][Gg] (.+)$/);
     if(msgM){const entry={from:gs.name,text:msgM[1],time:Date.now(),boro};
-      const ws={...world,messages:[...(world.messages||[]).slice(-19),entry]};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages);
+      const ws={...world,messages:[...(world.messages||[]).slice(-49),entry]};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages);
       push(`📡 [${gs.name}]: ${msgM[1]}`);return;}
 
     // SLEEP — weather changes next day
@@ -3876,7 +3907,7 @@ export default function NYC(){
         {/* RIGHT */}
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden",width:185,flexShrink:0}}>
           <div style={{display:"flex",borderBottom:"1px solid #111",background:"#080808"}}>
-            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat","📡"],["crews","👥"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>setTab(id)} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":"#252525",borderBottom:tab===id?"2px solid #e9c46a":"2px solid transparent",cursor:"pointer",minWidth:24}}>{label}</div>)}
+            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":"#252525",borderBottom:tab===id?"2px solid #e9c46a":"2px solid transparent",cursor:"pointer",minWidth:24}}>{label}</div>)}
           </div>
           <div style={{flex:1,padding:9,overflowY:"auto"}}>
 
@@ -3913,18 +3944,52 @@ export default function NYC(){
 
             {tab==="npcs"&&<NpcPanel npcs={npcs} bId={boro} onTalk={npcTalk}/>}
 
-            {tab==="chat"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
-              <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// WORLD CHAT</div>
-              <div style={{maxHeight:200,overflowY:"auto",marginBottom:8,display:"flex",flexDirection:"column",gap:4}}>
-                {wMsgs.length===0&&<div style={{color:"#191919"}}>No messages yet.</div>}
-                {wMsgs.slice(-12).map((m,i)=><div key={i} style={{borderLeft:`2px solid ${m.from===gs.name?"#e9c46a":"#2a9d8f"}`,paddingLeft:6}}>
-                  <div style={{color:m.from===gs.name?"#e9c46a":"#2a9d8f",fontSize:7}}>{m.from} · {getBoro(m.boro)?.short}</div>
-                  <div style={{color:"#666",fontSize:8,marginTop:1}}>{m.text}</div>
-                </div>)}
-              </div>
-              <input value={mIn} onChange={e=>setMIn(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&mIn.trim()){const entry={from:gs.name,text:mIn.trim(),time:Date.now(),boro};const ws={...world,messages:[...(world.messages||[]).slice(-19),entry]};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages);push(`📡 [${gs.name}]: ${mIn.trim()}`);setMIn("");}}} placeholder="broadcast to all..." style={{width:"100%",boxSizing:"border-box",background:"#0a0a0a",border:"1px solid #1e1e1e",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:8,padding:"4px 6px",outline:"none"}}/>
-            </div>}
-
+            {tab==="chat"&&(()=>{
+              const sendMsg=()=>{
+                if(!mIn.trim())return;
+                const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b"};
+                const entry={from:gs.name,text:mIn.trim(),time:Date.now(),boro,arch:gs.archetype?.id||"veteran"};
+                const ws={...world,messages:[...(world.messages||[]).slice(-49),entry]};
+                setWorld(ws);saveWorld(ws);setWMsgs(ws.messages);setMIn("");
+                setTimeout(()=>{const el=document.getElementById("chat-msgs");if(el)el.scrollTop=el.scrollHeight;},50);
+              };
+              const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b"};
+              return <div style={{display:"flex",flexDirection:"column",fontFamily:"'Share Tech Mono',monospace"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <div style={{color:"#999",letterSpacing:2,fontSize:8}}>// WORLD CHAT</div>
+                  <div style={{fontSize:6,color:"#555"}}>{wMsgs.length} msgs</div>
+                </div>
+                <div style={{marginBottom:6,display:"flex",gap:3,flexWrap:"wrap"}}>
+                  {Object.entries(world.players||{}).map(([n,d])=>(
+                    <div key={n} style={{fontSize:6,padding:"1px 4px",border:`1px solid ${aColors[d.archId]||"#2a9d8f"}55`,color:aColors[d.archId]||"#2a9d8f"}}>
+                      {n} {getBoro(d.borough)?.short||"?"}
+                    </div>
+                  ))}
+                </div>
+                <div id="chat-msgs" style={{overflowY:"auto",marginBottom:6,display:"flex",flexDirection:"column",gap:4,maxHeight:240,minHeight:60}}>
+                  {wMsgs.length===0&&<div style={{color:"#333",fontSize:7}}>No messages. Say something.</div>}
+                  {wMsgs.slice(-30).map((m,i)=>{
+                    const isMe=m.from===gs.name;
+                    const mc=aColors[m.arch]||"#2a9d8f";
+                    const ts=m.time?new Date(m.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
+                    if(!m.from)return <div key={i} style={{color:"#444",fontSize:7,textAlign:"center",fontStyle:"italic"}}>{m.text}</div>;
+                    return <div key={i} style={{borderLeft:`2px solid ${isMe?"#e9c46a":mc}`,paddingLeft:5,paddingBottom:2}}>
+                      <div style={{display:"flex",justifyContent:"space-between"}}>
+                        <span style={{color:isMe?"#e9c46a":mc,fontSize:7}}>{m.from}</span>
+                        <span style={{color:"#333",fontSize:6}}>{getBoro(m.boro)?.short} {ts}</span>
+                      </div>
+                      <div style={{color:isMe?"#d4c9b0":"#bbb",fontSize:9,lineHeight:1.5,wordBreak:"break-word"}}>{m.text}</div>
+                    </div>;
+                  })}
+                </div>
+                <div style={{display:"flex",gap:4,borderTop:"1px solid #1a1a1a",paddingTop:5}}>
+                  <input value={mIn} onChange={e=>setMIn(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendMsg();}} placeholder="say something..." maxLength={200} autoComplete="off"
+                    style={{flex:1,background:"#0a0a0a",border:"1px solid #252525",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:9,padding:"5px 7px",outline:"none"}}/>
+                  <div onClick={sendMsg} style={{padding:"5px 8px",background:"#e9c46a22",border:"1px solid #e9c46a55",color:"#e9c46a",fontSize:10,cursor:"pointer",flexShrink:0}}>→</div>
+                </div>
+                <div style={{fontSize:6,color:"#333",marginTop:3}}>MSG [text] from command line · {Object.keys(world.players||{}).length} online</div>
+              </div>;
+            })()}
             {tab==="shelter"&&<div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
               <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// SHELTERS TONIGHT</div>
               {gs.isUndoc&&<div style={{color:"#e63946",fontSize:7,marginBottom:8,padding:"4px 6px",border:"1px solid #e6394633",background:"#e6394608"}}>No ID means no bed. You know this. CONNECT for community alternatives.</div>}
