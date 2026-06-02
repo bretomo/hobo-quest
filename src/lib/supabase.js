@@ -259,3 +259,29 @@ function dbToGameState(row) {
     bluffUsed: row.bluff_used,
   }
 }
+
+// ── STALE CHARACTER CLEANUP ───────────────────────────────────
+// Call once per session on login — removes characters inactive 30+ days
+export async function cleanStaleCharacters(daysInactive = 30) {
+  const cutoff = new Date(Date.now() - daysInactive * 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('characters')
+    .delete()
+    .lt('updated_at', cutoff)
+    .select('name')
+  if (error) { console.error('Cleanup error:', error); return { deleted: 0 } }
+  const deleted = data?.length || 0
+  if (deleted > 0) console.log(`Cleaned ${deleted} stale character(s) (${daysInactive}+ days inactive)`)
+  return { deleted, names: data?.map(c => c.name) || [] }
+}
+
+// Delete a specific character (for DELETE ACCOUNT command)
+export async function deleteCharacter(name, pin) {
+  const pinHash = hashPin(name, pin)
+  const { error } = await supabase
+    .from('characters')
+    .delete()
+    .eq('name', name)
+    .eq('pin_hash', pinHash)
+  return !error
+}
