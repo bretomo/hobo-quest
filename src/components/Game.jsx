@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from "react";
-import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe } from '../lib/supabase';
+import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe, sendChatMessage } from '../lib/supabase';
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=VT323&display=swap');`;
 
@@ -1648,6 +1648,7 @@ export default function NYC(){
   const chatRef=useRef(null);
   const worldRef=useRef(null);
   const boroRef=useRef(null);
+  const lastActivityRef=useRef(Date.now());
   const [unread,setUnread]=useState(0);
   useEffect(()=>{gsRef.current=gs;},[gs]);
   useEffect(()=>{if(feedRef.current)feedRef.current.scrollTop=feedRef.current.scrollHeight;},[feed]);
@@ -1747,6 +1748,12 @@ export default function NYC(){
   const addWorldHistory=(ws,type,actor,detail,bId)=>{
     const entry={type,actor,detail,boro:bId,time:Date.now(),day:ws.players?.[actor]?.day||1};
     return{...ws,worldHistory:[...(ws.worldHistory||[]).slice(-49),entry]};
+  };
+
+  // Broadcast to activity feed — all players see this
+  const broadcastActivity=(ws,msg,icon="🌆")=>{
+    const entry={msg,icon,time:Date.now(),id:Math.random().toString(36).slice(2)};
+    return{...ws,notifications:[...(ws.notifications||[]).slice(-29),entry]};
   };
 
   const notifyPlayers=(ws,excludeName,msg)=>{
@@ -2010,6 +2017,7 @@ export default function NYC(){
         if(g.survival.warmth<15&&w.id==="blizzard")setTimeout(()=>setFeed(f=>[...f,`❄️ Blizzard. Find shelter or you'll freeze.`]),10);
         if(g.survival.health<=0){
           setTimeout(()=>{
+            const dWs=broadcastActivity(world,`☠ ${g.name} went down on Day ${g.day}. Level ${g.level}.`,"☠");setWorld(dWs);saveWorld(dWs);
             setFeed(f=>[...f,``,`☠ YOU DIED. Day ${g.day}. Level ${g.level}.`,`Legacy: $${Math.floor(g.cash*0.2)} carries forward.`,`Refresh to start again.`]);
             setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,time:Date.now()}]};saveWorld(ws);return ws;});
           },10);
@@ -2052,6 +2060,8 @@ export default function NYC(){
           `  + 1 Skill Point available (SKILLS)`,
           `★━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━★`,``);
         journalEvent('levelUp',nLvl);
+        const lvlWs=broadcastActivity(world,`${gs.name} hit Level ${nLvl}. Still standing.`,"⭐");
+        setWorld(lvlWs);saveWorld(lvlWs);
       },10);
     }
     const newSkillPoints=(g.skillPoints||0)+(nLvl>g.level?1:0);
@@ -2563,7 +2573,8 @@ export default function NYC(){
       updGs(g=>applyXP({...g,cash:g.cash+total,product:{...g.product,[pKey]:g.product[pKey]-qty},heat:clamp(g.heat+hg,0,10)},8*qty,"deal"));
       // update world supply data so prices respond
       const supplyWs={...world,supply:{...world.supply,[`${boro}_${pKey}`]:((world.supply||{})[`${boro}_${pKey}`]||0)+qty}};
-      setWorld(supplyWs);saveWorld(supplyWs);
+      const actWs=broadcastActivity(supplyWs,`${gs.name} moved ${qty}x ${PRODUCTS[pKey].name} in ${getBoro(boro)?.name}. +$${total}.`,"💊");
+      setWorld(actWs);saveWorld(actWs);
       const archSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       if(archSub?.product===pKey){updGs(g=>({...g,addiction:Math.min(100,g.addiction+rnd(1,3))}));}
       push(`Moved ${qty}× ${PRODUCTS[pKey].name}. +$${total}${weather.bustMult<1?" (weather helped)":""}.`);return;
@@ -2779,6 +2790,7 @@ export default function NYC(){
       if(cur){push(`${cur} owns this. ATTACK them first.`);return;}
       let ws=addWorldHistory(world,"corner",gs.name,`${gs.name} claimed ${getBoro(boro)?.name} corner`,boro);
       ws=notifyPlayers(ws,gs.name,`🚩 ${gs.name} just claimed ${getBoro(boro)?.name} corner.`);
+      ws=broadcastActivity(ws,`${gs.name} locked down ${getBoro(boro)?.name}. Corner claimed.`,"🚩");
       ws={...ws,corners:{...ws.corners,[boro]:gs.name}};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
       updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro]},30,"claim"));
       push(`You claimed ${b.name} corner.`);journalEvent('firstCorner',boro);return;
@@ -2835,7 +2847,8 @@ export default function NYC(){
       if(won){
         updGs(g=>applyXP({...g,cash:g.cash+stolen,heat:clamp(g.heat+hg,0,10),survival:{...g.survival,health:clamp(g.survival.health-selfDmg,0,100)},cornersOwned:cornerStolen?[...g.cornersOwned,boro]:g.cornersOwned},25,"fight"));
         let wsh=addWorldHistory(world,"pvp",gs.name,`${gs.name} robbed ${tName} in ${getBoro(boro)?.name} (d20=${attackRoll}, +$${stolen})`,boro);
-        wsh=notifyPlayers(wsh,gs.name,`🔴 ${gs.name} rolled ${attackRoll} attacking ${tName} in ${getBoro(boro)?.name}.`);
+        wsh=notifyPlayers(wsh,gs.name,`🔴 ${gs.name} rolled ${attackRoll} attacking ${tName} in ${getBoro(boro)?.name}. +$${stolen}.`);
+        wsh=broadcastActivity(wsh,`${gs.name} put hands on ${tName} in ${getBoro(boro)?.name}. ${won?`$${stolen} taken.`:"Didn't go as planned."}`,"⚔");
         setWorld(wsh);saveWorld(wsh);setWMsgs(wsh.messages||[]);
         if(cornerStolen)log.push(`Corner taken.`);
       } else {
@@ -3009,6 +3022,8 @@ export default function NYC(){
         `The night passes the way nights pass out here — slowly, then all at once.`,
       ];
       setGameTime({hour:8,minute:0});
+      const sleepActWs=broadcastActivity(world,`${gs.name} called it a night. Day ${gs.day} done.`,"🌙");
+      setWorld(prev=>({...prev,...sleepActWs}));
       push(
         ``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -4810,20 +4825,38 @@ export default function NYC(){
             {tab==="npcs"&&<NpcPanel npcs={npcs} bId={boro} onTalk={npcTalk}/>}
 
             {tab==="chat"&&(()=>{
-              const sendMsg=()=>{
+              const sendMsg=async()=>{
                 if(!mIn.trim())return;
-                const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b"};
                 const entry={from:gs.name,text:mIn.trim(),time:Date.now(),boro,arch:gs.archetype?.id||"veteran"};
-                const ws={...world,messages:[...(world.messages||[]).slice(-49),entry]};
-                setWorld(ws);saveWorld(ws);setWMsgs(ws.messages);setMIn("");
+                const newMsgs=[...(world.messages||[]).slice(-49),entry];
+                const ws={...world,messages:newMsgs};
+                setWorld(ws);
+                setWMsgs(newMsgs);
+                setMIn("");
+                // Direct Supabase update for instant delivery to all players
+                try{
+                  await sendChatMessage(entry);
+                }catch(e){
+                  // Fallback to full saveWorld
+                  saveWorld(ws);
+                }
                 setTimeout(()=>{const el=document.getElementById("chat-msgs");if(el)el.scrollTop=el.scrollHeight;},50);
               };
               const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b"};
               return <div style={{display:"flex",flexDirection:"column",fontFamily:"'Share Tech Mono',monospace"}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                   <div style={{color:"#999",letterSpacing:2,fontSize:8}}>// WORLD CHAT</div>
-                  <div style={{fontSize:6,color:"#555"}}>{wMsgs.length} msgs</div>
+                  <div style={{fontSize:6,color:"#555"}}>{wMsgs.length} msgs · {Object.entries(world.players||{}).filter(([,d])=>(Date.now()-(d.lastSeen||0))<120000).length} online</div>
                 </div>
+                {/* Activity strip */}
+                {(world.notifications||[]).slice(-3).length>0&&<div style={{marginBottom:6,borderBottom:"1px solid #1a1a1a",paddingBottom:5}}>
+                  <div style={{fontSize:6,color:"#444",letterSpacing:1,marginBottom:3}}>RECENT ACTIVITY</div>
+                  {(world.notifications||[]).slice(-3).map((n,i)=>(
+                    <div key={i} style={{fontSize:7,color:"#666",marginBottom:1,lineHeight:1.4}}>
+                      {n.icon} {n.msg}
+                    </div>
+                  ))}
+                </div>}
                 <div style={{marginBottom:6,display:"flex",gap:3,flexWrap:"wrap"}}>
                   {Object.entries(world.players||{})
                   .filter(([n,d])=>(Date.now()-(d.lastSeen||0))<120000) // online = active in last 2 mins
