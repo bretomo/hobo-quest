@@ -16,7 +16,7 @@ const BOROUGHS = [
 const MAX_CARRY_CASH = 500;       // cash above this makes you a robbery target
 const PRODUCT_WEIGHT = {weed:1,pills:1.5,powder:2}; // weight units per item
 const MAX_CARRY_WEIGHT = 10;      // total weight units before penalty
-const MIN_SELL_PLAYERS = 2;       // players selling same product before price drops
+const MIN_SELL_PLAYERS = 1;       // even one seller starts dropping prices
 
 // ── ADDICTION SYSTEM ─────────────────────────────────────────────────────────
 const CLASS_SUBSTANCE = {
@@ -98,13 +98,14 @@ const HUSTLE_DAILY_MAX = {
   rat:          2,   // handler pays them instead
   drifter:      3,
   schizo:       99,  // no limit — chaos fires every time anyway
+  hooker:       6,   // client slots per day
 };
 // Diminishing returns multiplier by hustle number today
 const HUSTLE_PAYOUT_MULT = [1.0, 0.7, 0.45, 0.25, 0.10];
 // Borough cooldown — same borough twice in a row costs heat
 const HUSTLE_SAME_BORO_HEAT = 2;
-const DEMAND_DROP = 0.15;         // price drop per extra seller
-const DEMAND_SPIKE = 0.20;        // price spike per day without supply
+const DEMAND_DROP = 0.22;         // price drop per seller (aggressive)
+const DEMAND_SPIKE = 0.25;        // price spike per day without supply
 
 // ── COP SYSTEM ────────────────────────────────────────────────────────────
 const WANTED_TIERS = [
@@ -162,7 +163,10 @@ const ARCHETYPES = [
   { id:"rat", name:"THE RAT", icon:"🐀", color:"#ff6b6b", desc:"Plays both sides. The most dangerous thing on the street.", stats:{hustle:6,streetiq:10,toughness:2,charm:7,heat:5}, gear:["Handler's number","Burner","Small recorder"], xp:{scout:2,talk:1},
     startCash:30, isRat:true,
     special:"MORALLY COMPLEX. Informs on players for cash. Files tips that spike other players' heat. Lives in permanent social danger — if exposed, everyone hunts you. Double agent mechanic." },
-  { id:"schizo", name:"THE PROPHET", icon:"🌀", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
+  { id:"hooker", name:"THE SURVIVOR", icon:"💄", color:"#ff4d8d", desc:"You learned early that the city runs on transaction. You just cut out the middleman.", stats:{hustle:6,streetiq:8,toughness:4,charm:10,heat:4}, gear:["Good heels","Burner phone","Pepper spray"], xp:{talk:3,hustle:2},
+    startCash:50, isHooker:true,
+    special:"Highest charm stat in the game. CLIENT command replaces HUSTLE — higher yield, more risk. Regulars system builds over time. Cops are the real danger. The Stroll is a separate economy that operates in Manhattan and Queens at night." },
+  { id:"schizo", name:"THE SCHIZO", icon:"🌀", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
   { id:"drifter", name:"THE DRIFTER", icon:"🐕", color:"#c9a96e", desc:"You and your dog. The city can't take what you don't have.", stats:{hustle:5,streetiq:6,toughness:6,charm:9,heat:0}, gear:["Leash & collar","Cardboard sign","Sleeping bag"], xp:{panhandle:3,talk:2},
     startCash:15, isDrifter:true,
     special:"Your dog changes everything. Highest panhandle yield in the game — people give to the dog. Dog can SCOUT ahead, GUARD your stash, and DISTRACT during encounters. Hard mode: no shelters (dog not allowed), low cash, but the dog boosts mental health passively and NPCs trust you more." },
@@ -565,6 +569,22 @@ const LEVEL_STAT_GROWTH = {
   hustler:      ["hustle","streetiq","hustle","charm","hustle","streetiq","hustle","charm","streetiq","hustle"],
   junkie:       ["charm","streetiq","charm","hustle","streetiq","charm","toughness","hustle","charm","streetiq"],
   undocumented: ["streetiq","hustle","charm","streetiq","toughness","hustle","streetiq","charm","hustle","streetiq"],
+  hooker:       [
+    {id:"regulars",      name:"Regulars",      level:1,cost:1,desc:"Build a client list. Each SLEEP adds 1 regular who pays automatically next day.",effect:{regularIncome:20}},
+    {id:"read_the_room", name:"Read the Room", level:2,cost:1,desc:"Instantly sense if someone is a cop. SCOUT tells you heat with 90% accuracy.",  effect:{copSense:true}},
+    {id:"negotiator",    name:"Negotiator",    level:3,cost:1,desc:"CLIENT pays 30% more. You know exactly what you're worth.",                       effect:{clientBonus:0.3}},
+    {id:"the_stroll",    name:"The Stroll",    level:4,cost:2,desc:"Unlock Manhattan/Queens night economy. Double clients available after 8pm.",       effect:{strollUnlock:true}},
+    {id:"protection",    name:"Protection",    level:5,cost:2,desc:"A contact watches your back. Cop harassment events 50% less likely.",              effect:{protectionBonus:true}},
+    {id:"madame",        name:"Madame",        level:6,cost:2,desc:"Recruit NPCs to work for you. Passive income +$30/day per NPC.",                   effect:{madameBonus:30}},
+    {id:"alibi",         name:"Alibi",         level:7,cost:3,desc:"Clients are powerful. One call drops heat to 0 once per day.",                     effect:{alibiBonus:true}},
+    {id:"own_it",        name:"Own It",        level:8,cost:3,desc:"Max charm. NPCs trust you instantly. First TALK always gives max rep.",             effect:{ownItBonus:true}},
+  ],
+  hooker:       [
+    {id:"pepper_spray",  name:"Pepper Spray",  cooldown:3, desc:"Auto-hit. Enemy -3 attack for 2 rounds. Never leaves home without it.",
+      fn:(gs,enemy)=>{return{log:["💄 PEPPER SPRAY. Right in the eyes. "+enemy.name+" stumbles."],enemyDmg:rnd(3,6),selfDmg:0,autoHit:true,blindEnemy:true,stunRounds:2};}},
+    {id:"heel_strike",   name:"Heel Strike",   cooldown:4, desc:"Stiletto heel. Guaranteed 2d6. Concussive. Never underestimate the footwear.",
+      fn:(gs,enemy)=>{const r=rollStr(6,2);return{log:["💄 HEEL STRIKE. "+r.total+" damage. "+enemy.name+" did not see that coming."],enemyDmg:r.total+mod(gs.stats?.charm||5),selfDmg:0,autoHit:true};}},
+  ],
   schizo:       [
     {id:"pattern_recognition",name:"Pattern Recognition",level:1,cost:1,desc:"LOOK visions 30% more likely to yield real cash.",effect:{visionBonus:0.3}},
     {id:"voice_guidance",    name:"Voice Guidance",     level:2,cost:1,desc:"Chaos engine good outcomes increase by 10%.",         effect:{goodChaos:0.1}},
@@ -755,8 +775,10 @@ const mktPrice=(bId,pKey,day,weather,worldSupply)=>{
   const base=(getBoro(bId)?.base[pKey]||80)*(1+Math.sin(day*0.7+pKey.length)*0.15);
   const wMult=weather==="blizzard"?1.3:weather==="storm"?1.15:weather==="heatwave"?0.9:1;
   // Supply/demand: count sellers in borough from world supply data
-  const sellers=(worldSupply?.[bId]?.[pKey]||0);
-  const daysWithout=(worldSupply?.[`${bId}_${pKey}_drought`]||0);
+  // Supply is tracked as boro_product_dayN — sum today's units sold
+  const todayKey=`${bId}_${pKey}_d${day||1}`;
+  const sellers=worldSupply?.[todayKey]||0;
+  const daysWithout=worldSupply?.[`${bId}_${pKey}_drought`]||0;
   const demandMult=sellers>=MIN_SELL_PLAYERS?Math.max(0.6,1-(sellers-1)*DEMAND_DROP):1+(daysWithout*DEMAND_SPIKE);
   // Cop presence raises prices (risk premium)
   const copPresence=getBoro(bId)?.copBase||5;
@@ -973,6 +995,7 @@ const mod=(stat)=>Math.floor((clamp(stat,1,10)-5)/2);
 
 // Combat stats derived from character
 const getCombatStats=(gs)=>{
+    const _hasRev=(gs.skills||[]).includes("full_revelation");const _sb=gs.isSchizo&&_hasRev&&(gs.survival?.mental||70)<20?3:0;
   const eqStats=getItemStats(gs.equipment||{});
   const toughness=(gs.stats?.toughness||5)+(eqStats.toughness||0);
   const hustle=(gs.stats?.hustle||5)+(eqStats.hustle||0);
@@ -1966,6 +1989,7 @@ export default function NYC(){
         const safeHeatDrain=inSafehouse?(world.safehouses[boro].level||1)*0.5:0;
         const mentalDrain=p.survival.hunger<20?2:p.survival.health<30?2:p.survival.warmth<20?1:0;
         const mentalBoost=p.crew?0.5:0; // crew contact helps
+        const dogMentalBoost=p.isDrifter?3:0; // dog keeps you grounded
         const g={...p,survival:{
           hunger:clamp(p.survival.hunger-4,0,100),
           warmth:clamp(p.survival.warmth-warmDrain,0,100),
@@ -2209,6 +2233,8 @@ export default function NYC(){
       isHustler:arch.id==="hustler",
       isVampire:arch.id==="vampire",
       isSchizo:arch.id==="schizo",
+      isHooker:arch.id==="hooker",
+      regulars:0,
       isDrifter:arch.id==="drifter",
       dogName:arch.id==="drifter"?["Biscuit","Smoke","Patches","Duke","Gus","Lucky","Shadow","Boo"][rnd(0,7)]:null,
       isFixer:arch.id==="fixer",
@@ -2232,6 +2258,12 @@ export default function NYC(){
       ? `You know everyone. BROKER deals between players for 10%. WIRE cash. REPAIR gear. You never fight — you negotiate.`
       : arch.id==="rat"
       ? `You work both sides. INFORM on players to your Handler for cash. Get exposed and everyone hunts you. Trust nobody.`
+      : arch.id==="hooker"
+      ? `You know exactly what this city costs and exactly what you can get for it. CLIENT replaces HUSTLE. Night rates are better. Cops are the real danger.`
+      : arch.id==="drifter"
+      ? `${state.dogName||"Your dog"} sits at your feet looking up at you. Tail wagging. Ready for whatever comes next.`
+      : arch.id==="schizo"
+      ? `The city said your name this morning. Out loud. Nobody else heard it. You are used to being the only one who hears things.`
       : ``;
     const whyFlavor=BACKSTORY_QUESTIONS[0].options.find(o=>o.id===backstory.why)?.flavor||"";
     const leftFlavor=BACKSTORY_QUESTIONS[1].options.find(o=>o.id===backstory.left)?.flavor||"";
@@ -2572,7 +2604,7 @@ export default function NYC(){
         `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
         `  FORM CREW [name] · JOIN CREW [name] · LEAVE CREW`,`  CREW · CREWS · DEPOSIT [amt]`,
         `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
-        `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item]`,
+        `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item] · CLIENT (Survivor only)`,
         `  WRITE [message] · READ LETTERS`,
         gs.isJunkie?`  SCORE — find street product cheap`:"",
         gs.isVampire?`  FEED · MESMERIZE [npc] · MIST [borough] · DOMINATE [player] · THRALL [npc] · NIGHT MARKET · THIRST`:"",
@@ -2651,7 +2683,7 @@ export default function NYC(){
         `XP: ${gs.xp} · Next: ${xpNext(gs.xp)} · Next stat: +${nextStat.toUpperCase()}`,
         `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
-        !gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
+        gs.isHooker?`Clients today: ${gs.hustleCount||0}/6 · Regulars: ${gs.regulars||0}`:!gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
         `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
         `Crew: ${gs.crew||"solo"} · Corners: ${gs.cornersOwned.join(", ")||"none"}`,
 );return;
@@ -2680,7 +2712,7 @@ export default function NYC(){
     if(buyM){
       const pKey=buyM[1].toLowerCase();const qty=parseInt(buyM[2])||1;
       if(!PRODUCTS[pKey]){push(`Unknown product. Try: weed, pills, powder.`);return;}
-      const sellPrice=mktPrice(boro,pKey,gs.day,weather);
+      const sellPrice=mktPrice(boro,pKey,gs.day,weather,world.supply);
       const buyPrice=Math.round(sellPrice*PRODUCTS[pKey].bm);
       const total=buyPrice*qty;
       // hustler sees spread before committing
@@ -2688,9 +2720,18 @@ export default function NYC(){
         const profit=(sellPrice-buyPrice)*qty;
         push(`💵 Spread: Buy $${buyPrice} · Sell $${sellPrice} · Profit if sold here: $${profit}`);
       }
+      const maxBuy=gs.isHustler?10:8;
+      if(qty>maxBuy){push(`Can't buy ${qty} at once — too conspicuous. Max ${maxBuy} per trip.`);return;}
       if(total>gs.cash){push(`Need $${total}. Have $${gs.cash}.`);return;}
       // hustler gets slight buy discount
       const finalPrice=gs.isHustler?Math.round(total*0.95):total;
+      // Low-level buy bust — higher heat = higher chance of getting grabbed during transaction
+      const buyBustChance=gs.heat>7?0.12:gs.heat>5?0.06:0;
+      if(buyBustChance>0&&Math.random()<buyBustChance){
+        const lostQty=Math.ceil(qty/2);
+        updGs(g=>({...g,cash:Math.max(0,g.cash-finalPrice),product:{...g.product,[pKey]:Math.max(0,g.product[pKey]+qty-lostQty)},heat:clamp(g.heat+2,0,10)}));
+        push(`Deal went sideways. Got ${qty-lostQty}× ${PRODUCTS[pKey].name} but lost ${lostQty} units in the scramble. Heat +2.`);return;
+      }
       updGs(g=>applyXP({...g,cash:g.cash-finalPrice,product:{...g.product,[pKey]:g.product[pKey]+qty}},5*qty,"deal"));
       push(`Bought ${qty}× ${PRODUCTS[pKey].name} for $${finalPrice}.${gs.isHustler?" (hustler rate)":""}`);return;
     }
@@ -2724,18 +2765,39 @@ export default function NYC(){
         push(`${recipe3.icon} Sold ${qty3}x ${pKey}. +$${total3}.`);return;
       }
       if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder. For cooked: SELL COOKED [name].`);return;}
+      const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5;
+      if(qty>maxSell){push(`Can't move ${qty} at once. Max ${maxSell} per transaction. Multiple trips or find a buyer.`);return;}
       if(gs.product[pKey]<qty){push(`Only have ${gs.product[pKey]}.`);return;}
-      const price=mktPrice(boro,pKey,gs.day,weather);const total=price*qty;
-      const hg=Math.round(qty*PRODUCTS[pKey].rm*(b.heat/10));
-      const bustChance=gs.heat+hg>8?0.3*weather.bustMult:0;
+      const price=mktPrice(boro,pKey,gs.day,weather,world.supply);const total=price*qty;
+      // Heat scales with quantity AND current borough heat level
+      const boroHeatMult=b.heat/8;
+      const hg=Math.max(1,Math.round(qty*PRODUCTS[pKey].rm*boroHeatMult));
+      // Bust scales with heat, quantity, and borough cop presence
+      const copP=getCopPresence(boro,world.copPresence,gs.day)/10;
+      const bustBase=qty>=4?0.15:qty>=2?0.08:0.04; // more units = more risk
+      const bustChance=(gs.heat>5||copP>0.7)?bustBase*weather.bustMult*(1+copP):0;
       const caught=bustChance>0&&Math.random()<bustChance;
       if(caught){
-        updGs(g=>({...g,product:{...g.product,[pKey]:0},heat:clamp(g.heat+3,0,10),cash:Math.max(0,g.cash-50)}));
-        push(`BUSTED. Product gone. -$50.`);return;
+        const cashTaken=Math.min(gs.cash,rnd(50,150));
+        updGs(g=>({...g,
+          product:{...g.product,[pKey]:0}, // lose all of this product
+          heat:clamp(g.heat+4,0,10),
+          cash:Math.max(0,g.cash-cashTaken),
+          survival:{...g.survival,mental:clamp((g.survival.mental||70)-10,0,100)},
+        }));
+        const bustMsgs=[
+          "BUSTED. Plainclothes was watching the whole transaction. Product gone. -$"+cashTaken+". Heat +4.",
+          "BUSTED. They had the corner covered. You didn't see it. Product seized. -$"+cashTaken+".",
+          "BUSTED. Someone on the block called it in. All your "+PRODUCTS[pKey].name+" gone. -$"+cashTaken+".",
+        ];
+        push("",bustMsgs[rnd(0,bustMsgs.length-1)],"Heat critical. LAY LOW or SKIP TOWN now.","");return;
       }
       updGs(g=>applyXP({...g,cash:g.cash+total,product:{...g.product,[pKey]:g.product[pKey]-qty},heat:clamp(g.heat+hg,0,10)},8*qty,"deal"));
       // update world supply data so prices respond
-      const supplyWs={...world,supply:{...world.supply,[`${boro}_${pKey}`]:((world.supply||{})[`${boro}_${pKey}`]||0)+qty}};
+      // Supply tracking — accumulates per borough per product per day
+      const supplyKey=`${boro}_${pKey}_d${gs.day}`;
+      const todaySupply=(world.supply||{})[supplyKey]||0;
+      const supplyWs={...world,supply:{...(world.supply||{}),[supplyKey]:todaySupply+qty}};
       const actWs=broadcastActivity(supplyWs,`${gs.name} moved ${qty}x ${PRODUCTS[pKey].name} in ${getBoro(boro)?.name}. +$${total}.`,"💊");
       setWorld(actWs);saveWorld(actWs);
       const archSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
@@ -2758,7 +2820,50 @@ export default function NYC(){
     }
     // SELL COOKED handled above
 
+    // CLIENT — hooker-specific income command
+    if(C==="CLIENT"){
+      if(!gs.isHooker){push(`That's not how you operate. Try HUSTLE.`);return;}
+      if(gs.survival.energy<15){push(`Too tired. You need to rest first.`);return;}
+      const clientsToday=gs.hustleCount||0;
+      const maxClients=6;
+      if(clientsToday>=maxClients){push(`You've hit your limit for today. Come back tomorrow.`);return;}
+      const isNight=gameTime.hour>=20||gameTime.hour<4;
+      const nightBonus=isNight?1.4:1.0;
+      const charmMod=Math.floor((gs.stats?.charm||10)/2);
+      const basePay=rnd(30,70);
+      const total=Math.round(basePay*nightBonus+charmMod);
+      const heatGain=rnd(1,2);
+      // Cop chance — higher heat = higher risk
+      const copChance=gs.heat>6?0.25:gs.heat>4?0.15:0.08;
+      if(Math.random()<copChance){
+        const hasCopSense=(gs.skills||[]).includes("read_the_room");
+        if(hasCopSense){
+          push(`💄 You sensed it before they said a word. Badge under the jacket. Wrong shoes.`,`You walked. Heat +1.`);
+          updGs(g=>({...g,heat:clamp(g.heat+1,0,10),hustleCount:(g.hustleCount||0)+1}));
+        } else {
+          push(`💄 The client was a cop. BUSTED. Heat +3. -$30.`);
+          updGs(g=>({...g,heat:clamp(g.heat+3,0,10),cash:Math.max(0,g.cash-30),hustleCount:(g.hustleCount||0)+1}));
+        }
+        return;
+      }
+      const clientMsgs=[
+        "Business transaction. Clean. $"+total+" in hand.",
+        "Regular energy. The kind of client who doesn't make eye contact. $"+total+".",
+        "Midtown suit. Nervous. Tips well. $"+total+".",
+        "You made it quick. Got what you needed. $"+total+".",
+        isNight?"Night rate. The Stroll is good to you tonight. $"+total+".":"Afternoon. Quiet block. $"+total+".",
+      ];
+      updGs(g=>applyXP({...g,
+        cash:g.cash+total,
+        heat:clamp(g.heat+heatGain,0,10),
+        hustleCount:(g.hustleCount||0)+1,
+        survival:{...g.survival,energy:clamp(g.survival.energy-20,0,100),mental:clamp((g.survival.mental||70)-5,0,100)},
+      },12,"hustle"));
+      push(`💄 ${clientMsgs[rnd(0,clientMsgs.length-1)]}`,`+$${total}. Heat +${heatGain}. Energy -20.`);
+      return;
+    }
     if(C==="HUSTLE"){
+      if(gs.isHooker){push(`You don't hustle like that. Type CLIENT.`);return;}
       if(gs.survival.energy<20){push(`Too tired. REST first.`);return;}
       // Fixer and Rat have better alternatives
       if(gs.isFixer){push(`Fixers don't hustle. BROKER deals or WIRE cash instead.`);return;}
@@ -2912,8 +3017,13 @@ export default function NYC(){
       updGs(g=>({...g,survival:{...g.survival,energy:clamp(g.survival.energy-5,0,100)}}));return;
     }
     if(C==="SCOUT"){
+      const weedP=mktPrice(boro,"weed",gs.day,weather,world.supply);
+      const pillsP=mktPrice(boro,"pills",gs.day,weather,world.supply);
+      const powderP=mktPrice(boro,"powder",gs.day,weather,world.supply);
+      const weedBase=getBoro(boro)?.base?.weed||80;
+      const trend=(p,base)=>p>base*1.1?"📈":p<base*0.9?"📉":"→";
       push(`Intel — ${b.name} ${weather.icon}:`,
-        `  Weed $${mktPrice(boro,"weed",gs.day,weather)}/bag`,`  Pills $${mktPrice(boro,"pills",gs.day,weather)}/pack`,
+        `  Weed $${weedP}/bag ${trend(weedP,weedBase)}`,`  Pills $${mktPrice(boro,"pills",gs.day,weather)}/pack`,
         `  Powder $${mktPrice(boro,"powder",gs.day,weather)}/g`,
         `  Corner: ${world.corners?.[boro]||"unclaimed"}`,`  Safe house: ${world.safehouses?.[boro]?`owned by ${world.safehouses[boro].owner||world.safehouses[boro].crewOwner}`:"none"}`);
       updGs(g=>applyXP(g,8,"scout"));return;
@@ -3226,6 +3336,20 @@ export default function NYC(){
       setWorld(sleepWs);saveWorld(sleepWs);
       const nightIncome=gs.isVampire&&hasSkill(gs,"ancient_blood")?rnd(30,80):0;
       const crewBonus=gs.crew&&world.crews?.[gs.crew]?rnd(5,15):0;
+      // Update drought counters — products not sold today get drought flag
+      const todaySupplyKeys=Object.keys(world.supply||{}).filter(k=>k.includes(`_d${gs.day}`));
+      const newSupply={...world.supply};
+      ["bronx","brooklyn","manhattan","queens","staten"].forEach(b2=>{
+        ["weed","pills","powder"].forEach(pk=>{
+          const sold=(newSupply[`${b2}_${pk}_d${gs.day}`]||0)>0;
+          if(!sold){newSupply[`${b2}_${pk}_drought`]=(newSupply[`${b2}_${pk}_drought`]||0)+1;}
+          else{newSupply[`${b2}_${pk}_drought`]=0;}
+        });
+      });
+      // Clean old day keys to prevent bloat
+      Object.keys(newSupply).filter(k=>{const m=k.match(/_d(\d+)$/);return m&&parseInt(m[1])<gs.day-2;}).forEach(k=>delete newSupply[k]);
+      const supplyUpdatedWs={...world,supply:newSupply};
+      setWorld(supplyUpdatedWs);saveWorld(supplyUpdatedWs);
       const safePassive=Object.entries(world.safehouses||{}).filter(([,s])=>s.owner===gs.name||(gs.crew&&s.crewOwner===gs.crew)).length*rnd(5,10);
       const nextDay=gs.day+1;const nextWeather=getWeather(nextDay);
       // junkie habit cost
@@ -3282,7 +3406,7 @@ export default function NYC(){
         paper.personal,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
-        `${income>0?`Corners earned you $${income} while you slept. `:""}`+
+        `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners: +$"+income+". ":""}`+
         `${crewBonus>0?`Crew added $${crewBonus}. `:""}`+
         `${safePassive>0?`Safe houses: +$${safePassive}. `:""}`+
         `${commBonus>0?`Community network: +$${commBonus}. `:""}`+
@@ -4567,6 +4691,17 @@ export default function NYC(){
       return;
     }
 
+    // REGULARS — hooker sees their regular client list
+    if(C==="REGULARS"){
+      if(!gs.isHooker){push("That command is not for you.");return;}
+      const regulars=gs.regulars||0;
+      const dailyIncome=regulars*20;
+      push("","💄 YOUR REGULARS",
+        "Active clients: "+regulars,
+        dailyIncome>0?"Passive income: +$"+dailyIncome+"/day (on SLEEP)":"No regulars yet. Each successful CLIENT adds one.",
+        "","Each SLEEP adds 1 regular (max 5). Regulars pay while you sleep.");
+      return;
+    }
     if(C==="VISION"){
       if(!gs.isSchizo){push("You don't see visions. Type LOOK.");return;}
       const hasVisionSkill=(gs.skills||[]).includes("the_knowing");
