@@ -4290,8 +4290,7 @@ export default function NYC(){
       push("","⚔ RIVALS","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         myRivals.length?"People you've beefed with:":"No rivals yet.",
         ...myRivals.map(r=>`  ${r.name} — ${r.attacks} attack${r.attacks>1?"s":""} · ${r.attacks>=2?"RIVAL — 2x bonus if you beat them":"1 more attack to declare rivalry"}`),
-        theirRivals.length?"
-People gunning for you:":"",
+        theirRivals.length?"People gunning for you:":"",
         ...theirRivals.map(r=>`  ${r.name} has attacked you ${r.attacks} time${r.attacks>1?"s":""}`),
         "","Beat your rivals for 2x XP and cash.");
       return;
