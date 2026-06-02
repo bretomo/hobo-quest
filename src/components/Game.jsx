@@ -3208,6 +3208,10 @@ export default function NYC(){
       return;
     }
     const b=getBoro(boro);
+    const b=getBoro(boro);
+const weEffect=world.worldEvent?.effect||{};   // ADD
+const regularIncome=(gs.regulars||0)*20;        // ADD  
+const weather=getWeather(gs.day);
     const weather=getWeather(gs.day);
 
     // ABILITIES — show archetype combat abilities
