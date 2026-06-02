@@ -1401,6 +1401,8 @@ export default function NYC(){
   const [wMsgs,setWMsgs]   =useState([]);
   const [mIn,setMIn]       =useState("");
   const gsRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
+  const chatRef=useRef(null);
+  const [unread,setUnread]=useState(0);
   useEffect(()=>{gsRef.current=gs;},[gs]);
   useEffect(()=>{if(feedRef.current)feedRef.current.scrollTop=feedRef.current.scrollHeight;},[feed]);
 
@@ -1415,7 +1417,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
- useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
+  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
