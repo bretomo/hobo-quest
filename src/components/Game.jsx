@@ -4895,7 +4895,7 @@ export default function NYC(){
       const ws={...world,letters:[...(world.letters||[]).slice(-49),letter]};
       const ws2=notifyPlayers(ws,gs.name,`✉ Letter from ${gs.name}: "${letterText.slice(0,60)}${letterText.length>60?"...":""}"`);
       setWorld(ws2);saveWorld(ws2);
-      push("","✉ LETTER SENT","To: "+toName,"""+letterText+""","They'll get it when they log in.","");return;
+      push("","✉ LETTER SENT","To: "+toName,'"'+letterText+'"',"They will get it when they log in.","");return;
     }
     // LETTERS — check your mail
     if(C==="LETTERS"||C==="MAIL"||C==="READ LETTERS"){
