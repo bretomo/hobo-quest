@@ -1986,7 +1986,12 @@ export default function NYC(){
             "📋 CONTRACT COMPLETE: "+c.title,
             "+$"+( c.reward.cash||0)+(c.reward.xp?" +"+c.reward.xp+"XP":"")+(c.reward.rep?" +rep":""),
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━","");
-          const bWs=broadcastActivity(world,gs.name+" completed contract: "+c.title+". +$"+c.reward.cash+".","📋");
+          const _ctMsgs=[
+              gs.name+` finished the "${c.title}" contract. +$`+c.reward.cash+`. Getting paid out here.`,
+              `Contract done. ${gs.name} collected $`+c.reward.cash+` on "${c.title}".`,
+              `${gs.name} is running the board. "${c.title}" — complete. +$`+c.reward.cash+`.`,
+            ];
+            const bWs=broadcastActivity(world,_ctMsgs[rnd(0,_ctMsgs.length-1)],"📋");
           setWorld(bWs);saveWorld(bWs);
         });
       },100);
@@ -2093,11 +2098,17 @@ export default function NYC(){
     try{
       channel=subscribeToWorld((fresh)=>handleWorldUpdate(fresh));
     }catch(e){console.error("Realtime sub error",e);}
-    // Heartbeat — update our lastSeen every 30s so others know we're online
+    // Heartbeat — update lastSeen every 30s + clean stale players (24h)
     const heartbeat=setInterval(()=>{
       const g=gsRef.current;if(!g)return;
       const freshWorld=worldRef?.current;if(!freshWorld)return;
-      const ws={...freshWorld,players:{...(freshWorld.players||{}),[g.name]:{
+      const cutoff24=Date.now()-(24*60*60*1000);
+      const cleanedPlayers=Object.fromEntries(
+        Object.entries(freshWorld.players||{}).filter(([n,d])=>
+          n===g.name||(d.lastSeen&&d.lastSeen>cutoff24)
+        )
+      );
+      const ws={...freshWorld,players:{...cleanedPlayers,[g.name]:{
         level:g.level,borough:boroRef?.current||"manhattan",
         lastSeen:Date.now(),heat:Math.round(g.heat),
         archId:g.archetype?.id||"veteran",name:g.name
@@ -2278,7 +2289,13 @@ export default function NYC(){
         if(g.survival.warmth<15&&w.id==="blizzard")setTimeout(()=>setFeed(f=>[...f,`❄️ Blizzard. Find shelter or you'll freeze.`]),10);
         if(g.survival.health<=0){
           setTimeout(()=>{
-            const dWs=broadcastActivity(world,`☠ ${g.name} went down on Day ${g.day}. Level ${g.level}.`,"☠");setWorld(dWs);saveWorld(dWs);
+            const _deathMsgs=[
+              `☠ ${g.name} went down on Day ${g.day}. Level ${g.level}. The city doesn't stop for anyone.`,
+              `☠ ${g.name} is gone. Day ${g.day}. They made it to Level ${g.level}. That's something.`,
+              `☠ Day ${g.day}. Level ${g.level}. ${g.name} ran out of road. Moment of silence.`,
+              `☠ ${g.name} didn't make it. Day ${g.day}. Level ${g.level}. It happens to the best of them.`,
+            ];
+            const dWs=broadcastActivity(world,_deathMsgs[rnd(0,_deathMsgs.length-1)],"☠");setWorld(dWs);saveWorld(dWs);
             setFeed(f=>[...f,``,`☠ YOU DIED. Day ${g.day}. Level ${g.level}.`,`Legacy: $${Math.floor(g.cash*0.2)} carries forward.`,`Refresh to start again.`]);
             setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,time:Date.now()}]};saveWorld(ws);return ws;});
           },10);
@@ -2321,7 +2338,13 @@ export default function NYC(){
           `  + 1 Skill Point available (SKILLS)`,
           `★━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━★`,``);
         journalEvent('levelUp',nLvl);
-        const lvlWs=broadcastActivity(world,`${gs.name} hit Level ${nLvl}. Still standing.`,"⭐");
+        const _lvlMsgs=[
+          `${gs.name} just hit Level ${nLvl}. The street is taking notice.`,
+          `Level ${nLvl} for ${gs.name}. ${nLvl>=7?"Getting dangerous.":nLvl>=4?"Finding their footing.":"Learning fast."}`,
+          `${gs.name} is leveling up. ${nLvl>=8?"Watch out for this one.":"Still hungry."}`,
+          `Day ${gs.day}. Level ${nLvl}. ${gs.name} is still standing. Most don't make it this far.`,
+        ];
+        const lvlWs=broadcastActivity(world,_lvlMsgs[rnd(0,_lvlMsgs.length-1)],"⭐");
         setWorld(lvlWs);saveWorld(lvlWs);
       },10);
     }
@@ -3010,7 +3033,25 @@ export default function NYC(){
       const supplyKey=`${boro}_${pKey}_d${gs.day}`;
       const todaySupply=(world.supply||{})[supplyKey]||0;
       const supplyWs={...world,supply:{...(world.supply||{}),[supplyKey]:todaySupply+qty}};
-      const actWs=broadcastActivity(supplyWs,`${gs.name} moved ${qty}x ${PRODUCTS[pKey].name} in ${getBoro(boro)?.name}. +$${total}.`,"💊");
+      const _sellMsgs={
+        weed:[
+          `${gs.name} just cleared ${qty} bags in ${getBoro(boro)?.name}. Block is moving.`,
+          `${qty} bags of green changed hands in ${getBoro(boro)?.name}. ${gs.name} walking away clean.`,
+          `${gs.name} is working the ${getBoro(boro)?.name} corners. Weed money.`,
+        ],
+        pills:[
+          `${gs.name} running pills through ${getBoro(boro)?.name}. ${qty} packs. Clean and quick.`,
+          `Medical-grade in ${getBoro(boro)?.name}. ${gs.name} moved ${qty} packs. +$${total}.`,
+          `${gs.name} found buyers in ${getBoro(boro)?.name}. Pills moving fast today.`,
+        ],
+        powder:[
+          `Heavy product in ${getBoro(boro)?.name}. ${gs.name} just moved ${qty} grams. +$${total}.`,
+          `${gs.name} locked down a powder deal in ${getBoro(boro)?.name}. ${qty} units. Real money.`,
+          `${getBoro(boro)?.name} powder game is active. ${gs.name} just got paid.`,
+        ],
+      };
+      const _sellPool=_sellMsgs[pKey]||[`${gs.name} moved ${qty}x ${PRODUCTS[pKey].name} in ${getBoro(boro)?.name}.`];
+      const actWs=broadcastActivity(supplyWs,_sellPool[rnd(0,_sellPool.length-1)],"💊");
       setWorld(actWs);saveWorld(actWs);
       const archSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       if(archSub?.product===pKey){updGs(g=>({...g,addiction:Math.min(100,g.addiction+rnd(1,3))}));}
@@ -3288,7 +3329,13 @@ export default function NYC(){
       if(cur){push(`${cur} owns this. ATTACK them first.`);return;}
       let ws=addWorldHistory(world,"corner",gs.name,`${gs.name} claimed ${getBoro(boro)?.name} corner`,boro);
       ws=notifyPlayers(ws,gs.name,`🚩 ${gs.name} just claimed ${getBoro(boro)?.name} corner.`);
-      ws=broadcastActivity(ws,`${gs.name} locked down ${getBoro(boro)?.name}. Corner claimed.`,"🚩");
+      const _cornerMsgs=[
+        `${gs.name} just claimed the ${getBoro(boro)?.name} corner. It's theirs now.`,
+        `${getBoro(boro)?.name} corner changed hands. ${gs.name} put their flag on it.`,
+        `${gs.name} is running ${getBoro(boro)?.name}. Corner secured. Don't test it.`,
+        `New corner owner in ${getBoro(boro)?.name}. ${gs.name} made their move.`,
+      ];
+      ws=broadcastActivity(ws,_cornerMsgs[rnd(0,_cornerMsgs.length-1)],"🚩");
       if(ws.corners?.[boro]&&ws.corners[boro]!==gs.name)trackContract('corner_steal');
       ws={...ws,corners:{...ws.corners,[boro]:gs.name}};setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
       updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro]},30,"claim"));
@@ -3311,7 +3358,12 @@ export default function NYC(){
       const endMsgs=isBossWin?[ENEMIES[enemyType].winMsg||"Boss down."]:["Over. You walk away.","Done. They will not try that again.","You end it before it gets worse."];
       push("",endMsgs[rnd(0,endMsgs.length-1)]);
       if(isBossWin){
-        const bWs=broadcastActivity(world,gs.name+" just dropped "+ENEMIES[enemyType].name+" in "+getBoro(boro)?.name+". BOSS DOWN.","👹");
+        const _bossMsgs=[
+          `👹 ${gs.name} just took down ${ENEMIES[enemyType].name} in ${getBoro(boro)?.name}. BOSS DOWN. How.`,
+          `👹 ${ENEMIES[enemyType].name} went down in ${getBoro(boro)?.name}. ${gs.name} did what most people can't.`,
+          `👹 BOSS FELL. ${gs.name} dropped ${ENEMIES[enemyType].name} in ${getBoro(boro)?.name}. The block is talking about it.`,
+        ];
+        const bWs=broadcastActivity(world,_bossMsgs[rnd(0,_bossMsgs.length-1)],"👹");
         const bWs2=addWorldHistory(bWs,"boss",gs.name,gs.name+" defeated "+ENEMIES[enemyType].name+" on Day "+gs.day+".",boro);
         setWorld(bWs2);saveWorld(bWs2);
       }updGs(g=>{const np={...g.questProgress};Object.keys(g.activeQuests||{}).forEach(qid=>{np[qid]={...(np[qid]||{}),fights:(np[qid]?.fights||0)+1};});return{...g,questProgress:np};});},
@@ -3350,7 +3402,7 @@ export default function NYC(){
         const bAmt2=tBounty&&typeof tBounty==="object"?tBounty.amount:tBounty||0;
         if(won&&bAmt2>0){
           const bc3={...world.bounties};delete bc3[tName];
-          const bcW3=broadcastActivity({...world,bounties:bc3},gs.name+" collected $"+bAmt2+" bounty on "+tName+".","💰");
+          const bcW3=broadcastActivity({...world,bounties:bc3},[gs.name+" collected $"+bAmt2+" bounty on "+tName+".",tName+"'s bounty cleared. "+gs.name+" got $"+bAmt2+"."][rnd(0,2)]||gs.name+" collected the bounty.","💰");
           setWorld(bcW3);saveWorld(bcW3);
           updGs(g=>({...g,cash:g.cash+bAmt2}));
           push("💰 Bounty collected! +$"+bAmt2+".");
@@ -3364,7 +3416,18 @@ export default function NYC(){
         updGs(g=>applyXP({...g,cash:g.cash+stolen,heat:clamp(g.heat+hg,0,10),survival:{...g.survival,health:clamp(g.survival.health-selfDmg,0,100)},cornersOwned:cornerStolen?[...g.cornersOwned,boro]:g.cornersOwned},25,"fight"));
         let wsh=addWorldHistory(world,"pvp",gs.name,`${gs.name} robbed ${tName} in ${getBoro(boro)?.name} (d20=${attackRoll}, +$${stolen})`,boro);
         wsh=notifyPlayers(wsh,gs.name,`🔴 ${gs.name} rolled ${attackRoll} attacking ${tName} in ${getBoro(boro)?.name}. +$${stolen}.`);
-        wsh=broadcastActivity(wsh,`${gs.name} put hands on ${tName} in ${getBoro(boro)?.name}. ${won?`$${stolen} taken.`:"Didn't go as planned."}`,"⚔");
+        const _pvpWinMsgs=[
+          `${gs.name} ran up on ${tName} in ${getBoro(boro)?.name}. $${stolen} lighter now.`,
+          `${tName} got taxed in ${getBoro(boro)?.name}. ${gs.name} collected $${stolen}.`,
+          `${gs.name} and ${tName} had words in ${getBoro(boro)?.name}. Only one walked away with their cash.`,
+        ];
+        const _pvpLoseMsgs=[
+          `${gs.name} stepped to ${tName} in ${getBoro(boro)?.name}. Didn't go as planned.`,
+          `${gs.name} swung on ${tName} in ${getBoro(boro)?.name}. ${tName} held their ground.`,
+          `Bad read in ${getBoro(boro)?.name}. ${gs.name} came up short against ${tName}.`,
+        ];
+        const _pvpPool=won?_pvpWinMsgs:_pvpLoseMsgs;
+        wsh=broadcastActivity(wsh,_pvpPool[rnd(0,_pvpPool.length-1)],"⚔");
         setWorld(wsh);saveWorld(wsh);setWMsgs(wsh.messages||[]);
         if(cornerStolen)log.push(`Corner taken.`);
       } else {
@@ -3442,7 +3505,12 @@ export default function NYC(){
       const existingAmt=typeof existing==="object"?existing.amount:existing||0;
       const newBounty={amount:existingAmt+bAmt,by:gs.name,postedDay:gs.day};
       const bws={...world,bounties:{...(world.bounties||{}),[bTarget]:newBounty}};
-      const bws2=broadcastActivity(bws,gs.name+" posted $"+bAmt+" bounty on "+bTarget+". Collect it.","☠");
+      const _bntMsgs=[
+        gs.name+" put $"+bAmt+" on "+bTarget+"'s head. Bounty board just got interesting.",
+        "☠ BOUNTY: $"+bAmt+" on "+bTarget+". Posted by "+gs.name+". Collect it.",
+        bTarget+" has a price on their head. $"+bAmt+". "+gs.name+" is serious about it.",
+      ];
+      const bws2=broadcastActivity(bws,_bntMsgs[rnd(0,_bntMsgs.length-1)],"☠");
       const bws3=notifyPlayers(bws2,gs.name,"☠ "+gs.name+" put a $"+bAmt+" bounty on your head.");
       updGs(g=>({...g,cash:g.cash-bAmt}));setWorld(bws3);saveWorld(bws3);
       push("☠ $"+bAmt+" bounty on "+bTarget+". Live on the board.");return;
@@ -3525,7 +3593,12 @@ export default function NYC(){
       if((myCrewD.wars||[]).includes(wTarget)){push("Already at war with "+wTarget+".");return;}
       const upCrew={...myCrewD,wars:[...(myCrewD.wars||[]),wTarget]};
       const wws={...world,crews:{...(world.crews||{}),[gs.crew]:upCrew}};
-      const wws2=broadcastActivity(wws,gs.crew+" DECLARED WAR on "+wTarget+". Corners contested.","⚔");
+      const _warMsgs=[
+        gs.crew+" DECLARED WAR on "+wTarget+". Every corner is contested until it's done.",
+        "⚔ "+gs.crew+" vs "+wTarget+". War is on. Choose your side.",
+        "The "+gs.crew+" just called it. War with "+wTarget+". ${getBoro(boro)?.name} is about to get hot.",
+      ];
+      const wws2=broadcastActivity(wws,_warMsgs[rnd(0,_warMsgs.length-1)],"⚔");
       const wws3=notifyPlayers(wws2,gs.name,"⚔ "+gs.crew+" declared war on "+wTarget+". Watch your corners.");
       setWorld(wws3);saveWorld(wws3);
       push("⚔ WAR DECLARED on "+wTarget+".","2x XP on "+wTarget+" members.","Contested corners give double rep.","PEACE "+wTarget+" to end it.");return;
@@ -3599,7 +3672,9 @@ export default function NYC(){
       // reset rat daily infos
       if(gs.isRat)updGs(g=>({...g,informsToday:0}));
       // mark as away during sleep
-      const sleepWs={...world,players:{...(world.players||{}),[gs.name]:{...(world.players||{})[gs.name],lastSeen:Date.now()-200000}}};
+      const _cut24=Date.now()-(24*60*60*1000);
+      const _cPlayers=Object.fromEntries(Object.entries(world.players||{}).filter(([n,d])=>n===gs.name||(d.lastSeen&&d.lastSeen>_cut24)));
+      const sleepWs={...world,players:{..._cPlayers,[gs.name]:{...(_cPlayers[gs.name]||{}),lastSeen:Date.now()-200000}}};
       setWorld(sleepWs);saveWorld(sleepWs);
       const nightIncome=gs.isVampire&&hasSkill(gs,"ancient_blood")?rnd(30,80):0;
       const crewBonus=gs.crew&&world.crews?.[gs.crew]?rnd(5,15):0;
@@ -3650,7 +3725,13 @@ export default function NYC(){
         `The night passes the way nights pass out here — slowly, then all at once.`,
       ];
       setGameTime({hour:8,minute:0});
-      const sleepActWs=broadcastActivity(world,`${gs.name} called it a night. Day ${gs.day} done.`,"🌙");
+      const _sleepMsgs=[
+        `${gs.name} called it a night. Day ${gs.day} in the books.`,
+        `${gs.name} is off the streets. Day ${gs.day}. Cash: $${gs.cash}. Still breathing.`,
+        `Day ${gs.day} done for ${gs.name}. Level ${gs.level}. See you tomorrow.`,
+        `${gs.name} found somewhere to sleep. Day ${gs.day}. $${gs.cash} to their name.`,
+      ];
+      const sleepActWs=broadcastActivity(world,_sleepMsgs[rnd(0,_sleepMsgs.length-1)],"🌙");
       setWorld(prev=>({...prev,...sleepActWs}));
       push(
         ``,
@@ -5236,7 +5317,7 @@ export default function NYC(){
     updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:item?[...g.inventory,item.name]:g.inventory}));
     push(`Unequipped ${item?.name||slot}.`);
   };
-  const others=Object.entries(world.players||{}).filter(([n])=>n!==gs?.name).map(([n,d])=>({name:n,...d}));
+  const others=Object.entries(world.players||{}).filter(([n,d])=>n!==gs?.name&&(Date.now()-(d.lastSeen||0))<86400000).map(([n,d])=>({name:n,...d}));
 
   // ── BOOT ──────────────────────────────────────────────────────────────────
   if(phase==="boot")return(<>
