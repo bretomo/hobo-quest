@@ -6429,7 +6429,7 @@ export default function NYC(){
           {ARCHETYPES.map(a=><div key={a.id} onClick={()=>setSelA(a.id===selA?null:a.id)} style={{border:`1px solid ${selA===a.id?a.color:"#141414"}`,background:selA===a.id?`${a.color}12`:"#080808",padding:"10px 8px",cursor:"pointer",transition:"all 0.15s",boxShadow:selA===a.id?`0 0 20px ${a.color}22`:"none",textAlign:"center"}}>
             <div style={{fontSize:20,marginBottom:3}}>{a.icon}</div>
             <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:11,color:selA===a.id?a.color:"#444",letterSpacing:1}}>{a.name}</div>
-            <div style={{fontSize:7,color:"#2a2a2a",marginTop:2}}>$\{a.startCash}</div>
+            <div style={{fontSize:7,color:"#2a2a2a",marginTop:2}}>${a.startCash}</div>
           </div>)}
         </div>
         {/* BACKSTORY QUESTIONS */}
