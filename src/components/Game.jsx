@@ -1089,7 +1089,6 @@ const BASE_ITEMS = [
 ];
 
 const getItemById=id=>BASE_ITEMS.find(i=>i.id===id);
-const addJournalEntry=(g,entry)=>({...g,journal:[...(g.journal||[]).slice(-49),entry]});
 
 // ── D&D COMBAT ENGINE ─────────────────────────────────────────────────────────
 // Dice roller
