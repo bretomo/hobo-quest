@@ -4182,9 +4182,9 @@ export default function NYC(){
       return;
     }
     // ACCEPT [offer id] — accept a trade offer
-    const acceptM=C.match(/^ACCEPT ([A-Za-z0-9]+)$/);
-    if(acceptM&&!["RAY","SMOKE","CARLOS","DEE","MARIA"].includes(acceptM[1].toUpperCase())){
-      const offerId=acceptM[1];
+    const acceptOfferM=C.match(/^ACCEPT ([A-Za-z0-9]+)$/);
+    if(acceptOfferM&&!["RAY","SMOKE","CARLOS","DEE","MARIA"].includes(acceptOfferM[1].toUpperCase())){
+      const offerId=acceptOfferM[1];
       const offer=(world.tradeOffers||{})[offerId];
       if(!offer){push("No trade offer found with that ID. Check TRADES.");return;}
       if(offer.to!==gs.name){push("That offer is not for you.");return;}
