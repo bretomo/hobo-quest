@@ -1937,8 +1937,8 @@ function InvGrid({items,equipment,onEquip}){
       const rar=baseItem?ITEM_RARITY[baseItem.rarity]:null;
       const isEquipped=equippedNames.includes(item);
       return <div key={i} onClick={()=>baseItem&&onEquip&&onEquip(baseItem)} style={{
-        height:38,border:`1px solid ${isEquipped?rar?.color||"#2a9d8f":rar?`${rar.color}44`:"#1a1a1a"}`,
-        background:isEquipped?`${rar?.color||"#2a9d8f"}15`:baseItem?"#0f0f0f":"#080808",
+        height:38,border:"1px solid "+(isEquipped?rar?.color||"#2a9d8f":rar?rar.color+"44":"#1a1a1a"),
+        background:isEquipped?(rar?.color||"#2a9d8f")+"15":baseItem?"#0f0f0f":"#080808",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
         fontSize:6,fontFamily:"'Share Tech Mono',monospace",
         color:isEquipped?rar?.color||"#2a9d8f":rar?.color||"#666",
@@ -3035,14 +3035,14 @@ export default function NYC(){
       const totalAttack=attackRoll+cs.attackBonus;
       const crit=attackRoll===20;
       const miss=attackRoll===1;
-      newLog.push(`⚔ Attack roll: d20=${attackRoll}${advantage?` (adv: ${roll1},${roll2})`:""} +${cs.attackBonus} = ${totalAttack} vs AC ${enemy.ac}`);
+      newLog.push(`⚔ Attack roll: d20=${attackRoll}`+(advantage?` (adv: ${roll1},${roll2})`:"")+" +"+cs.attackBonus+" = "+totalAttack+" vs AC "+enemy.ac);
       if(miss){
         newLog.push(`  MISS. Fumble.`);
       } else if(crit||totalAttack>=enemy.ac){
         const dmgDice=crit?[roll(6),roll(6),roll(6)]:[roll(6),roll(6)];
         const dmg=dmgDice.reduce((a,b)=>a+b,0)+cs.damageBonus+(crit?4:0);
         enemy={...enemy,hp:Math.max(0,enemy.hp-dmg)};
-        newLog.push(`  ${crit?"💥 CRITICAL HIT!":"HIT!"} ${crit?`3d6`:`2d6`}=${dmgDice.join("+")}+${cs.damageBonus}${crit?" +4 crit":""} = ${dmg} damage. ${enemy.name} HP: ${enemy.hp}/${enemy.maxHp}`);
+        newLog.push("  "+(crit?"💥 CRITICAL HIT!":"HIT!")+" "+(crit?"3d6":"2d6")+"="+dmgDice.join("+")+"+"+cs.damageBonus+(crit?" +4 crit":"")+" = "+dmg+" damage. "+enemy.name+" HP: "+enemy.hp+"/"+enemy.maxHp);
       } else {
         newLog.push(`  MISS. ${enemy.name}'s AC too high (${totalAttack} vs ${enemy.ac}).`);
       }
@@ -3108,7 +3108,7 @@ export default function NYC(){
     // ── CONTINUE COMBAT ──
     const archAbilities=COMBAT_ABILITIES[gs2.archetype?.id]||[];
     const availAbils=archAbilities.filter(a=>(abilityCooldowns[a.id]||0)===0);
-    newLog.push(``,`HP: ${playerHp} · Enemy HP: ${enemy.hp}/${enemy.maxHp}`,`FIGHT · FLEE${availAbils.length?` · USE [${availAbils.map(a=>a.name).join(" / ")}]`:""}`);
+    newLog.push(``,`HP: ${playerHp} · Enemy HP: ${enemy.hp}/${enemy.maxHp}`,"FIGHT · FLEE"+(availAbils.length?" · USE ["+availAbils.map(a=>a.name).join(" / ")+"]":""));
     setCombat({...combat,enemy,round:round+1,log:newLog,playerHp,advantage:newAdvantage,halfDmg:newHalfDmg,skipEnemyTurn:newSkipEnemy,stunEnemy:newStunEnemy,abilitiesUsed});
     push(...newLog.slice(-8)); // show last 8 lines of combat log in feed
     setAbilityCooldowns(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{if(v>0)n[k]=v-1;});return n;});
@@ -3219,7 +3219,7 @@ export default function NYC(){
       const archAbilities=COMBAT_ABILITIES[gs.archetype?.id]||[];
       push(`— ${gs.archetype?.name} COMBAT ABILITIES —`,...archAbilities.map(a=>{
         const cd=abilityCooldowns[a.id]||0;
-        return `  ${a.name}${cd>0?` (cooldown: ${cd}r)`:""} — ${a.desc}`;
+        return "  "+a.name+(cd>0?" (cooldown: "+cd+"r)":"")+" — "+a.desc;
       }),``,`USE [ability name] during combat.`);
       return;
     }
@@ -3244,7 +3244,7 @@ export default function NYC(){
 
     if(C==="WEATHER"){
       push(`${weather.icon} ${weather.name.toUpperCase()}`,weather.desc,
-        `Bust rate: ${weather.bustMult<1?`-${Math.round((1-weather.bustMult)*100)}%`:weather.bustMult>1?`+${Math.round((weather.bustMult-1)*100)}%`:"normal"}`,
+        "Bust rate: "+(weather.bustMult<1?"-"+Math.round((1-weather.bustMult)*100)+"%":weather.bustMult>1?"+"+Math.round((weather.bustMult-1)*100)+"%":"normal"),
         weather.movePenalty>0?`Move penalty: -${weather.movePenalty} energy`:`No move penalty.`);
       return;
     }
@@ -3318,13 +3318,13 @@ export default function NYC(){
       const wt=getWantedTier(Math.round(gs.heat));
       const pw=getCarryWeight(gs.product);
       push(`${gs.name} · Lvl ${gs.level} · Day ${gs.day}${gs.wanted?" · 🚨 WANTED":""}${gs.ghostMode?" · 👻 GHOST":""}`,
-        `Cash: $${gs.cash}${gs.cash>MAX_CARRY_CASH?" ⚠ TARGET":""}${gs.cashStash>0?` · Stashed: $${gs.cashStash}`:""}`,
+        "Cash: $"+gs.cash+(gs.cash>MAX_CARRY_CASH?" ⚠ TARGET":"")+(gs.cashStash>0?" · Stashed: $"+gs.cashStash:""),
         `Heat: ${Math.round(gs.heat)}/10 · ${wt.stars>0?"★".repeat(wt.stars):"☆"} ${wt.name}`,
         `Cops here: ${getCopPresence(boro,world.copPresence,gs.day)}/10`,
         `XP: ${gs.xp} · Next: ${xpNext(gs.xp)} · Next stat: +${nextStat.toUpperCase()}`,
         `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
-        gs.isHooker?`Clients today: ${gs.hustleCount||0}/6 · Regulars: ${gs.regulars||0}`:!gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
+        gs.isHooker?"Clients today: "+(gs.hustleCount||0)+"/6 · Regulars: "+(gs.regulars||0):!gs.isFixer&&!gs.isRat?"Hustles today: "+(gs.hustleCount||0)+"/"+HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]+(gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""):"",
         `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
         `Crew: ${gs.crew||"solo"}`,
         gs.army?.length?`Army: ${gs.army.length} units · Power ${getArmyPower(gs.army)} · Upkeep $${getArmyUpkeep(gs.army)}/day · Heat +${getArmyHeatMult(gs.army).toFixed(1)}/day${gs.armyDeployed?" · Deployed: "+getBoro(gs.armyDeployed)?.short:""}`:
@@ -3643,7 +3643,7 @@ export default function NYC(){
           push(style.flavorOk[rnd(0,style.flavorOk.length-1)],`💥 Crit! Double payout. +$${base}.`);
         } else {
           push(style.flavorOk[rnd(0,style.flavorOk.length-1)],
-            `+$${base}.${payoutMult<1?` (${Math.round(payoutMult*100)}% — block's drying up)`:""}`,
+            "+$"+base+(payoutMult<1?" ("+Math.round(payoutMult*100)+"% — block's drying up)":""),
             attemptsLeft>0?`${attemptsLeft} hustle${attemptsLeft>1?"s":""} left today.`:`Last hustle today. Rest or move.`);
         }
         const hg=sameBoroPenalty?style.heatRate+HUSTLE_SAME_BORO_HEAT:style.heatRate;
@@ -3757,7 +3757,7 @@ export default function NYC(){
       push(`Intel — ${b.name} ${weather.icon}:`,
         `  Weed $${weedP}/bag ${trend(weedP,weedBase)}`,`  Pills $${pillsP}/pack ${trend(pillsP,getBoro(boro)?.base?.pills||12)}`,
         `  Powder $${mktPrice(boro,"powder",gs.day,weather)}/g`,
-        `  Corner: ${world.corners?.[boro]||"unclaimed"}`,`  Safe house: ${world.safehouses?.[boro]?`owned by ${world.safehouses[boro].owner||world.safehouses[boro].crewOwner}`:"none"}`);
+        `  Corner: ${world.corners?.[boro]||"unclaimed"}`,"  Safe house: "+(world.safehouses?.[boro]?"owned by "+(world.safehouses[boro].owner||world.safehouses[boro].crewOwner):"none"));
       updGs(g=>applyXP(g,8,"scout"));return;
     }
 
@@ -3794,7 +3794,7 @@ export default function NYC(){
         const tv=["The train announcements are addressing you specifically.","Someone on the platform knows your name.","The subway map rearranged itself while you were looking.","You arrived before you left. You checked."];
         push(tv[rnd(0,tv.length-1)]);
       }
-      push(`You head to ${t.name}. ${weather.movePenalty>0?`Rough going in this weather.`:""}`,wPool[rnd(0,wPool.length-1)]);
+      push("You head to "+t.name+(weather.movePenalty>0?" Rough going in this weather.":""),wPool[rnd(0,wPool.length-1)]);
       updGs(g=>{const np={...g.questProgress};Object.keys(g.activeQuests||{}).forEach(qid=>{const v=np[qid]?.visited||[];if(!v.includes(t.id))np[qid]={...(np[qid]||{}),visited:[...v,t.id]};});return{...g,questProgress:np};});
       updGs(g=>applyXP({...g,survival:{...g.survival,energy:clamp(g.survival.energy-penalty,0,100)}},5,"move"));
       const ws={...world,players:{...(world.players||{}),[gs.name]:{level:gs.level,borough:t.id,lastSeen:Date.now(),heat:Math.round(gs.heat)}}};
@@ -3985,7 +3985,7 @@ export default function NYC(){
          const ws={...world,pvpLog:[...(world.pvpLog||[]).slice(-29),{attacker:gs.name,victim:tName,won,stolen,boro,time:Date.now()}],
         corners:{...world.corners,...(cornerStolen?{[boro]:gs.name}:{})},
         playerAlerts:{...(world.playerAlerts||{}),[tName]:[...((world.playerAlerts||{})[tName]||[]),
-          {msg:`⚠ ${gs.name} attacked you in ${b.name}. Attack roll ${totalAttack}. ${won?`Lost $${stolen}.`:"They missed."}`,time:Date.now()}]}};
+          {msg:"⚠ "+gs.name+" attacked you in "+b.name+". Attack roll "+totalAttack+". "+(won?"Lost $"+stolen+".":"They missed."),time:Date.now()}]}};
       // Track rivals — attacked same player twice = rivalry
       const rivalKey=gs.name+":"+tName;
       const attackCount=((world.rivals||{})[rivalKey]||0)+1;
@@ -4056,7 +4056,7 @@ export default function NYC(){
         ...currentContracts.map((c,i)=>{
           const done=myCompleted.includes(c.id);
           const diff=c.diff==="hard"?"🔴":c.diff==="medium"?"🟡":"🟢";
-          const reward=`$${c.reward.cash||0}${c.reward.xp?` +${c.reward.xp}XP`:""}${c.reward.rep?` +${c.reward.rep}rep`:""}${c.reward.heat?` heat${c.reward.heat}`:""}${c.reward.mental?` +mental`:""}`;
+          const reward="$"+(c.reward.cash||0)+(c.reward.xp?" +"+c.reward.xp+"XP":"")+(c.reward.rep?" +"+c.reward.rep+"rep":"")+(c.reward.heat?" heat"+c.reward.heat:"")+(c.reward.mental?" +mental":"");
           return `${done?"✓":"○"} ${diff} ${c.title}
    ${c.desc}
    Reward: ${reward}`;
@@ -4462,12 +4462,12 @@ export default function NYC(){
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
         `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners: +$"+income+(coldCorners.length?" ("+coldCorners.join(",")+": COLD)":"")+". ":""}`+
-        `${crewBonus>0?`Crew added $${crewBonus}. `:""}`+
-        `${safePassive>0?`Safe houses: +$${safePassive}. `:""}`+
-        `${commBonus>0?`Community network: +$${commBonus}. `:""}`+
-        `${thrallIncome>0?`Thralls: +$${thrallIncome}. `:""}`+
-        `${nightIncome>0?`Night economy: +$${nightIncome}. `:""}`+
-        `${networkIncome>0?`Network cut: +$${networkIncome}.`:""}`,
+        (crewBonus>0?"Crew added $"+crewBonus+". ":"")+
+        (safePassive>0?"Safe houses: +$"+safePassive+". ":"")+
+        (commBonus>0?"Community network: +$"+commBonus+". ":"")+
+        (thrallIncome>0?"Thralls: +$"+thrallIncome+". ":"")+
+        (nightIncome>0?"Night economy: +$"+nightIncome+". ":"")+
+        (networkIncome>0?"Network cut: +$"+networkIncome:""),
         habitMsg||"",
         `${nextWeather.icon} ${nextWeather.name} today — ${nextWeather.desc}`,
         ``,
@@ -5056,7 +5056,7 @@ export default function NYC(){
         const itemId=gs.equipment?.[slot];
         const item=itemId?getItemById(itemId):null;
         const rar=item?ITEM_RARITY[item.rarity]:null;
-        return `  ${slot.toUpperCase()}: ${item?`${rar?.prefix||""}${item.name} [${Object.entries(item.stats).map(([k,v])=>`${k}+${v}`).join(", ")}]`:"(empty)"}`;
+        return "  "+slot.toUpperCase()+": "+(item?(rar?.prefix||"")+item.name+" ["+Object.entries(item.stats).map(([k,v])=>k+"+"+v).join(", ")+"]":"(empty)");
       }),``,`Stat bonuses: ${Object.entries(eqStats).map(([k,v])=>`${k}+${v}`).join(", ")||"none"}`);
       return;
     }
@@ -5326,7 +5326,7 @@ export default function NYC(){
         `The subway car empties out. You're alone with someone who shouldn't have been alone.`,
         `Quick. Quiet. They'll wake up confused but alive. Mostly.`,
       ];
-      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,`+$${cash}. Health +${healAmt}hp.${ancientBlood?" (Ancient Blood — full restore)":""}`);
+      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,"+$"+cash+". Health +"+healAmt+"hp."+(ancientBlood?" (Ancient Blood — full restore)":""));
       if(gs.survival.health>=95)push(`You're at full strength.`);
       return;
     }
@@ -5703,14 +5703,14 @@ export default function NYC(){
       const exposed=Math.random()<0.15;
       const ws={...world,
         playerAlerts:{...(world.playerAlerts||{}),[tName]:[...((world.playerAlerts||{})[tName]||[]),
-          {msg:`🚔 Heat spiked +${heatSpike}. Someone talked. ${exposed?`Word is it was ${gs.name}.`:"Source unknown."}`,time:Date.now()}]},
+          {msg:"🚔 Heat spiked +"+heatSpike+". Someone talked. "+(exposed?"Word is it was "+gs.name+".":"Source unknown."),time:Date.now()}]},
         worldHistory:[...(world.worldHistory||[]).slice(-49),
           {type:"rat",actor:gs.name,detail:exposed?`${gs.name} informed on ${tName} (exposed)`:`Someone filed a tip on ${tName}`,boro,time:Date.now(),day:gs.day}]};
       setWorld(ws);saveWorld(ws);
       updGs(g=>applyXP({...g,cash:g.cash+pay,informsToday:(g.informsToday||0)+1,
         exposedAsRat:exposed?true:g.exposedAsRat,
         ratHandles:[...new Set([...(g.ratHandles||[]),tName])]},10,"scout"));
-      push(`🐀 Tip filed on ${tName}.`,`Handler confirms: +$${pay}.`,exposed?`⚠ Your name came up. Watch your back.`:`Source protected.`);
+      push(`🐀 Tip filed on ${tName}.`,`Handler confirms: +$${pay}.`,exposed?"⚠ Your name came up. Watch your back.":"Source protected.");
       if(exposed)push(``,`🚨 ${tName} now knows it was you.`);
       return;
     }
@@ -5856,7 +5856,7 @@ export default function NYC(){
         tier.cantEnter.length?`BLOCKED FROM: ${tier.cantEnter.join(", ").toUpperCase()}`:`No borough restrictions`,
         ``,
         `Product weight: ${weight.toFixed(1)}/${MAX_CARRY_WEIGHT}${overWeight?" ⚠ OVERLOADED":""}`,
-        `Cash: $${gs.cash}${overCash?` ⚠ CARRYING TOO MUCH — you're a target`:""}`);
+        "Cash: $"+gs.cash+(overCash?" ⚠ CARRYING TOO MUCH — you're a target":""));
       return;
     }
 
