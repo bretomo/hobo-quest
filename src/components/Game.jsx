@@ -1415,7 +1415,7 @@ export default function NYC(){
   },[phase]);
 
   // load world
-  useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w){}catch{}})();},[]);
+ useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
 
