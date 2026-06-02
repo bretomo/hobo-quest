@@ -3301,13 +3301,17 @@ export default function NYC(){
         const capWs2=notifyPlayers(capWs,gs.name,`🚔 THE CAPTAIN has been spotted in ${getBoro(capBoro)?.name}. Heat is out of control.`);
         setWorld(capWs2);saveWorld(capWs2);setWMsgs(capWs2.messages||[]);
       }
-      // Update supply drought counters
+      // Update supply drought counters using day-keyed supply
       const newSupply={...world.supply};
-      BOROUGHS.forEach(b=>Object.keys(PRODUCTS).forEach(pKey=>{
-        const key=`${b.id}_${pKey}`;const droughtKey=`${b.id}_${pKey}_drought`;
-        if(!newSupply[key]||newSupply[key]===0){newSupply[droughtKey]=(newSupply[droughtKey]||0)+1;}
-        else{newSupply[droughtKey]=0;newSupply[key]=0;} // reset daily supply count
+      BOROUGHS.forEach(b2x=>Object.keys(PRODUCTS).forEach(pk2=>{
+        const dayKey=`${b2x.id}_${pk2}_d${gs.day}`;
+        const droughtKey=`${b2x.id}_${pk2}_drought`;
+        const soldToday=(newSupply[dayKey]||0)>0;
+        if(!soldToday){newSupply[droughtKey]=(newSupply[droughtKey]||0)+1;}
+        else{newSupply[droughtKey]=0;}
       }));
+      // Clean old day keys to prevent DB bloat
+      Object.keys(newSupply).filter(k=>{const m=k.match(/_d(\d+)$/);return m&&parseInt(m[1])<gs.day-2;}).forEach(k=>delete newSupply[k]);
       setWorld(prev=>({...prev,supply:newSupply}));
       // debt penalty if not paid
       if(gs.debtOwed>0&&gs.debtOwed>0){
@@ -3336,20 +3340,8 @@ export default function NYC(){
       setWorld(sleepWs);saveWorld(sleepWs);
       const nightIncome=gs.isVampire&&hasSkill(gs,"ancient_blood")?rnd(30,80):0;
       const crewBonus=gs.crew&&world.crews?.[gs.crew]?rnd(5,15):0;
-      // Update drought counters — products not sold today get drought flag
-      const todaySupplyKeys=Object.keys(world.supply||{}).filter(k=>k.includes(`_d${gs.day}`));
-      const newSupply={...world.supply};
-      ["bronx","brooklyn","manhattan","queens","staten"].forEach(b2=>{
-        ["weed","pills","powder"].forEach(pk=>{
-          const sold=(newSupply[`${b2}_${pk}_d${gs.day}`]||0)>0;
-          if(!sold){newSupply[`${b2}_${pk}_drought`]=(newSupply[`${b2}_${pk}_drought`]||0)+1;}
-          else{newSupply[`${b2}_${pk}_drought`]=0;}
-        });
-      });
-      // Clean old day keys to prevent bloat
+      // Clean old day-keyed supply entries
       Object.keys(newSupply).filter(k=>{const m=k.match(/_d(\d+)$/);return m&&parseInt(m[1])<gs.day-2;}).forEach(k=>delete newSupply[k]);
-      const supplyUpdatedWs={...world,supply:newSupply};
-      setWorld(supplyUpdatedWs);saveWorld(supplyUpdatedWs);
       const safePassive=Object.entries(world.safehouses||{}).filter(([,s])=>s.owner===gs.name||(gs.crew&&s.crewOwner===gs.crew)).length*rnd(5,10);
       const nextDay=gs.day+1;const nextWeather=getWeather(nextDay);
       // junkie habit cost
