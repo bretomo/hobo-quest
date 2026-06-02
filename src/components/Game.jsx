@@ -4972,9 +4972,7 @@ export default function NYC(){
           const poster=typeof b==="object"?b.by:"anon";
           const pData=world.players?.[n];
           const lastBoro=pData?getBoro(pData.borough)?.name:"unknown borough";
-          return "☠ "+n+" — $"+amt+"
-   Posted by: "+poster+"
-   Last seen: "+lastBoro;
+          return "☠ "+n+" — $"+amt+" · "+poster+" · Last seen: "+lastBoro;
         }),
         "","Collect by winning FIGHT against the target.");
       return;
