@@ -1520,11 +1520,11 @@ function InvGrid({items,equipment,onEquip}){
     })}
   </div>;
 }
-function MktPanel({bId,day,prod,setProd,qty,setQty,onBuy,onSell,playerProd,weather}){
+function MktPanel({bId,day,prod,setProd,qty,setQty,onBuy,onSell,playerProd,weather,worldSupply}){
   return <div style={{fontSize:8,fontFamily:"'Share Tech Mono',monospace"}}>
     <div style={{color:"#999",letterSpacing:2,marginBottom:6}}>// MARKET — {getBoro(bId)?.short}</div>
     {Object.entries(PRODUCTS).map(([key,p])=>{
-      const sp=mktPrice(bId,key,day,weather?.id),bp=Math.round(sp*p.bm);
+      const sp=mktPrice(bId,key,day,weather?.id,worldSupply),bp=Math.round(sp*p.bm);
       return <div key={key} onClick={()=>setProd(key)} style={{padding:"4px 6px",marginBottom:2,cursor:"pointer",border:`1px solid ${prod===key?"#e9c46a22":"#161616"}`,background:prod===key?"#e9c46a06":"transparent"}}>
         <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:prod===key?"#e9c46a":"#444"}}>{p.icon} {p.name}</span><span style={{color:"#2a9d8f"}}>${sp}</span></div>
         <div style={{color:"#999",fontSize:7,marginTop:1}}>Buy ${bp} · Have: {playerProd?.[key]||0}</div>
@@ -2230,6 +2230,7 @@ export default function NYC(){
       xpMult:driveOpt?.xpMult||1.0,
       activeQuests:{},completedQuests:[],questProgress:{},
       title:"",
+      dailySells:{},
       wantedStars:0,patrolEncountered:false,
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
@@ -2803,7 +2804,14 @@ export default function NYC(){
       }
       if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder. For cooked: SELL COOKED [name].`);return;}
       const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5;
-      if(qty>maxSell){push(`Can't move ${qty} at once. Max ${maxSell} per transaction. Multiple trips or find a buyer.`);return;}
+      if(qty>maxSell){push(`Can't move ${qty} at once. Max ${maxSell} per transaction.`);return;}
+      // Daily sell limit — same product, same borough, max 3 transactions
+      const sellLogKey=`sells_${boro}_${pKey}`;
+      const sellsToday=(gs.dailySells||{})[sellLogKey]||0;
+      const maxSellTx=gs.isHustler?5:3;
+      if(sellsToday>=maxSellTx){
+        push(`Market's dry here. You've moved ${pKey} in ${getBoro(boro)?.name} ${sellsToday} times today.`,`Come back tomorrow or try another borough.`);return;
+      }
       if(gs.product[pKey]<qty){push(`Only have ${gs.product[pKey]}.`);return;}
       const price=mktPrice(boro,pKey,gs.day,weather,world.supply);const total=price*qty;
       // Heat scales with quantity AND current borough heat level
@@ -2829,7 +2837,13 @@ export default function NYC(){
         ];
         push("",bustMsgs[rnd(0,bustMsgs.length-1)],"Heat critical. LAY LOW or SKIP TOWN now.","");return;
       }
-      updGs(g=>applyXP({...g,cash:g.cash+total,product:{...g.product,[pKey]:g.product[pKey]-qty},heat:clamp(g.heat+hg,0,10)},8*qty,"deal"));
+      const sellLogKey2=`sells_${boro}_${pKey}`;
+      updGs(g=>applyXP({...g,
+        cash:g.cash+total,
+        product:{...g.product,[pKey]:g.product[pKey]-qty},
+        heat:clamp(g.heat+hg,0,10),
+        dailySells:{...(g.dailySells||{}),[sellLogKey2]:((g.dailySells||{})[sellLogKey2]||0)+1},
+      },8*qty,"deal"));
       // update world supply data so prices respond
       // Supply tracking — accumulates per borough per product per day
       const supplyKey=`${boro}_${pKey}_d${gs.day}`;
@@ -3060,7 +3074,7 @@ export default function NYC(){
       const weedBase=getBoro(boro)?.base?.weed||80;
       const trend=(p,base)=>p>base*1.1?"📈":p<base*0.9?"📉":"→";
       push(`Intel — ${b.name} ${weather.icon}:`,
-        `  Weed $${weedP}/bag ${trend(weedP,weedBase)}`,`  Pills $${mktPrice(boro,"pills",gs.day,weather)}/pack`,
+        `  Weed $${weedP}/bag ${trend(weedP,weedBase)}`,`  Pills $${pillsP}/pack ${trend(pillsP,getBoro(boro)?.base?.pills||12)}`,
         `  Powder $${mktPrice(boro,"powder",gs.day,weather)}/g`,
         `  Corner: ${world.corners?.[boro]||"unclaimed"}`,`  Safe house: ${world.safehouses?.[boro]?`owned by ${world.safehouses[boro].owner||world.safehouses[boro].crewOwner}`:"none"}`);
       updGs(g=>applyXP(g,8,"scout"));return;
@@ -3403,7 +3417,7 @@ export default function NYC(){
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
-        dayJobDone:false,hasMetrocard:false,panhandleCount:0,
+        dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
         dayJobDone:false,hasMetrocard:false,
 
           informsToday:0,patrolEncountered:false,feedUsed:false};
@@ -3487,7 +3501,7 @@ export default function NYC(){
     if(C==="FLIP"){
       if(!gs.isHustler){push(`You don't think that way.`);return;}
       // compare current borough prices to all others
-      const current=Object.entries(PRODUCTS).map(([key,p])=>({key,buy:Math.round(mktPrice(boro,key,gs.day,weather)*p.bm),sell:mktPrice(boro,key,gs.day,weather)}));
+      const current=Object.entries(PRODUCTS).map(([key,p])=>({key,buy:Math.round(mktPrice(boro,key,gs.day,weather,world.supply)*p.bm),sell:mktPrice(boro,key,gs.day,weather,world.supply)}));
       push(`💵 FLIP ANALYSIS — ${getBoro(boro)?.short}:`,...current.map(p=>`  ${PRODUCTS[p.key].icon} ${PRODUCTS[p.key].name}: Buy $${p.buy} → Sell $${p.sell} (margin $${p.sell-p.buy})`),`Best margins: move to high-opp boroughs to sell.`);
       return;
     }
@@ -4381,7 +4395,7 @@ export default function NYC(){
     // PRICES — fixer sees all borough prices at once
     if(C==="PRICES"){
       if(!gs.isFixer&&!hasSkill(gs,"inside_prices")){push(`You don't have those connections yet.`);return;}
-      push(`🔧 ALL MARKET PRICES — Day ${gs.day}:`,...BOROUGHS.map(b=>`  ${b.short}: Weed $${mktPrice(b.id,"weed",gs.day,weather)} · Pills $${mktPrice(b.id,"pills",gs.day,weather)} · Powder $${mktPrice(b.id,"powder",gs.day,weather)}`));return;
+      push(`🔧 ALL MARKET PRICES — Day ${gs.day}:`,...BOROUGHS.map(b=>`  ${b.short}: Weed $${mktPrice(b.id,"weed",gs.day,weather,world.supply)} · Pills $${mktPrice(b.id,"pills",gs.day,weather,world.supply)} · Powder $${mktPrice(b.id,"powder",gs.day,weather,world.supply)}`));return;
     }
 
     // ── RAT COMMANDS ─────────────────────────────────────────────────────────
@@ -4613,7 +4627,7 @@ export default function NYC(){
     if(C==="ARBITRAGE"){
       const lines=["💹 ARBITRAGE — Buy cheap, sell high:"];
       Object.entries(PRODUCTS).forEach(([pKey,prod])=>{
-        const prices=BOROUGHS.map(b=>({b,p:mktPrice(b.id,pKey,gs.day,weather)}));
+        const prices=BOROUGHS.map(b=>({b,p:mktPrice(b.id,pKey,gs.day,weather,world.supply)}));
         const cheapest=prices.reduce((a,b)=>b.p<a.p?b:a);
         const priciest=prices.reduce((a,b)=>b.p>a.p?b:a);
         const margin=Math.round((priciest.p-cheapest.p*prod.bm));
@@ -4909,8 +4923,50 @@ export default function NYC(){
     push(`Unknown command. Type HELP.`);
   };
 
-  const panelBuy=()=>{if(!gs)return;const weather=getWeather(gs.day);const price=Math.round(mktPrice(boro,mProd,gs.day,weather)*PRODUCTS[mProd].bm);const total=price*mQty;if(total>gs.cash){push(`Need $${total}.`);return;}updGs(g=>applyXP({...g,cash:g.cash-total,product:{...g.product,[mProd]:g.product[mProd]+mQty}},5*mQty,"deal"));push(`Bought ${mQty}× ${PRODUCTS[mProd].name} for $${total}.`);};
-  const panelSell=()=>{if(!gs)return;const weather=getWeather(gs.day);if(gs.product[mProd]<mQty){push(`Only have ${gs.product[mProd]}.`);return;}const total=mktPrice(boro,mProd,gs.day,weather)*mQty;updGs(g=>applyXP({...g,cash:g.cash+total,product:{...g.product,[mProd]:g.product[mProd]-mQty}},8*mQty,"deal"));push(`Sold ${mQty}× ${PRODUCTS[mProd].name} for $${total}.`);};
+  const panelBuy=()=>{
+    if(!gs)return;
+    const weather=getWeather(gs.day);
+    const maxBuy=gs.isHustler?10:8;
+    if(mQty>maxBuy){push(`Max ${maxBuy} per trip.`);return;}
+    const price=Math.round(mktPrice(boro,mProd,gs.day,weather,world.supply)*PRODUCTS[mProd].bm);
+    const total=price*mQty;
+    if(total>gs.cash){push(`Need $${total}. Have $${gs.cash}.`);return;}
+    // Buy bust at high heat
+    const buyBust=gs.heat>7?0.12:gs.heat>5?0.06:0;
+    if(buyBust>0&&Math.random()<buyBust){
+      const lostQty=Math.ceil(mQty/2);
+      updGs(g=>({...g,cash:Math.max(0,g.cash-total),product:{...g.product,[mProd]:Math.max(0,g.product[mProd]+mQty-lostQty)},heat:clamp(g.heat+2,0,10)}));
+      push(`Deal went sideways. Got ${mQty-lostQty}× but lost ${lostQty} in the scramble. Heat +2.`);return;
+    }
+    updGs(g=>applyXP({...g,cash:g.cash-total,product:{...g.product,[mProd]:g.product[mProd]+mQty}},5*mQty,"deal"));
+    push(`Bought ${mQty}× ${PRODUCTS[mProd].name} for $${total}.`);
+  };
+  const panelSell=()=>{
+    if(!gs)return;
+    const weather=getWeather(gs.day);
+    const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5;
+    if(mQty>maxSell){push(`Max ${maxSell} per transaction.`);return;}
+    if(gs.product[mProd]<mQty){push(`Only have ${gs.product[mProd]}.`);return;}
+    const price=mktPrice(boro,mProd,gs.day,weather,world.supply);
+    const total=price*mQty;
+    const b=getBoro(boro);
+    const boroHeatMult=(b?.heat||5)/8;
+    const hg=Math.max(1,Math.round(mQty*PRODUCTS[mProd].rm*boroHeatMult));
+    const copP=getCopPresence(boro,world.copPresence,gs.day)/10;
+    const bustBase=mQty>=4?0.15:mQty>=2?0.08:0.04;
+    const bustChance=(gs.heat>5||copP>0.7)?bustBase*weather.bustMult*(1+copP):0;
+    if(bustChance>0&&Math.random()<bustChance){
+      const cashTaken=Math.min(gs.cash,rnd(50,150));
+      updGs(g=>({...g,product:{...g.product,[mProd]:0},heat:clamp(g.heat+4,0,10),cash:Math.max(0,g.cash-cashTaken),survival:{...g.survival,mental:clamp((g.survival.mental||70)-10,0,100)}}));
+      push(`BUSTED. Product seized. -$${cashTaken}. Heat +4.`);return;
+    }
+    updGs(g=>applyXP({...g,cash:g.cash+total,product:{...g.product,[mProd]:g.product[mProd]-mQty},heat:clamp(g.heat+hg,0,10)},8*mQty,"deal"));
+    // update supply
+    const supplyKey=`${boro}_${mProd}_d${gs.day}`;
+    const sWs={...world,supply:{...(world.supply||{}),[supplyKey]:((world.supply||{})[supplyKey]||0)+mQty}};
+    setWorld(sWs);saveWorld(sWs);
+    push(`Sold ${mQty}× ${PRODUCTS[mProd].name}. +$${total}. Heat +${hg}.`);
+  };
   const npcTalk=(npc)=>{if(npc.b!==boro){push(`${npc.name} isn't here.`);return;}push(`> talk ${npc.name}`,...npc.lines);setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));updGs(g=>applyXP(g,5,"talk"));};
   const joinCrewPanel=(name,crew)=>{if(gs.crew){push(`Leave first.`);return;}const ws={...world,crews:{...world.crews,[name]:{...crew,members:[...crew.members,gs.name]}}};setWorld(ws);saveWorld(ws);updGs(g=>({...g,crew:name,crewRole:"member"}));push(`Joined ${name}.`);};
   const acceptQuest=(npcId,tier)=>{
@@ -5246,7 +5302,7 @@ export default function NYC(){
               {(world.legends||[]).length>0&&<><div style={{fontSize:7,color:"#444",letterSpacing:2,margin:"8px 0 4px"}}>// LEGENDS</div>{(world.legends||[]).slice(-3).reverse().map((l,i)=><div key={i} style={{fontSize:7,color:"#e9c46a",marginBottom:2}}>{l.badge} {l.name} · P{l.prestige}</div>)}</>}
             </>}
 
-            {tab==="market"&&<MktPanel bId={boro} day={gs.day} prod={mProd} setProd={setMProd} qty={mQty} setQty={setMQty} onBuy={panelBuy} onSell={panelSell} playerProd={gs.product} weather={weather}/>}
+            {tab==="market"&&<MktPanel bId={boro} day={gs.day} prod={mProd} setProd={setMProd} qty={mQty} setQty={setMQty} onBuy={panelBuy} onSell={panelSell} playerProd={gs.product} weather={weather} worldSupply={world.supply}/>}
             {tab==="skills"&&<SkillPanel gs={gs} onUnlock={unlockSkill}/>}
             {tab==="quests"&&<QuestPanel gs={gs} npcs={npcs} onAccept={acceptQuest} onComplete={completeQuest} onAbandon={abandonQuest} boro={boro}/>}
             {tab==="gear"&&<GearPanel gs={gs} onUnequip={unequipSlot} onEquip={(slot)=>{
