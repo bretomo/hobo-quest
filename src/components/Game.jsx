@@ -918,52 +918,150 @@ const getSkillEffect=(gs,key)=>{
 };
 
 // ── RARE EVENTS ───────────────────────────────────────────────────────────────
+// ── MENTAL HEALTH STAGES ──────────────────────────────────────────────────────
+const MENTAL_STAGES = [
+  {min:80, max:100, name:"Stable",     color:"#2a9d8f", icon:"🧠", desc:"Clear-headed. Holding it together."},
+  {min:60, max:79,  name:"Strained",   color:"#e9c46a", icon:"😟", desc:"The stress is showing. Keep moving."},
+  {min:40, max:59,  name:"Fragile",    color:"#f4a261", icon:"😰", desc:"One bad day from the edge. Watch yourself."},
+  {min:20, max:39,  name:"Breaking",   color:"#e63946", icon:"😖", desc:"Barely holding on. You need help."},
+  {min:0,  max:19,  name:"Shattered",  color:"#9d4edd", icon:"💀", desc:"You are not okay. Nobody can see it but you."},
+];
+const getMentalStage=(m)=>MENTAL_STAGES.find(s=>m>=s.min&&m<=s.max)||MENTAL_STAGES[0];
+
+// Mental health consequences by stage
+const MENTAL_CONSEQUENCES = {
+  strained: [
+    "You snap at someone on the corner. They give you space. You regret it.",
+    "Sleep didn't come easy. The thoughts are louder at night.",
+    "You counted your cash three times. The number didn't change.",
+  ],
+  fragile: [
+    "You spent $20 you couldn't afford on something you can't remember buying.",
+    "You stood on the corner for an hour and didn't move any product. Just stood there.",
+    "You got into it with someone over nothing. They walked away confused. So did you.",
+    "You forgot what borough you were heading to. Just walked for a while.",
+  ],
+  breaking: [
+    "You tried to make a deal and couldn't finish your sentences. They walked.",
+    "You missed a corner window because you couldn't get off the stoop.",
+    "Your hands shook so bad you dropped your product. Had to find it all.",
+    "You sat in the dark for two hours and didn't notice the time passing.",
+    "You called someone's name who isn't here anymore. Old habit.",
+  ],
+  shattered: [
+    "You don't know what day it is. You stopped caring somewhere back there.",
+    "You gave away $30 to someone who didn't ask for it. You're not sure why.",
+    "You screamed at a cop car that wasn't moving. Then you ran.",
+    "You woke up behind a dumpster on a block you don't recognize.",
+    "The city feels like it's contracting. Getting smaller every day.",
+  ],
+};
+
+// ── EXPANDED RARE EVENTS ──────────────────────────────────────────────────────
 const RARE_EVENTS = [
-  { id:"lawyer",    prob:0.05, title:"A Suit Steps Out of a Town Car",
-    desc:"A lawyer hands you a card. Says he needs a runner. $150 cash, no questions.",
+  { id:"lawyer",    prob:0.04, title:"A Suit Steps Out of a Town Car",
+    desc:"He's looking at you specifically. Not with contempt. With recognition. His firm does pro bono housing work. He thinks he can help.",
     choices:[
-      {label:"Take the job",  fn:(g)=>({...g,cash:g.cash+150}), outcome:"You do the run. Cash in hand. No idea what you moved."},
-      {label:"Walk away",     fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)+5}}), outcome:"Felt right. Cleaner somehow."},
+      {label:"Take his card",      fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20)}}), outcome:"You take it. Don't know if you'll call. But you have it now."},
+      {label:"Walk away",          fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)+5}}), outcome:"Felt right. Some things you're not ready for yet."},
     ]},
-  { id:"wallet",    prob:0.06, title:"Lost Wallet",
-    desc:"$200 cash. ID for a guy named Marcus Webb. He looks like he has people to go home to.",
+  { id:"wallet",    prob:0.05, title:"Someone Dropped a Wallet",
+    desc:"Fat wallet. $200 minimum inside. License says Marcus Webb, Midtown address. Still warm from his pocket. He's maybe twenty yards ahead.",
     choices:[
-      {label:"Keep it",       fn:(g)=>({...g,cash:g.cash+200}), outcome:"$200 richer. You don't think about Marcus."},
-      {label:"Turn it in",    fn:(g)=>({...g,cash:g.cash+20,survival:{...g.survival,mental:(g.survival.mental||70)+15}}), outcome:"Cop at the precinct gives you $20 finder's fee. Marcus probably never knows."},
+      {label:"Keep it",            fn:(g)=>({...g,cash:g.cash+200,heat:clamp(g.heat+1,0,10)}), outcome:"$200. You needed it. Marcus Webb will cancel his cards by morning."},
+      {label:"Turn it in",         fn:(g)=>({...g,cash:g.cash+20,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)}}), outcome:"Cop at the precinct gives you $20 finder's fee. Felt surprisingly good."},
+      {label:"Return it yourself", fn:(g)=>({...g,cash:g.cash+50,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+25)}}), outcome:"Marcus gives you $50 and won't stop thanking you. You'll think about his face for days."},
     ]},
-  { id:"rat",       prob:0.04, title:"Someone's Talking",
-    desc:"Word is one of your customers has been talking to someone they shouldn't.",
+  { id:"oldcrew",   prob:0.04, title:"Someone From Before",
+    desc:"You recognize the face before you can stop yourself. Old job. Old life. Old version of you. They slow down when they see you.",
     choices:[
-      {label:"Cut them off",  fn:(g)=>({...g,heat:Math.max(0,g.heat-2)}), outcome:"Lose the income. Lose the risk. Smart move."},
-      {label:"Confront them", fn:(g)=>({...g,heat:g.heat+2,cash:g.cash+50}), outcome:"They pay to keep quiet. For now."},
+      {label:"Talk to them",       fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20)}}), outcome:"An hour of feeling human. Hard to put a price on that."},
+      {label:"Keep walking",       fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-5}}), outcome:"They call your name. You don't turn around. Some doors you can't open again."},
     ]},
-  { id:"medkit",    prob:0.07, title:"Marta Left a Bag",
-    desc:"A bag of supplies near the spot you usually sit. No note. Just supplies.",
+  { id:"medkit",    prob:0.06, title:"Church Van Running a First Aid Clinic",
+    desc:"St. Anthony's mobile unit parked on the corner. Nurse asks no questions. She's seen worse. Probably today.",
     choices:[
-      {label:"Take it",       fn:(g)=>({...g,survival:{...g.survival,health:Math.min(100,g.survival.health+30)},inventory:[...g.inventory,"Med kit"]}), outcome:"Health restored. Whoever left it knew what you needed."},
+      {label:"Get treated",        fn:(g)=>({...g,survival:{...g.survival,health:Math.min(100,g.survival.health+35),mental:Math.min(100,(g.survival.mental||70)+10)}}), outcome:"She patches you up properly. Doesn't charge. You feel almost human."},
+      {label:"Move on",            fn:(g)=>g, outcome:"You've gotten this far without asking for help. Habit."},
     ]},
-  { id:"oldcrew",   prob:0.04, title:"A Face From Before",
-    desc:"Someone from your past. Before all this. They almost don't recognize you.",
+  { id:"eviction",  prob:0.04, title:"Clearing Day",
+    desc:"City workers with notices. The spot under the overpass where six people sleep — they're moving everyone out. You know those people.",
     choices:[
-      {label:"Talk to them",  fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20)}}), outcome:"An hour of feeling human. Hard to put a price on that."},
-      {label:"Disappear",     fn:(g)=>({...g,heat:Math.max(0,g.heat-1)}), outcome:"Easier this way. Less explaining."},
+      {label:"Help them move",     fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+10)}}), outcome:"You help carry what you can. Three people remember your name now."},
+      {label:"Watch from a distance", fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-10}}), outcome:"You watch them scatter. That could be you tomorrow. It might be."},
     ]},
-  { id:"eviction",  prob:0.03, title:"Raid on the Block",
-    desc:"City's clearing the encampment. You've got five minutes.",
+  { id:"windfall",  prob:0.03, title:"You Find Something",
+    desc:"Behind a dumpster behind a restaurant. A bag. Sealed. You shake it. Something shifts inside.",
     choices:[
-      {label:"Grab your stuff", fn:(g)=>({...g,survival:{...g.survival,energy:Math.max(0,g.survival.energy-20)}}), outcome:"You got most of it. Lost a few things. Kept moving."},
-      {label:"Help others first",fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+10)},rep:{...g.rep,[Object.keys(g.rep)[0]]:Math.min(5,(g.rep[Object.keys(g.rep)[0]]||0)+1)}}), outcome:"Left a few things behind. Helped three people who couldn't move fast. Worth it."},
+      {label:"Open it",            fn:(g)=>{const r=Math.random();return r>0.6?{...g,cash:g.cash+150}:r>0.3?{...g,product:{...g.product,weed:g.product.weed+3}}:{...g,survival:{...g.survival,health:clamp(g.survival.health-10,0,100)}};}, outcome:"Could be money. Could be product. Could be something you wish you hadn't opened."},
+      {label:"Leave it",           fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)+5}}), outcome:"Some things aren't meant to be found. You keep moving."},
     ]},
-  { id:"windfall",  prob:0.03, title:"Lucky Night",
-    desc:"You were in the right place. Nobody else was around. $80 just sitting there.",
+  { id:"sickness",  prob:0.04, title:"You're Getting Sick",
+    desc:"Started as a sore throat. Now it's everything. Your body is staging a revolt from the cold and the stress.",
     choices:[
-      {label:"Take it",       fn:(g)=>({...g,cash:g.cash+80}), outcome:"No story. Just money."},
+      {label:"Push through",       fn:(g)=>({...g,survival:{...g.survival,health:clamp(g.survival.health-20,0,100),energy:clamp(g.survival.energy-30,0,100)}}), outcome:"You keep moving. Your body disagrees loudly."},
+      {label:"Find somewhere warm", fn:(g)=>({...g,survival:{...g.survival,health:clamp(g.survival.health-5,0,100)}}), outcome:"You lose the day but gain some health back."},
     ]},
-  { id:"sickness",  prob:0.05, title:"You Don't Feel Right",
-    desc:"Been coming on for days. Finally hit. You need to rest or it gets worse.",
+  { id:"letter_home", prob:0.03, title:"You Find a Pay Phone That Works",
+    desc:"One of maybe twelve left in the city. You stand there. You know a number you haven't dialed in a long time.",
     choices:[
-      {label:"Rest it off",   fn:(g)=>({...g,survival:{...g.survival,health:Math.max(0,g.survival.health-15),energy:Math.max(0,g.survival.energy-30)}}), outcome:"Two days lost. Health stabilizes."},
-      {label:"Push through",  fn:(g)=>({...g,survival:{...g.survival,health:Math.max(0,g.survival.health-35)}}), outcome:"Kept moving. Your body paid for it."},
+      {label:"Call",               fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+30)}}), outcome:"They pick up. You don't say much. They don't either. But they picked up."},
+      {label:"Walk past",          fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-5}}), outcome:"You walk past. The number stays in your head all day."},
+    ]},
+  { id:"cop_harassment", prob:0.05, title:"Stop and Frisk",
+    desc:"Two officers. You fit a description. They want to see ID, check your pockets. One of them finds something.",
+    choices:[
+      {label:"Comply",             fn:(g)=>({...g,heat:clamp(g.heat+2,0,10),product:{...g.product,weed:Math.max(0,g.product.weed-1)}}), outcome:"They take what they find. Write nothing down. Tell you to move along."},
+      {label:"Know your rights",   fn:(g)=>({...g,heat:clamp(g.heat+1,0,10),survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+10)}}), outcome:"They're annoyed but they let you go. You carry yourself differently the rest of the day."},
+    ]},
+  { id:"overdose_witness", prob:0.04, title:"Someone's Down",
+    desc:"On the sidewalk. Not sleeping. You know the difference. People are walking around them. Nobody's stopping.",
+    choices:[
+      {label:"Call 911",           fn:(g)=>({...g,heat:clamp(g.heat+1,0,10),survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)}}), outcome:"You call it in. They come. You're gone before they arrive. You think about it for days."},
+      {label:"Stay with them",     fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20),energy:clamp(g.survival.energy-20,0,100)}}), outcome:"You stay until the ambulance arrives. They make it."},
+      {label:"Keep moving",        fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-20}}), outcome:"You keep moving. You tell yourself you couldn't have done anything. You don't fully believe it."},
+    ]},
+  { id:"job_offer",   prob:0.04, title:"A Line Cook Quits Mid-Shift",
+    desc:"Restaurant back door propped open. Manager sweating, looking at his phone. He looks at you. 'You know how to wash dishes? Cash. Tonight only.'",
+    choices:[
+      {label:"Take the shift",     fn:(g)=>({...g,cash:g.cash+60,survival:{...g.survival,energy:clamp(g.survival.energy-40,0,100),hunger:Math.min(100,g.survival.hunger+30),mental:Math.min(100,(g.survival.mental||70)+10)}}), outcome:"$60 cash, a meal, four hours of feeling like a person with a job. Even if just for tonight."},
+      {label:"Pass",               fn:(g)=>g, outcome:"You've got other plans. The manager finds someone else within the hour."},
+    ]},
+  { id:"community_meal", prob:0.05, title:"Block Association Cookout",
+    desc:"Tables on the sidewalk. Rice, chicken, music. Someone waves you over without hesitation.",
+    choices:[
+      {label:"Join them",          fn:(g)=>({...g,survival:{...g.survival,hunger:Math.min(100,g.survival.hunger+50),mental:Math.min(100,(g.survival.mental||70)+25),energy:Math.min(100,g.survival.energy+15)}}), outcome:"You eat. You talk. You forget for an hour why you're out here. That's worth something."},
+      {label:"Take a plate to go", fn:(g)=>({...g,survival:{...g.survival,hunger:Math.min(100,g.survival.hunger+30)}}), outcome:"You grab a plate. Keep moving. The food's good."},
+    ]},
+  { id:"robbery_target", prob:0.04, title:"Three Kids Step to You",
+    desc:"Young. Maybe 17. They want what you have. All of them nervous. One keeps touching his jacket pocket.",
+    choices:[
+      {label:"Give them something", fn:(g)=>({...g,cash:Math.max(0,g.cash-40),survival:{...g.survival,mental:(g.survival.mental||70)+5}}), outcome:"$40 to make it not a situation. Cheaper than the alternative."},
+      {label:"Stand your ground",  fn:(g)=>{const won=Math.random()>0.4;return won?{...g,survival:{...g.survival,health:clamp(g.survival.health-10,0,100)}}:{...g,cash:Math.max(0,g.cash-80),survival:{...g.survival,health:clamp(g.survival.health-25,0,100)}};}, outcome:"Whether that was smart depends on how it goes."},
+    ]},
+  { id:"mental_break",  prob:0.03, title:"Something Snaps",
+    desc:"You can't name what triggered it. Just a moment where the weight of all of it lands at once. You sit down on the curb.",
+    choices:[
+      {label:"Sit with it",        fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+10),energy:clamp(g.survival.energy-20,0,100)}}), outcome:"You stay there a while. Let it pass. It does. You get up."},
+      {label:"Push it down",       fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-15,energy:Math.min(100,g.survival.energy+10)}}), outcome:"You stuff it down and keep moving. Works for now."},
+    ]},
+  { id:"shelter_fire",  prob:0.02, title:"The Shelter Burned",
+    desc:"Smoke on the horizon. The Bronx shelter caught fire overnight. Everyone got out. Barely.",
+    choices:[
+      {label:"Check on people",   fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)}}), outcome:"Everyone's okay. Shaken. Gathered on the sidewalk with everything they own."},
+      {label:"Process it alone",  fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-5}}), outcome:"That was a safe place. Now it isn't. You file that and keep moving."},
+    ]},
+  { id:"found_phone",   prob:0.04, title:"Working Phone on a Bench",
+    desc:"Cracked screen. 22% battery. Locked but emergency call still works. Worth $30 to the right person.",
+    choices:[
+      {label:"Sell it",           fn:(g)=>({...g,cash:g.cash+30}), outcome:"$30. Done."},
+      {label:"Make a call first", fn:(g)=>({...g,cash:g.cash+20,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+20)}}), outcome:"Emergency calls go through. You make one you've been putting off. Then sell it for $20."},
+    ]},
+  { id:"veteran_moment", prob:0.02, title:"A Familiar Sound",
+    desc:"A car backfires on 8th Avenue. You're on the ground before you know why. When you look up, someone's watching.",
+    choices:[
+      {label:"Get up, say nothing", fn:(g)=>({...g,survival:{...g.survival,mental:(g.survival.mental||70)-10}}), outcome:"You get up. Dust off. Keep walking. Nobody says anything. That's the worst part."},
+      {label:"Talk to the stranger", fn:(g)=>({...g,survival:{...g.survival,mental:Math.min(100,(g.survival.mental||70)+15)}}), outcome:"He's a vet too. You talk for an hour. Exchange nothing but recognition. It helps."},
     ]},
 ];
 
@@ -1372,6 +1470,8 @@ function GearPanel({gs,onUnequip,day,boro}){
 
 export default function NYC(){
   const [phase,setPhase]   =useState("boot");
+  const [gameTime,setGameTime] =useState({hour:8,minute:0}); // game starts at 8am
+  const [newspaper,setNewspaper]=useState(null); // today's street report
   const [rareEvent,setRareEvent]   =useState(null);
   const [combat,setCombat]         =useState(null); // active combat state
   const [tutStep,setTutStep]       =useState(0);    // tutorial step index
@@ -1402,6 +1502,8 @@ export default function NYC(){
   const [mIn,setMIn]       =useState("");
   const gsRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
   const chatRef=useRef(null);
+  const worldRef=useRef(null);
+  const boroRef=useRef(null);
   const [unread,setUnread]=useState(0);
   useEffect(()=>{gsRef.current=gs;},[gs]);
   useEffect(()=>{if(feedRef.current)feedRef.current.scrollTop=feedRef.current.scrollHeight;},[feed]);
@@ -1420,6 +1522,83 @@ export default function NYC(){
   useEffect(()=>{(async()=>{try{const w=await loadWorld();if(w)setWorld(w);}catch(e){console.error(e)}})();},[]);
 
   const saveWorld=async(w)=>{try{await sbSaveWorld(w);}catch(e){console.error("saveWorld error",e)}};
+
+  const generateNewspaper=(gs,world)=>{
+    const day=gs.day;
+    const weather=getWeather(day);
+    const players=Object.entries(world.players||{});
+    const pvpLog=world.pvpLog||[];
+    const history=world.worldHistory||[];
+    const corners=world.corners||{};
+    const legends=world.wallOfDead||[];
+
+    // Headlines — pick the most interesting things that happened
+    const headlines=[];
+
+    // Top earner from world history
+    const dealEvents=history.filter(h=>h.type==="deal"||h.type==="quest");
+    if(dealEvents.length>0){
+      const last=dealEvents[dealEvents.length-1];
+      headlines.push(`${last.actor} making moves in ${getBoro(last.boro)?.name}.`);
+    }
+
+    // PvP activity
+    const recentPvp=pvpLog.slice(-3);
+    if(recentPvp.length>0){
+      const pvp=recentPvp[recentPvp.length-1];
+      headlines.push(`${pvp.attacker} and ${pvp.victim} had words in ${getBoro(pvp.boro)?.name}. Only one walked away clean.`);
+    }
+
+    // Corner control
+    const cornerOwners=Object.entries(corners);
+    if(cornerOwners.length>0){
+      const [bId,owner]=cornerOwners[Math.floor(Math.random()*cornerOwners.length)];
+      headlines.push(`${getBoro(bId)?.name} corner still belongs to ${owner}. For now.`);
+    }
+
+    // Captain
+    if(world.captainBoro&&world.captainDay===day){
+      headlines.push(`THE CAPTAIN spotted in ${getBoro(world.captainBoro)?.name}. Stay off the corners.`);
+    }
+
+    // Weather note
+    const weatherNotes={
+      blizzard:"Half the city called out today. Streets belong to whoever's desperate enough to be out there.",
+      rain:"Rain keeps the civilians inside. The corners are yours if you want them.",
+      heatwave:"City's on edge. Heat brings out the worst in everyone. Cops included.",
+      storm:"Lightning hit a transformer on 3rd Ave. Three blocks dark. Opportunity.",
+      fog:"You can't see past the corner tonight. Neither can anyone else.",
+      clear:"Clean day. No excuses.",
+      cloudy:"Gray. Quiet. The kind of day where things happen without witnesses.",
+    };
+    headlines.push(weatherNotes[weather.id]||"Another day out here.");
+
+    // Dead
+    if(legends.length>0){
+      const recent=legends[legends.length-1];
+      headlines.push(`${recent.name} went down on Day ${recent.day}. ${recent.msg||"Gone."}`);
+    }
+
+    // Player count
+    if(players.length>1){
+      headlines.push(`${players.length} people running these streets right now. You know some of them.`);
+    }
+
+    // Personal note
+    const personalNotes=[
+      `You've survived ${day} days. The city expected less of you.`,
+      `Day ${day}. You're still here. That's not nothing.`,
+      `${day} days on the street. You know things now that you didn't before.`,
+      `Day ${day}. The city doesn't care. You do. That's the difference.`,
+    ];
+
+    return {
+      day, weather,
+      headlines: headlines.slice(0,4),
+      personal: personalNotes[Math.floor(Math.random()*personalNotes.length)],
+      date: new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}),
+    };
+  };
 
   const addWorldHistory=(ws,type,actor,detail,bId)=>{
     const entry={type,actor,detail,boro:bId,time:Date.now(),day:ws.players?.[actor]?.day||1};
@@ -1448,6 +1627,7 @@ export default function NYC(){
   // ── REAL-TIME WORLD SYNC ──────────────────────────────────────────────────
   const handleWorldUpdate=(fresh)=>{
     if(!fresh)return;
+    worldRef.current=fresh;
     const prevMsgCount=(wMsgs||[]).length;
     const newMsgs=fresh.messages||[];
     setWorld(fresh);
@@ -1489,6 +1669,17 @@ export default function NYC(){
     try{
       channel=subscribeToWorld((fresh)=>handleWorldUpdate(fresh));
     }catch(e){console.error("Realtime sub error",e);}
+    // Heartbeat — update our lastSeen every 30s so others know we're online
+    const heartbeat=setInterval(()=>{
+      const g=gsRef.current;if(!g)return;
+      const freshWorld=worldRef?.current;if(!freshWorld)return;
+      const ws={...freshWorld,players:{...(freshWorld.players||{}),[g.name]:{
+        level:g.level,borough:boroRef?.current||"manhattan",
+        lastSeen:Date.now(),heat:Math.round(g.heat),
+        archId:g.archetype?.id||"veteran",name:g.name
+      }}};
+      saveWorld(ws);
+    },30000);
     // Fallback poll every 8 seconds (covers any missed real-time events)
     const iv=setInterval(async()=>{
       try{
@@ -1500,6 +1691,20 @@ export default function NYC(){
       clearInterval(iv);
       if(channel)try{unsubscribe(channel);}catch{}
     };
+  },[]);
+
+  // Game clock — 1 real second = 4 game minutes
+  useEffect(()=>{
+    const clockTick=setInterval(()=>{
+      setGameTime(prev=>{
+        let {hour,minute}=prev;
+        minute+=4;
+        if(minute>=60){minute=minute-60;hour++;}
+        if(hour>=26){return{hour:8,minute:0};}
+        return{hour,minute};
+      });
+    },1000);
+    return()=>clearInterval(clockTick);
   },[]);
 
   // survival tick 60s — weather affects drain rates
@@ -1620,10 +1825,28 @@ export default function NYC(){
             setTimeout(()=>setFeed(f=>[...f,`🧛 Thrall income: +$${income}.`]),10);
           }
         }
-        if((g.survival.mental||70)<20&&Math.random()<0.3){
-          // paranoia events at low mental health
-          const paranoia=["You see a cop car. Is it moving? You can't tell. You freeze.","The corner feels wrong. Everyone's watching. Maybe they are.","You lost track of time. How long have you been standing here?"];
-          setTimeout(()=>setFeed(f=>[...f,`🧠 ${paranoia[rnd(0,paranoia.length-1)]}`]),10);
+        const mental=g.survival.mental||70;
+        const mStage=getMentalStage(mental);
+        // Mental health consequences by stage
+        if(mental<60&&Math.random()<0.15){
+          let consequences=[];
+          if(mental<20)consequences=MENTAL_CONSEQUENCES.shattered;
+          else if(mental<40)consequences=MENTAL_CONSEQUENCES.breaking;
+          else if(mental<60)consequences=MENTAL_CONSEQUENCES.fragile;
+          else consequences=MENTAL_CONSEQUENCES.strained;
+          const evt=consequences[rnd(0,consequences.length-1)];
+          setTimeout(()=>setFeed(f=>[...f,``,`${mStage.icon} ${evt}`,``]),10);
+          // At breaking/shattered, automatic bad decisions
+          if(mental<40&&Math.random()<0.3){
+            const badDecision=rnd(0,2);
+            if(badDecision===0&&g.cash>20){
+              setTimeout(()=>setFeed(f=>[...f,`You spent $20 without thinking about it. It's gone.`]),50);
+              return{...g,cash:Math.max(0,g.cash-20)};
+            } else if(badDecision===1&&g.heat<10){
+              setTimeout(()=>setFeed(f=>[...f,`You made a scene. Heat +1.`]),50);
+              return{...g,heat:clamp(g.heat+1,0,10)};
+            }
+          }
         }
         if(g.survival.warmth<15&&w.id==="blizzard")setTimeout(()=>setFeed(f=>[...f,`❄️ Blizzard. Find shelter or you'll freeze.`]),10);
         if(g.survival.health<=0){
@@ -2031,6 +2254,21 @@ export default function NYC(){
       }
       push(`In combat! FIGHT · FLEE · USE [ability]`);return;
     }
+    // rare event requires response before anything else
+    if(rareEvent){
+      const chooseM=C.match(/^CHOOSE ([12])$/);
+      if(chooseM){
+        const idx=parseInt(chooseM[1])-1;
+        const choice=rareEvent.choices[idx];
+        if(!choice){push(`Choose 1${rareEvent.choices.length>1?" or 2":""}.`);return;}
+        updGs(g=>choice.fn(g));
+        push(``,choice.outcome,``);
+        setRareEvent(null);
+        return;
+      }
+      push(`⚡ You need to respond to the situation first.`,`Type CHOOSE 1${rareEvent.choices?.[1]?" or CHOOSE 2":""}`);
+      return;
+    }
     const b=getBoro(boro);
     const weather=getWeather(gs.day);
 
@@ -2045,7 +2283,7 @@ export default function NYC(){
     }
     if(C==="HELP"){
       push(`COMMANDS:`,
-        `  LOOK · STATUS · INVENTORY · SCOUT · ARBITRAGE · USE · ADDICTION`,`  HUSTLE · REST · EAT · FIGHT · CLAIM`,
+        `  LOOK · STATUS · INVENTORY · SCOUT · ARBITRAGE · USE · ADDICTION · NEWSPAPER`,`  HUSTLE · REST · EAT · FIGHT · CLAIM`,
         `  BUY [product] [qty] · SELL [product] [qty]`,`  COOK · SELL COOKED [name] [qty]`,
         `  BUY SAFEHOUSE · UPGRADE SAFEHOUSE`,`  STASH [product] · UNSTASH [product] · REST SAFE · STASH CASH · RETRIEVE CASH`,
         `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
@@ -2105,7 +2343,7 @@ export default function NYC(){
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
         !gs.isFixer&&!gs.isRat?`Hustles today: ${gs.hustleCount||0}/${HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}${gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""}`:"",
         `Crew: ${gs.crew||"solo"} · Corners: ${gs.cornersOwned.join(", ")||"none"}`,
-        `${weather.icon} Weather: ${weather.name}`);return;
+);return;
     }
     if(C==="INVENTORY"){push(`Carrying: ${gs.inventory.join(", ")||"nothing"}.`);return;}
     if(C==="MARKET"){setTab("market");push(`Market open.`);return;}
@@ -2492,6 +2730,9 @@ export default function NYC(){
       const networkIncome=gs.isFixer&&hasSkill(gs,"network_effect")?Object.keys(world.players||{}).length*5:0;
       // reset rat daily infos
       if(gs.isRat)updGs(g=>({...g,informsToday:0}));
+      // mark as away during sleep
+      const sleepWs={...world,players:{...(world.players||{}),[gs.name]:{...(world.players||{})[gs.name],lastSeen:Date.now()-200000}}};
+      setWorld(sleepWs);saveWorld(sleepWs);
       const nightIncome=gs.isVampire&&hasSkill(gs,"ancient_blood")?rnd(30,80):0;
       const crewBonus=gs.crew&&world.crews?.[gs.crew]?rnd(5,15):0;
       const safePassive=Object.entries(world.safehouses||{}).filter(([,s])=>s.owner===gs.name||(gs.crew&&s.crewOwner===gs.crew)).length*rnd(5,10);
@@ -2518,22 +2759,32 @@ export default function NYC(){
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
+
           informsToday:0,patrolEncountered:false,feedUsed:false};
       });
       // reset shelter checkins for new day
       const ws2={...world,shelterCheckins:{}};setWorld(ws2);saveWorld(ws2);
+      // generate newspaper for new day
+      const paper=generateNewspaper(gs,world);
+      setNewspaper(paper);
+
       const dayTransitions=[
         `You close your eyes somewhere between midnight and dawn. The city doesn't stop for you. It never does.`,
         `Sleep comes eventually. Heavy and dreamless, the way it comes when the body is done arguing.`,
         `You find a spot. Not comfortable. Functional. Your eyes close before you finish the thought.`,
         `The night passes the way nights pass out here — slowly, then all at once.`,
       ];
+      setGameTime({hour:8,minute:0});
       push(
         ``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         dayTransitions[rnd(0,dayTransitions.length-1)],
         ``,
-        `DAY ${nextDay}`,
+        `DAY ${nextDay}  ·  THE STREET REPORT`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        ...paper.headlines.map(h=>`  ${h}`),
+        ``,
+        paper.personal,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
         `${income>0?`Corners earned you $${income} while you slept. `:""}`+
@@ -2971,6 +3222,20 @@ export default function NYC(){
         "",
         "USE to intentionally use. Addiction grows with product handling.",
         "Recovery: -1 addiction per 2 days clean.");
+      return;
+    }
+
+    // NEWSPAPER — read today's street report
+    if(C==="NEWSPAPER"||C==="NEWS"||C==="PAPER"){
+      if(!newspaper){
+        push(`No paper yet. SLEEP to get tomorrow's edition.`);
+        // generate one on demand
+        const paper=generateNewspaper(gs,world);
+        setNewspaper(paper);
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`THE STREET REPORT — Day ${gs.day}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,...paper.headlines.map(h=>`  ${h}`),``,paper.personal,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+        return;
+      }
+      push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`THE STREET REPORT — Day ${newspaper.day}`,`${newspaper.date}  ·  ${newspaper.weather.icon} ${newspaper.weather.name}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,...newspaper.headlines.map(h=>`  ${h}`),``,newspaper.personal,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
       return;
     }
 
@@ -3608,6 +3873,19 @@ export default function NYC(){
       push(...lines,``,`Weight limit: ${MAX_CARRY_WEIGHT} units total.`);return;
     }
 
+    // MENTAL — check mental health status
+    if(C==="MENTAL"){
+      const m=gs.survival.mental||70;
+      const stage=getMentalStage(m);
+      push(`${stage.icon} MENTAL HEALTH: ${stage.name.toUpperCase()} (${m}/100)`,
+        stage.desc,
+        m<60?`Consequences active — erratic behavior possible.`:`Holding together.`,
+        ``,
+        `What helps: TALK [npc] · WRITE [letter] · SHELTER · REST · SLEEP`,
+        `What hurts: hunger, cold, heat, withdrawal, isolation`);
+      return;
+    }
+
     push(`Unknown command. Type HELP.`);
   };
 
@@ -3809,6 +4087,17 @@ export default function NYC(){
         {/* TOP BAR */}
         <div style={{borderBottom:"1px solid #111",display:"flex",alignItems:"center",padding:"0 12px",gap:10,background:"#080808",height:38,flexShrink:0}}>
           <div style={{fontFamily:"'VT323',monospace",fontSize:21,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 10px #e9c46a55"}}>HOBO QUEST</div>
+          {gs&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:"#666",marginLeft:8,letterSpacing:1}}>
+            {(()=>{
+              const h=gameTime.hour>=24?gameTime.hour-24:gameTime.hour;
+              const ampm=gameTime.hour<12?"AM":gameTime.hour<24?"PM":"AM";
+              const h12=h===0?12:h>12?h-12:h;
+              const m=String(gameTime.minute).padStart(2,"0");
+              const isNight=gameTime.hour>=20||gameTime.hour<6;
+              const isDawn=gameTime.hour>=6&&gameTime.hour<10;
+              return <span style={{color:isNight?"#9d4edd":isDawn?"#f4a261":"#666"}}>{h12}:{m}{ampm} {isNight?"🌙":isDawn?"🌅":"☀️"}</span>;
+            })()}
+          </div>}
           <div style={{fontSize:8,color:"#191919"}}>|</div>
           <div style={{fontSize:9,color:arch.color}}>{gs.name}</div>
           {gs.crew&&<div style={{fontSize:7,padding:"1px 5px",border:"1px solid #e9c46a33",color:"#e9c46a66"}}>{gs.crew.toUpperCase()}</div>}
@@ -3864,7 +4153,13 @@ export default function NYC(){
             <SrvBar label="WARMTH" value={gs.survival.warmth} icon={gs.isVampire?"🌙":weather.id==="blizzard"?"❄️":"🔥"}/>
             <SrvBar label="HEALTH" value={gs.survival.health} icon="❤️"/>
             <SrvBar label="ENERGY" value={gs.survival.energy} icon="⚡"/>
-            <SrvBar label="MENTAL" value={gs.survival.mental||70} icon="🧠"/>
+            {(()=>{
+              const mStage=getMentalStage(gs.survival.mental||70);
+              return <div style={{marginBottom:4}}>
+                <SrvBar label="MENTAL" value={gs.survival.mental||70} icon={mStage.icon}/>
+                {(gs.survival.mental||70)<60&&<div style={{fontSize:6,color:mStage.color,marginTop:1,fontFamily:"'Share Tech Mono',monospace",padding:"1px 0"}}>{mStage.name.toUpperCase()} — {mStage.desc}</div>}
+              </div>;
+            })()}
             {!gs.isVampire&&(gs.addiction||0)>0&&<div style={{marginBottom:4}}>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:8,fontFamily:"'Share Tech Mono',monospace",color:"#444",marginBottom:2}}>
                 <span>{CLASS_SUBSTANCE[gs.archetype?.id||"veteran"]?.icon} ADDICT</span>
@@ -3962,11 +4257,19 @@ export default function NYC(){
                   <div style={{fontSize:6,color:"#555"}}>{wMsgs.length} msgs</div>
                 </div>
                 <div style={{marginBottom:6,display:"flex",gap:3,flexWrap:"wrap"}}>
-                  {Object.entries(world.players||{}).map(([n,d])=>(
+                  {Object.entries(world.players||{})
+                  .filter(([n,d])=>(Date.now()-(d.lastSeen||0))<120000) // online = active in last 2 mins
+                  .map(([n,d])=>(
                     <div key={n} style={{fontSize:6,padding:"1px 4px",border:`1px solid ${aColors[d.archId]||"#2a9d8f"}55`,color:aColors[d.archId]||"#2a9d8f"}}>
                       {n} {getBoro(d.borough)?.short||"?"}
+                      <span style={{color:"#2a9d8f",marginLeft:2}}>●</span>
                     </div>
                   ))}
+                {Object.entries(world.players||{}).filter(([n,d])=>(Date.now()-(d.lastSeen||0))>=120000&&(Date.now()-(d.lastSeen||0))<3600000).length>0&&(
+                  <div style={{fontSize:6,color:"#333",marginTop:2}}>
+                    + {Object.entries(world.players||{}).filter(([n,d])=>(Date.now()-(d.lastSeen||0))>=120000&&(Date.now()-(d.lastSeen||0))<3600000).length} away
+                  </div>
+                )}
                 </div>
                 <div id="chat-msgs" style={{overflowY:"auto",marginBottom:6,display:"flex",flexDirection:"column",gap:4,maxHeight:240,minHeight:60}}>
                   {wMsgs.length===0&&<div style={{color:"#333",fontSize:7}}>No messages. Say something.</div>}
