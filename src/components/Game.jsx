@@ -1748,6 +1748,10 @@ export default function NYC(){
   const [pulse,setPulse]   =useState(false);
   const [wMsgs,setWMsgs]   =useState([]);
   const [mIn,setMIn]       =useState("");
+  const [chatStrip,setChatStrip]=useState(true); // persistent bottom chat strip
+  const [toast,setToast]   =useState(null);      // floating notification
+  const [crewMsg,setCrewMsg]=useState(false);    // crew-only chat mode
+  const [typingUser,setTypingUser]=useState(null);// typing indicator
   const gsRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
   const chatRef=useRef(null);
   const worldRef=useRef(null);
@@ -1905,10 +1909,18 @@ export default function NYC(){
     // auto scroll chat if open
     setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
     // count unread from others
-    if(newMsgs.length>prevMsgCount&&tab!=="chat"){
+    if(newMsgs.length>prevMsgCount){
       const newOnes=newMsgs.slice(prevMsgCount);
       const fromOthers=newOnes.filter(m=>m.from!==gsRef.current?.name);
-      if(fromOthers.length>0)setUnread(u=>u+fromOthers.length);
+      if(fromOthers.length>0){
+        if(tab!=="chat")setUnread(u=>u+fromOthers.length);
+        // Show toast for latest message
+        const latest=fromOthers[fromOthers.length-1];
+        if(latest&&latest.from){
+          setToast({from:latest.from,text:latest.text,arch:latest.arch,time:Date.now()});
+          setTimeout(()=>setToast(null),4000);
+        }
+      }
     }
     setPulse(true);setTimeout(()=>setPulse(false),800);
     const g=gsRef.current;if(!g)return;
@@ -2525,6 +2537,31 @@ export default function NYC(){
   const handleCmd=(e)=>{
     if(e.key!=="Enter"||!cmd.trim())return;
     const raw=cmd.trim();const C=raw.toUpperCase();
+    // / prefix sends directly to chat
+    if(raw.startsWith("/")){
+      const msgText=raw.slice(1).trim();
+      if(!msgText||!gs)return;
+      setCmd("");
+      const isCrew=raw.startsWith("//");
+      const actualText=isCrew?raw.slice(2).trim():msgText;
+      if(!actualText)return;
+      const entry={from:gs.name,text:actualText,time:Date.now(),boro,arch:gs.archetype?.id||"veteran",crew:isCrew?gs.crew:null};
+      const newMsgs2=[...(world.messages||[]).slice(-49),entry];
+      const ws={...world,messages:newMsgs2};
+      setWorld(ws);setWMsgs(newMsgs2);
+      if(isCrew&&gs.crew){
+        // crew-only: send via playerAlerts to crew members
+        const crewMembers=Object.keys(world.players||{}).filter(n=>world.players[n]?.crew===gs.crew&&n!==gs.name);
+        let cws=ws;
+        crewMembers.forEach(n=>{cws=notifyPlayers(cws,gs.name,`[CREW] ${gs.name}: ${actualText}`);});
+        saveWorld(cws);
+        push(`[CREW] You: ${actualText}`);
+      } else {
+        saveWorld(ws);
+        try{sendChatMessage(entry);}catch{}
+      }
+      return;
+    }
     setCmd("");push(`> ${raw}`);
     if(!gs)return;
     // CHAOS ENGINE
@@ -5190,7 +5227,7 @@ export default function NYC(){
         {/* RIGHT */}
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden",width:185,flexShrink:0}}>
           <div style={{display:"flex",borderBottom:"1px solid #111",background:"#080808"}}>
-            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":"#252525",borderBottom:tab===id?"2px solid #e9c46a":"2px solid transparent",cursor:"pointer",minWidth:24}}>{label}</div>)}
+            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":id==="chat"&&unread>0?"#e63946":"#252525",borderBottom:tab===id?"2px solid #e9c46a":id==="chat"&&unread>0?"2px solid #e63946":"2px solid transparent",animation:id==="chat"&&unread>0?"wanted 1s infinite":"none",cursor:"pointer",minWidth:24}}>{label}</div>)}
           </div>
           <div style={{flex:1,padding:9,overflowY:"auto"}}>
 
@@ -5277,9 +5314,10 @@ export default function NYC(){
                 </div>
                 <div id="chat-msgs" style={{overflowY:"auto",marginBottom:6,display:"flex",flexDirection:"column",gap:4,maxHeight:240,minHeight:60}}>
                   {wMsgs.length===0&&<div style={{color:"#333",fontSize:7}}>No messages. Say something.</div>}
-                  {wMsgs.slice(-30).map((m,i)=>{
+                  {(wMsgs||[]).slice(-30).filter(m=>!m.crewOnly||(m.crewOnly===gs.crew)||m.from===gs.name).map((m,i)=>{
                     const isMe=m.from===gs.name;
-                    const mc=aColors[m.arch]||"#2a9d8f";
+                    const isCrew=!!m.crewOnly;
+                    const mc=isCrew?"#06d6a0":aColors[m.arch]||"#2a9d8f";
                     const ts=m.time?new Date(m.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"";
                     if(!m.from)return <div key={i} style={{color:"#444",fontSize:7,textAlign:"center",fontStyle:"italic"}}>{m.text}</div>;
                     return <div key={i} style={{borderLeft:`2px solid ${isMe?"#e9c46a":mc}`,paddingLeft:5,paddingBottom:2}}>
@@ -5292,7 +5330,7 @@ export default function NYC(){
                   })}
                 </div>
                 <div style={{display:"flex",gap:4,borderTop:"1px solid #1a1a1a",paddingTop:5}}>
-                  <input value={mIn} onChange={e=>setMIn(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")sendMsg();}} placeholder="say something..." maxLength={200} autoComplete="off"
+                  <input value={mIn} onChange={e=>{setMIn(e.target.value);}} onKeyDown={e=>{if(e.key==="Enter")sendMsg();}} placeholder="say something..." maxLength={200} autoComplete="off"
                     style={{flex:1,background:"#0a0a0a",border:"1px solid #252525",color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",fontSize:9,padding:"5px 7px",outline:"none"}}/>
                   <div onClick={sendMsg} style={{padding:"5px 8px",background:"#e9c46a22",border:"1px solid #e9c46a55",color:"#e9c46a",fontSize:10,cursor:"pointer",flexShrink:0}}>→</div>
                 </div>
@@ -5421,10 +5459,52 @@ export default function NYC(){
 
         </div>{/* end MAIN CONTENT ROW */}
 
+        {/* TOAST NOTIFICATION */}
+        {toast&&(()=>{
+          const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b",drifter:"#c9a96e",schizo:"#c77dff",hooker:"#ff4d8d"};
+          const mc=aColors[toast.arch]||"#2a9d8f";
+          return <div style={{position:"absolute",top:50,right:16,zIndex:100,background:"#0d0f0f",border:`1px solid ${mc}44`,padding:"6px 10px",maxWidth:220,animation:"fadeIn 0.2s ease",pointerEvents:"none"}}>
+            <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              <span style={{color:mc,fontSize:8,fontFamily:"'Share Tech Mono',monospace",fontWeight:"bold"}}>📡 {toast.from}</span>
+              <span style={{color:"#555",fontSize:6}}>{new Date(toast.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</span>
+            </div>
+            <div style={{color:"#bbb",fontSize:8,marginTop:2,lineHeight:1.4,wordBreak:"break-word"}}>{toast.text}</div>
+          </div>;
+        })()}
+
+        {/* PERSISTENT CHAT STRIP */}
+        {gs&&chatStrip&&(()=>{
+          const aColors={veteran:"#e63946",schemer:"#f4a261",ghost:"#a8dadc",hustler:"#2a9d8f",junkie:"#e9c46a",undocumented:"#f4a261",vampire:"#9d4edd",fixer:"#06d6a0",rat:"#ff6b6b",drifter:"#c9a96e",schizo:"#c77dff",hooker:"#ff4d8d"};
+          const recentMsgs=(wMsgs||[]).filter(m=>m.from&&m.from!==gs.name).slice(-3);
+          return <div style={{borderTop:"1px solid #111",background:"#060606",padding:"3px 12px",flexShrink:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+              <div style={{fontSize:6,color:"#333",letterSpacing:1}}>
+                📡 WORLD CHAT
+                {unread>0&&<span style={{color:"#e63946",marginLeft:4,animation:"wanted 1s infinite"}}> {unread} NEW</span>}
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <div onClick={()=>setChatStrip(false)} style={{fontSize:6,color:"#222",cursor:"pointer"}}>hide</div>
+                <div onClick={()=>{setTab("chat");setUnread(0);if(inputRef.current)inputRef.current.focus();}} style={{fontSize:6,color:"#444",cursor:"pointer"}}>expand ↗</div>
+              </div>
+            </div>
+            {recentMsgs.length===0&&<div style={{fontSize:7,color:"#1a1a1a",fontStyle:"italic"}}>No recent messages. Type /message to chat.</div>}
+            {recentMsgs.map((m,i)=>{
+              const mc=aColors[m.arch]||"#2a9d8f";
+              return <div key={i} style={{display:"flex",gap:5,alignItems:"baseline",marginBottom:1}}>
+                <span style={{color:mc,fontSize:7,flexShrink:0,minWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.from}</span>
+                <span style={{color:"#888",fontSize:8,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{m.text}</span>
+                <span style={{color:"#222",fontSize:6,flexShrink:0}}>{m.time?new Date(m.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</span>
+              </div>;
+            })}
+            {typingUser&&<div style={{fontSize:6,color:"#333",fontStyle:"italic"}}>{typingUser} is typing...</div>}
+          </div>;
+        })()}
+        {gs&&!chatStrip&&<div onClick={()=>setChatStrip(true)} style={{borderTop:"1px solid #111",background:"#060606",padding:"3px 12px",fontSize:6,color:"#333",cursor:"pointer",flexShrink:0}}>📡 show chat strip</div>}
+
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
           <span style={{color:"#f4d03f",fontSize:13,flexShrink:0}}>▶</span>
-          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="type a command  (HELP for full list)" autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#f4d03f",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
+          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder="command  ·  /message to chat  ·  //message for crew" autoFocus onBlur={e=>{setTimeout(()=>{try{e.target.focus();}catch{}},100);}} style={{flex:1,background:"transparent",border:"none",outline:"none",color:"#f4d03f",fontFamily:"'Share Tech Mono',monospace",fontSize:14,letterSpacing:1,minWidth:0}}/>
           <div onClick={()=>inputRef.current?.focus()} style={{fontSize:8,color:"#666",padding:"4px 8px",border:"1px solid #1a1a1a",cursor:"pointer",flexShrink:0}}>ENTER ↵</div>
         </div>
 
