@@ -96,6 +96,8 @@ const HUSTLE_DAILY_MAX = {
   vampire:      2,   // not their preferred method
   fixer:        2,   // brokers deals instead
   rat:          2,   // handler pays them instead
+  drifter:      3,
+  schizo:       99,  // no limit — chaos fires every time anyway
 };
 // Diminishing returns multiplier by hustle number today
 const HUSTLE_PAYOUT_MULT = [1.0, 0.7, 0.45, 0.25, 0.10];
@@ -160,6 +162,10 @@ const ARCHETYPES = [
   { id:"rat", name:"THE RAT", icon:"🐀", color:"#ff6b6b", desc:"Plays both sides. The most dangerous thing on the street.", stats:{hustle:6,streetiq:10,toughness:2,charm:7,heat:5}, gear:["Handler's number","Burner","Small recorder"], xp:{scout:2,talk:1},
     startCash:30, isRat:true,
     special:"MORALLY COMPLEX. Informs on players for cash. Files tips that spike other players' heat. Lives in permanent social danger — if exposed, everyone hunts you. Double agent mechanic." },
+  { id:"schizo", name:"THE PROPHET", icon:"🌀", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
+  { id:"drifter", name:"THE DRIFTER", icon:"🐕", color:"#c9a96e", desc:"You and your dog. The city can't take what you don't have.", stats:{hustle:5,streetiq:6,toughness:6,charm:9,heat:0}, gear:["Leash & collar","Cardboard sign","Sleeping bag"], xp:{panhandle:3,talk:2},
+    startCash:15, isDrifter:true,
+    special:"Your dog changes everything. Highest panhandle yield in the game — people give to the dog. Dog can SCOUT ahead, GUARD your stash, and DISTRACT during encounters. Hard mode: no shelters (dog not allowed), low cash, but the dog boosts mental health passively and NPCs trust you more." },
 ];
 const NPCS = [
   {id:"ray", name:"Ray", role:"Old-timer", b:"manhattan", icon:"👴", lines:[
@@ -559,6 +565,26 @@ const LEVEL_STAT_GROWTH = {
   hustler:      ["hustle","streetiq","hustle","charm","hustle","streetiq","hustle","charm","streetiq","hustle"],
   junkie:       ["charm","streetiq","charm","hustle","streetiq","charm","toughness","hustle","charm","streetiq"],
   undocumented: ["streetiq","hustle","charm","streetiq","toughness","hustle","streetiq","charm","hustle","streetiq"],
+  schizo:       [
+    {id:"pattern_recognition",name:"Pattern Recognition",level:1,cost:1,desc:"LOOK visions 30% more likely to yield real cash.",effect:{visionBonus:0.3}},
+    {id:"voice_guidance",    name:"Voice Guidance",     level:2,cost:1,desc:"Chaos engine good outcomes increase by 10%.",         effect:{goodChaos:0.1}},
+    {id:"unpredictable",     name:"Unpredictable",      level:3,cost:1,desc:"In combat: erratic movement. +2 attack, enemy -2 AC.", effect:{erraticCombat:true}},
+    {id:"the_knowing",       name:"The Knowing",        level:4,cost:2,desc:"VISION command gives true player location once per day.",effect:{trueVision:true}},
+    {id:"blessed_chaos",     name:"Blessed Chaos",      level:5,cost:2,desc:"Good chaos outcomes increase to 40% of chaos events.", effect:{blessedChaos:true}},
+    {id:"street_prophet",    name:"Street Prophet",     level:6,cost:2,desc:"NPCs give you items or cash during TALK.",             effect:{prophetBonus:true}},
+    {id:"beyond_fear",       name:"Beyond Fear",        level:7,cost:3,desc:"Cops hesitate. Wanted threshold effectively +2.",       effect:{fearless:true}},
+    {id:"full_revelation",   name:"Full Revelation",    level:8,cost:3,desc:"At Shattered mental health, all stats +3.",            effect:{revelation:true}},
+  ],
+  drifter:      [
+    {id:"good_boy",      name:"Good Boy",      level:1, cost:1, desc:"Dog gives +15 charm to all NPC interactions.",    effect:{charmBonus:2}},
+    {id:"begging_eyes",  name:"Begging Eyes",  level:2, cost:1, desc:"PANHANDLE earns 50% more. People give to the dog.",effect:{panhandleBonus:0.5}},
+    {id:"guard_dog",     name:"Guard Dog",     level:3, cost:1, desc:"GUARD command. Dog watches your stash while you sleep.",effect:{guardBonus:true}},
+    {id:"dog_scout",     name:"Dog Scout",     level:4, cost:2, desc:"SCOUT DOG — dog runs ahead, returns with cop intel.", effect:{scoutBonus:true}},
+    {id:"pack_bond",     name:"Pack Bond",     level:5, cost:2, desc:"Mental health never drops below 20 while your dog is with you.",effect:{mentalFloor:20}},
+    {id:"street_vet",    name:"Street Vet",    level:6, cost:2, desc:"NPCs trust you faster. +1 rep per TALK.",            effect:{repBonus:1}},
+    {id:"two_of_us",     name:"Two of Us",     level:7, cost:3, desc:"Dog joins combat. +3 attack, enemy -2 AC.",          effect:{dogCombat:true}},
+    {id:"famous_dog",    name:"Famous Dog",    level:8, cost:3, desc:"Dog is famous. PANHANDLE earns 2x in home borough.", effect:{famousBonus:true}},
+  ],
   vampire:      ["charm","toughness","charm","streetiq","toughness","charm","hustle","toughness","charm","streetiq"],
   fixer:        ["streetiq","charm","hustle","streetiq","charm","streetiq","hustle","charm","streetiq","hustle"],
   rat:          ["streetiq","streetiq","charm","hustle","streetiq","charm","streetiq","toughness","hustle","streetiq"],
@@ -968,16 +994,63 @@ const getCombatStats=(gs)=>{
 
 // Enemy stat blocks by type
 const ENEMIES = {
-  thug:     {name:"Street Thug",   ac:10, hp:rnd(8,14),  attackBonus:2, damage:[4],  xp:15, loot:[10,25],
-    desc:"Young, hungry, running with whatever crew will have him. Hoodie up, eyes scanning. He's not dangerous because he's skilled. He's dangerous because he has nothing to lose."},
-  dealer:   {name:"Rival Dealer",  ac:11, hp:rnd(10,16), attackBonus:3, damage:[6],  xp:20, loot:[20,50],
-    desc:"This is his corner and he's been on it for four years. He's not going anywhere. Neither are you, apparently. This is about to become a problem for one of you."},
-  enforcer: {name:"The Enforcer",  ac:13, hp:rnd(18,26), attackBonus:5, damage:[8],  xp:40, loot:[40,100],
-    desc:"Six-two, two-forty, hands like sledgehammers. He collects debts for people you don't want to owe. You don't owe him anything, but you're in his way, which amounts to the same thing."},
-  cop:      {name:"Plainclothes",  ac:14, hp:rnd(16,22), attackBonus:4, damage:[6],  xp:0,  loot:[0,0],
-    desc:"Badge clipped inside his jacket where you can't see it. Wrong shoes — they always have the wrong shoes. He's been watching you for two blocks. Now he's done watching."},
-  kingpin:  {name:"The Kingpin",   ac:15, hp:rnd(30,40), attackBonus:7, damage:[10], xp:80, loot:[100,250],
-    desc:"He controls three boroughs and fourteen corners and he hasn't left this block in six months because he doesn't have to. Today something changed. He's out here himself. That means something went very wrong somewhere."},
+  thug:     {name:"Street Thug",   ac:10,hp:rnd(8,14),  attackBonus:2,damage:[4],  xp:15, loot:[10,25],
+    desc:"Young, nothing to lose, running with whatever crew will have him."},
+  dealer:   {name:"Rival Dealer",  ac:11,hp:rnd(10,16), attackBonus:3,damage:[6],  xp:20, loot:[20,50],
+    desc:"Four years on this corner. He is not leaving. Neither are you."},
+  enforcer: {name:"The Enforcer",  ac:13,hp:rnd(18,26), attackBonus:5,damage:[8],  xp:40, loot:[40,100],
+    desc:"Six-two, two-forty, hands like sledgehammers. Collects debts for people you do not want to owe."},
+  cop:      {name:"Plainclothes",  ac:14,hp:rnd(16,22), attackBonus:4,damage:[6],  xp:0,  loot:[0,0],
+    desc:"Wrong shoes. Always the wrong shoes. Two blocks back. Now done watching."},
+  kingpin:  {name:"The Kingpin",   ac:15,hp:rnd(30,40), attackBonus:7,damage:[10], xp:80, loot:[100,250],
+    desc:"Controls three boroughs. Has not left this block in six months. Today is different."},
+  boss_iceman:  {name:"Iceman",       ac:16,hp:rnd(45,60),attackBonus:8, damage:[12],xp:150,loot:[200,500],boss:true,special:"freeze",
+    desc:"Former cartel logistics. Runs product through four boroughs without one arrest in eleven years.",
+    intro:"A black Suburban pulls up. He steps out alone. He does not need backup.",
+    winMsg:"You somehow got out of that. You will be talking about this for years.",
+    fleeMsg:"Iceman watches you go with something that might be respect."},
+  boss_duchess: {name:"The Duchess",  ac:15,hp:rnd(40,55),attackBonus:7, damage:[10],xp:130,loot:[150,400],boss:true,special:"counter",
+    desc:"Runs the Bronx wholesale from a nail salon on 161st. Third-degree black belt. Absolutely no mercy.",
+    intro:"She closes the ledger. You have been skimming from my supply chain. Not a question.",
+    winMsg:"She went down. Powerful enemy made. Four hundred dollars gained.",
+    fleeMsg:"She lets you go. That is almost more terrifying."},
+  boss_prophet: {name:"The Prophet",  ac:14,hp:rnd(38,50),attackBonus:6, damage:[10],xp:120,loot:[100,300],boss:true,special:"inspire",
+    desc:"Runs a crew through a storefront church. Has ordered actual hits. The contradiction does not bother him.",
+    intro:"The Lord puts obstacles in our path for a reason. I am yours today.",
+    winMsg:"You beat a man of God in a fistfight on the street. You will think about that.",
+    fleeMsg:"Come back when you are ready. He means it."},
+  boss_ghost:   {name:"Ghost",        ac:17,hp:rnd(35,48),attackBonus:9, damage:[8], xp:140,loot:[180,450],boss:true,special:"vanish",
+    desc:"Nobody knows his real name. DEA has a file but no photo. Standing right in front of you.",
+    intro:"You have something that belongs to someone I work for.",
+    winMsg:"You beat someone the DEA could not catch. That will be your personality for a week.",
+    fleeMsg:"He does not chase. He already knows where you sleep."},
+  boss_mama:    {name:"Mama Rosario", ac:13,hp:rnd(42,55),attackBonus:6, damage:[9], xp:125,loot:[130,350],boss:true,special:"call_sons",
+    desc:"Sixty-three. Runs Queens from her kitchen table. Her sons run street level. Decisions come from her.",
+    intro:"She is outside in her housecoat at 11am. You put your hands on my son.",
+    winMsg:"You got into a street fight with a grandmother and won. Take your money.",
+    fleeMsg:"Run then. I know where you will be."},
+  boss_cole:    {name:"Sgt. Cole",    ac:15,hp:rnd(40,52),attackBonus:8, damage:[11],xp:135,loot:[160,400],boss:true,special:"suppress",
+    desc:"Two tours. Purple Heart. Could not find work when he got back. Now does the same thing here.",
+    intro:"He sizes you up in two seconds. You are in the wrong place.",
+    winMsg:"Fighting a combat veteran and coming out on top. Your hands are still shaking.",
+    fleeMsg:"Smart. That is all."},
+  boss_captain: {name:"The Captain",  ac:18,hp:rnd(60,80),attackBonus:10,damage:[14],xp:300,loot:[400,800],boss:true,special:"authority",
+    desc:"Most decorated detective in the borough. Three commendations. Completely compromised. Watching you for weeks.",
+    intro:"He flashes the badge. I think we need to have a conversation.",
+    winMsg:"You beat a decorated NYPD detective. Heat max. Legend citywide. World knows by morning.",
+    fleeMsg:"He lets you go. Every cop has your description."},
+};
+const getBossChance=(lv,heat)=>Math.min(0.25,(lv/10)*0.15+(heat/10)*0.1);
+const BOSS_POOL=["boss_iceman","boss_duchess","boss_prophet","boss_ghost","boss_mama","boss_cole"];
+const applyBossSpecial=(special,playerHp,enemyHp,log)=>{
+  if(special==="freeze"&&Math.random()<0.3){log.push("Iceman freezes you. Skip this round.");return{playerHp,enemyHp,skip:true};}
+  if(special==="counter"&&Math.random()<0.35){const d=rnd(4,8);log.push("Duchess counters: -"+d+"hp.");return{playerHp:Math.max(1,playerHp-d),enemyHp};}
+  if(special==="inspire"&&enemyHp<30&&Math.random()<0.5){log.push("Prophet heals 8hp.");return{playerHp,enemyHp:enemyHp+8};}
+  if(special==="vanish"&&Math.random()<0.25){log.push("Ghost vanishes. Attack misses.");return{playerHp,enemyHp,missedEnemy:true};}
+  if(special==="call_sons"&&Math.random()<0.3){const d=rnd(6,12);log.push("Mama's sons hit for "+d+".");return{playerHp:Math.max(1,playerHp-d),enemyHp};}
+  if(special==="suppress"&&Math.random()<0.4){log.push("Cole suppresses. Attack penalty.");return{playerHp,enemyHp,suppressed:true};}
+  if(special==="authority"&&Math.random()<0.4){log.push("Captain's authority stops you cold.");return{playerHp,enemyHp,skip:true};}
+  return{playerHp,enemyHp};
 };
 
 // Special abilities per archetype — usable in combat
@@ -996,6 +1069,14 @@ const COMBAT_ABILITIES = {
                  {id:"community",    name:"Community",     cooldown:5, desc:"A stranger intervenes. Enemy stunned 2 rounds.", fn:(gs,enemy)=>{return{log:[`🤝 A stranger steps in. "${enemy.name}, leave them alone." Stunned 2 rounds.`],enemyDmg:0,selfDmg:0,stunEnemy:true,stunRounds:2};}}],
   fixer:        [{id:"bribe_out",    name:"Bribe Out",     cooldown:3, desc:"Pay enemy $20 to end combat. Always works.", fn:(gs,enemy)=>{return{log:[`🔧 BRIBE OUT. You hand them $20. "Not worth it." They walk.`],enemyDmg:0,selfDmg:0,endCombat:true,cashCost:20};}},
                  {id:"call_backup",  name:"Call Backup",   cooldown:5, desc:"Call a contact. Enemy flees immediately.", fn:(gs,enemy)=>{return{log:[`📱 CALL BACKUP. You make one call. ${enemy.name} doesn't want those problems. Gone.`],enemyDmg:0,selfDmg:0,endCombat:true,cashCost:0};}}],
+  schizo:       [
+    {id:"unhinged",  name:"Unhinged",  cooldown:2, desc:"Completely random attack. d4 to d20 — even you don't know.",
+      fn:(gs,enemy)=>{const dice=[4,6,8,10,12,20];const d=dice[rnd(0,dice.length-1)];const r=rollStr(d,1);const crit=d===20;return{log:["🌀 UNHINGED! Rolling a d"+d+". "+r.total+" damage."+(crit?" NATURAL 20. The voices called it.":"")],enemyDmg:crit?r.total*2:r.total,selfDmg:0};}},
+    {id:"rambling",  name:"Rambling",  cooldown:4, desc:"Talk at them for 3 minutes. So confusing they skip 2 turns.",
+      fn:(gs,enemy)=>{return{log:["🌀 RAMBLING. You explain a seventeen-part theory. "+enemy.name+" genuinely cannot process this."],enemyDmg:0,selfDmg:0,stunEnemy:true,stunRounds:2};}},
+  ],
+  drifter:      [{id:"sic_em",    name:"Sic Em",     cooldown:3, desc:"Dog attacks. 1d8 guaranteed hit. Enemy distracted next round.", fn:(gs,enemy)=>{const r=rollStr(8,1);return{log:["🐕 Your dog launches. "+r.total+" damage. Enemy is rattled."],enemyDmg:r.total,selfDmg:0,autoHit:true,stunEnemy:true};}},
+                 {id:"good_distraction",name:"Distraction",cooldown:4, desc:"Dog distracts. Enemy -4 to attack for 2 rounds. You attack free.",fn:(gs,enemy)=>{return{log:["🐕 Your dog barks and weaves. "+enemy.name+" loses track of you."],enemyDmg:0,selfDmg:0,blindEnemy:true,stunRounds:2};}}],
   rat:          [{id:"rat_out",      name:"Rat Out",       cooldown:3, desc:"Snitch mid-fight. Cops arrive. Enemy flees, you get heat +2.", fn:(gs,enemy)=>{return{log:[`🐀 RAT OUT. You call it in. ${enemy.name} scatters. Cops incoming.`],enemyDmg:0,selfDmg:0,endCombat:true,heatCost:2};}},
                  {id:"sucker_stab",  name:"Sucker Stab",   cooldown:4, desc:"Stab from behind. 3d4 guaranteed hit, no AC check.", fn:(gs,enemy)=>{const r=rollStr(4,3);return{log:[`🐀 SUCKER STAB! From behind. ${r.rolls.join("+")}=${r.total}. They didn't see it coming.`],enemyDmg:r.total,selfDmg:0,autoHit:true};}}],
   vampire:      [{id:"bite",         name:"Bite",          cooldown:3, desc:"Drain life. 2d6 damage, steal that HP for yourself.", fn:(gs,enemy)=>{const r=rollStr(6,2);const dmg=r.total+mod(gs.stats?.charm||5);const drain=Math.floor(dmg/2);return{log:[`🧛 BITE! Fangs in. ${r.rolls.join("+")}=${r.total}+${mod(gs.stats?.charm||5)} charm = ${dmg} damage dealt. +${drain}hp drained back to you.`],enemyDmg:dmg,selfDmg:-drain};}},
@@ -1340,7 +1421,7 @@ function CharPortrait({gs}){
           <span style={{fontSize:18}}>{id.icon}</span>
           <div>
             <div style={{color,fontFamily:"'Bebas Neue',sans-serif",fontSize:14,letterSpacing:2,lineHeight:1}}>{gs.name}</div>
-            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}{gs.title?` · ${gs.title}`:""}</div>
+            <div style={{color:`${color}88`,fontSize:7,letterSpacing:1}}>{gs.archetype?.name}{gs.title?` · ${gs.title}`:""}{gs.isDrifter&&gs.dogName?` 🐕 ${gs.dogName}`:""}</div>
           </div>
         </div>
         <div style={{textAlign:"right"}}>
@@ -1890,7 +1971,7 @@ export default function NYC(){
           warmth:clamp(p.survival.warmth-warmDrain,0,100),
           health:p.survival.hunger<15?clamp(p.survival.health-5,0,100):p.survival.health,
           energy:clamp(p.survival.energy-2,0,100),
-          mental:clamp((p.survival.mental||70)-mentalDrain+mentalBoost,0,100),
+          mental:clamp((p.survival.mental||70)-mentalDrain+mentalBoost+dogMentalBoost,0,100),
         },heat:clamp(p.heat-0.1-safeHeatDrain,0,10)};
         if(g.survival.warmth===0)g.survival.health=clamp(g.survival.health-3,0,100);
         if(g.isUndoc){
@@ -1994,7 +2075,8 @@ export default function NYC(){
         const mental=g.survival.mental||70;
         const mStage=getMentalStage(mental);
         // Mental health consequences by stage
-        if(mental<60&&Math.random()<0.15){
+        if(g.isSchizo&&mental<20){setTimeout(()=>setFeed(f=>[...f,"🌀 THE VOICES ARE LOUDEST NOW. Everything is clearer."]),10);}
+        if(mental<60&&Math.random()<0.15&&!g.isSchizo){
           let consequences=[];
           if(mental<20)consequences=MENTAL_CONSEQUENCES.shattered;
           else if(mental<40)consequences=MENTAL_CONSEQUENCES.breaking;
@@ -2126,6 +2208,9 @@ export default function NYC(){
       isUndoc:arch.id==="undocumented",
       isHustler:arch.id==="hustler",
       isVampire:arch.id==="vampire",
+      isSchizo:arch.id==="schizo",
+      isDrifter:arch.id==="drifter",
+      dogName:arch.id==="drifter"?["Biscuit","Smoke","Patches","Duke","Gus","Lucky","Shadow","Boo"][rnd(0,7)]:null,
       isFixer:arch.id==="fixer",
       isRat:arch.id==="rat",
       thralls:[],feedCount:0,feedUsed:false,
@@ -2410,6 +2495,33 @@ export default function NYC(){
     const raw=cmd.trim();const C=raw.toUpperCase();
     setCmd("");push(`> ${raw}`);
     if(!gs)return;
+    // CHAOS ENGINE
+    if(gs.isSchizo&&Math.random()<0.20&&C!=="LOOK"&&C!=="HELP"&&C!=="STATUS"&&C!=="SLEEP"&&C!=="VISION"){
+      const bad=[
+        ()=>{const a=rnd(5,20);updGs(g=>({...g,cash:Math.max(0,g.cash-a)}));push("🌀 You gave $"+a+" to a man who may not have been there.");},
+        ()=>{updGs(g=>({...g,heat:clamp(g.heat+1,0,10)}));push("🌀 You said something loud on the street. Heat +1.");},
+        ()=>{updGs(g=>({...g,survival:{...gs.survival,energy:clamp(gs.survival.energy-20,0,100)}}));push("🌀 You lost track of time. An hour passed. Energy -20.");},
+        ()=>{updGs(g=>({...g,survival:{...gs.survival,hunger:clamp(gs.survival.hunger-20,0,100)}}));push("🌀 You forgot to eat. Again. Hunger -20.");},
+        ()=>{updGs(g=>({...g,survival:{...gs.survival,health:clamp(gs.survival.health-10,0,100)}}));push("🌀 You walked into something. Health -10.");},
+        ()=>{updGs(g=>({...g,heat:clamp(g.heat+2,0,10)}));push("🌀 You confronted someone about something. They called the cops. Heat +2.");},
+      ];
+      const neutral=[
+        ()=>{setBoro(["bronx","brooklyn","manhattan","queens","staten"][rnd(0,4)]);push("🌀 You ended up in a different borough. You are not sure how.");},
+        ()=>{push("🌀 A man you have never met calls you by a name you have never used. He nods. You nod back.");},
+        ()=>{push("🌀 You spent twenty minutes arguing with a payphone. You made some good points.");},
+        ()=>{push("🌀 You delivered a speech to twelve pigeons. Two of them stayed for the whole thing.");},
+      ];
+      const good=[
+        ()=>{const a=rnd(15,60);updGs(g=>({...g,cash:g.cash+a}));push("🌀 Someone pressed $"+a+" into your hand and walked away fast.");},
+        ()=>{updGs(g=>({...g,survival:{...gs.survival,mental:Math.min(100,(gs.survival.mental||70)+25)}}));push("🌀 A moment of perfect clarity. Everything makes sense. Mental +25.");},
+        ()=>{updGs(g=>({...g,heat:clamp(g.heat-2,0,10)}));push("🌀 Cops looked at you, looked away, and crossed the street. Heat -2.");},
+        ()=>{updGs(g=>({...g,survival:{...gs.survival,health:Math.min(100,gs.survival.health+20)}}));push("🌀 You ate something you found. You feel better actually. Health +20.");},
+        ()=>{updGs(g=>({...g,xp:g.xp+50}));push("🌀 You solved something nobody asked you to solve. The answer was correct. +50 XP.");},
+      ];
+      const roll=Math.random();
+      const pool=roll<0.6?bad:roll<0.8?neutral:good;
+      pool[rnd(0,pool.length-1)]();
+    }
     // advance tutorial on matching commands
     advanceTutorial(C);
     // route combat commands if in combat
@@ -2476,6 +2588,33 @@ export default function NYC(){
         `Bust rate: ${weather.bustMult<1?`-${Math.round((1-weather.bustMult)*100)}%`:weather.bustMult>1?`+${Math.round((weather.bustMult-1)*100)}%`:"normal"}`,
         weather.movePenalty>0?`Move penalty: -${weather.movePenalty} energy`:`No move penalty.`);
       return;
+    }
+    if(C==="LOOK"&&gs.isSchizo){
+      const visions=[
+        "The pigeons are facing north. That means cops are coming from the south. You have six minutes.",
+        "You can see the heat signatures of undercover officers. Wrong shoes. Always the wrong shoes.",
+        "The bodega owner is about to throw out good product. You know this because the bottles told you.",
+        "A man on the corner has $" + rnd(60,200) + " in his left jacket pocket. You can see the outline through time.",
+        "The corner at " + getBoro(boro)?.name + " and nowhere is unguarded. The other players don't know this.",
+        "The rats are running east. That's important. You don't know why but it is.",
+        "The sidewalk is breathing. You count " + rnd(3,12) + " breaths per minute. Normal.",
+        "You see your past self on the corner. He looks disappointed. You look away.",
+        "The street signs are in a different language today. You can still read them.",
+        "The city grid is a circuit board and you are the signal. You have been the signal this whole time.",
+        "There are " + rnd(2,7) + " people within earshot who know your name but won't say it.",
+        "The weather is about to change. You can taste it.",
+        "You found $" + rnd(5,25) + " on the ground. It was always there. You just had to look with the right eyes.",
+        "Someone pressed money into your hand as you walked past. You checked. It was real.",
+      ];
+      const vision=visions[rnd(0,visions.length-1)];
+      if((vision.includes("found $")||vision.includes("pressed money"))&&Math.random()<0.4){
+        const cashAmt=rnd(8,30);
+        updGs(g=>({...g,cash:g.cash+cashAmt}));
+        push("","🌀 VISION",vision,"","(The vision was real. +$"+cashAmt+".)","");
+      } else {
+        push("","🌀 VISION",vision,"");
+      }
+      updGs(g=>applyXP(g,2,"look"));return;
     }
     if(C==="LOOK"){
       const wPool=weather.id==="blizzard"?EVTS.blizzard:weather.id==="rain"||weather.id==="storm"?EVTS.rain:weather.id==="heatwave"?EVTS.heatwave:gs.heat>6?EVTS.hot:gs.survival.hunger<30?EVTS.hungry:gs.cash<10?EVTS.broke:EVTS.normal;
@@ -2557,10 +2696,34 @@ export default function NYC(){
     }
 
     // SELL — weather affects bust rate
+    // SELL COOKED — must be checked before generic SELL
+    const scM2=raw.match(/^[Ss][Ee][Ll][Ll] [Cc][Oo][Oo][Kk][Ee][Dd] (.+?)(?:\s+(\d+))?$/);
+    if(scM2){
+      const rName2=scM2[1].trim().toLowerCase();const qty2=parseInt(scM2[2])||1;const recipe2=RECIPES[rName2];
+      if(!recipe2){
+        // list what they have cooked
+        const cookedList=Object.entries(gs.cooked||{}).filter(([,v])=>v>0);
+        push(`Unknown recipe "${rName2}".`,cookedList.length?`You have cooked: ${cookedList.map(([n,q])=>n+" x"+q).join(", ")}`:`Nothing cooked. Type COOK to see recipes.`);return;
+      }
+      const held2=(gs.cooked||{})[rName2]||0;if(held2<qty2){push(`Only have ${held2} ${rName2}.`);return;}
+      const price2=Math.round(mktPrice(boro,recipe2.base,gs.day,weather)*recipe2.sellX);
+      const total2=price2*qty2;const hg2=rnd(1,3);
+      updGs(g=>applyXP({...g,cash:g.cash+total2,cooked:{...g.cooked,[rName2]:held2-qty2},heat:clamp(g.heat+hg2,0,10)},12*qty2,"deal"));
+      push(`${recipe2.icon} Sold ${qty2}x ${rName2}. +$${total2}. Heat +${hg2}.`);return;
+    }
+    // Also: SELL [recipe name] works as shorthand for cooked products
     const sellM=C.match(/^SELL (\w+)(?:\s+(\d+))?$/);
     if(sellM){
       const pKey=sellM[1].toLowerCase();const qty=parseInt(sellM[2])||1;
-      if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder.`);return;}
+      // Check if it's a cooked product first
+      if(RECIPES[pKey]&&(gs.cooked||{})[pKey]>0){
+        const recipe3=RECIPES[pKey];const held3=(gs.cooked||{})[pKey]||0;
+        const qty3=Math.min(qty,held3);
+        const total3=Math.round(mktPrice(boro,recipe3.base,gs.day,weather)*recipe3.sellX)*qty3;const hg3=rnd(1,3);
+        updGs(g=>applyXP({...g,cash:g.cash+total3,cooked:{...g.cooked,[pKey]:held3-qty3},heat:clamp(g.heat+hg3,0,10)},12*qty3,"deal"));
+        push(`${recipe3.icon} Sold ${qty3}x ${pKey}. +$${total3}.`);return;
+      }
+      if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder. For cooked: SELL COOKED [name].`);return;}
       if(gs.product[pKey]<qty){push(`Only have ${gs.product[pKey]}.`);return;}
       const price=mktPrice(boro,pKey,gs.day,weather);const total=price*qty;
       const hg=Math.round(qty*PRODUCTS[pKey].rm*(b.heat/10));
@@ -2593,15 +2756,7 @@ export default function NYC(){
       updGs(g=>applyXP({...g,product:np,cooked:nc},15,"cook"));
       push(`${recipe.icon} Cooked 1 ${rName}. Sells at ${recipe.sellX}x.`);return;
     }
-    const scM=raw.match(/^[Ss][Ee][Ll][Ll] [Cc][Oo][Oo][Kk][Ee][Dd] (.+?) (\d+)$/);
-    if(scM){
-      const rName=scM[1].trim().toLowerCase();const qty=parseInt(scM[2]);const recipe=RECIPES[rName];
-      if(!recipe){push(`Unknown cooked product.`);return;}
-      const held=(gs.cooked||{})[rName]||0;if(held<qty){push(`Only have ${held}.`);return;}
-      const total=Math.round(mktPrice(boro,recipe.base,gs.day,weather)*recipe.sellX)*qty;const hg=rnd(1,3);
-      updGs(g=>applyXP({...g,cash:g.cash+total,cooked:{...g.cooked,[rName]:held-qty},heat:clamp(g.heat+hg,0,10)},12*qty,"deal"));
-      push(`Sold ${qty} ${recipe.icon} ${rName}. +$${total}.`);return;
-    }
+    // SELL COOKED handled above
 
     if(C==="HUSTLE"){
       if(gs.survival.energy<20){push(`Too tired. REST first.`);return;}
@@ -2740,6 +2895,22 @@ export default function NYC(){
         return;
       }
     }
+    // SCOUT DOG — drifter special
+    if(C==="SCOUT DOG"||C==="DOG SCOUT"){
+      if(!gs.isDrifter){push(`Only the Drifter has a dog.`);return;}
+      if(gs.survival.energy<10){push(`Your dog is tired too.`);return;}
+      const copLvl=getCopPresence(boro,world.copPresence,gs.day);
+      const patrolActive=Math.random()<(gs.heat/10)*0.5;
+      const msgs=[
+        `Your dog trots around the block and comes back. Tail wagging — no cops nearby.`,
+        `Your dog sniffs out two plainclothes near the bodega. You know to avoid 3rd Ave.`,
+        `Your dog freezes halfway down the block. Hackles up. You pull back. Good call.`,
+        `Clean block. Your dog found a half sandwich and you let them have it.`,
+      ];
+      push(`🐕 SCOUT DOG`,msgs[rnd(0,msgs.length-1)],
+        `Cop presence here: ${copLvl}/10. ${patrolActive?"⚠ Patrol active.":"Clear for now."}`);
+      updGs(g=>({...g,survival:{...g.survival,energy:clamp(g.survival.energy-5,0,100)}}));return;
+    }
     if(C==="SCOUT"){
       push(`Intel — ${b.name} ${weather.icon}:`,
         `  Weed $${mktPrice(boro,"weed",gs.day,weather)}/bag`,`  Pills $${mktPrice(boro,"pills",gs.day,weather)}/pack`,
@@ -2776,6 +2947,10 @@ export default function NYC(){
         updGs(g=>({...g,patrolEncountered:true,survival:{...g.survival,energy:clamp(g.survival.energy-5,0,100)}}));
         return;
       }
+      if(gs.isSchizo&&Math.random()<0.25){
+        const tv=["The train announcements are addressing you specifically.","Someone on the platform knows your name.","The subway map rearranged itself while you were looking.","You arrived before you left. You checked."];
+        push(tv[rnd(0,tv.length-1)]);
+      }
       push(`You head to ${t.name}. ${weather.movePenalty>0?`Rough going in this weather.`:""}`,wPool[rnd(0,wPool.length-1)]);
       updGs(g=>{const np={...g.questProgress};Object.keys(g.activeQuests||{}).forEach(qid=>{const v=np[qid]?.visited||[];if(!v.includes(t.id))np[qid]={...(np[qid]||{}),visited:[...v,t.id]};});return{...g,questProgress:np};});
       updGs(g=>applyXP({...g,survival:{...g.survival,energy:clamp(g.survival.energy-penalty,0,100)}},5,"move"));
@@ -2807,7 +2982,14 @@ export default function NYC(){
       ];
       push(``,`⚔ ${enemy.name} ${fightIntros[rnd(0,fightIntros.length-1)]}`,``,`${enemy.desc}`,``,`FIGHT · FLEE · USE [ability]`);
       resolveCombat(gs,eType,
-        (loot)=>{const endMsgs=[`Over. You walk away.`,`Done. They won't try that again.`,`You end it before it gets worse.`];push(endMsgs[rnd(0,endMsgs.length-1)]);updGs(g=>{const np={...g.questProgress};Object.keys(g.activeQuests||{}).forEach(qid=>{np[qid]={...(np[qid]||{}),fights:(np[qid]?.fights||0)+1};});return{...g,questProgress:np};});},
+        (loot)=>{const isBossWin=ENEMIES[enemyType]?.boss;
+      const endMsgs=isBossWin?[ENEMIES[enemyType].winMsg||"Boss down."]:["Over. You walk away.","Done. They will not try that again.","You end it before it gets worse."];
+      push("",endMsgs[rnd(0,endMsgs.length-1)]);
+      if(isBossWin){
+        const bWs=broadcastActivity(world,gs.name+" just dropped "+ENEMIES[enemyType].name+" in "+getBoro(boro)?.name+". BOSS DOWN.","👹");
+        const bWs2=addWorldHistory(bWs,"boss",gs.name,gs.name+" defeated "+ENEMIES[enemyType].name+" on Day "+gs.day+".",boro);
+        setWorld(bWs2);saveWorld(bWs2);
+      }updGs(g=>{const np={...g.questProgress};Object.keys(g.activeQuests||{}).forEach(qid=>{np[qid]={...(np[qid]||{}),fights:(np[qid]?.fights||0)+1};});return{...g,questProgress:np};});},
         ()=>{const loseMsgs=[`You hit the ground. They took something. Find somewhere to recover.`,`Bad read. They were ready. Get somewhere safe.`,`Didn't go your way. The city doesn't care. Keep moving.`];push(loseMsgs[rnd(0,loseMsgs.length-1)]);},
         ()=>{const fleeMsgs=[`You get out. Barely, but you get out.`,`Gone before they can regroup. Smart.`,`Slip away into the block. They don't follow.`];push(fleeMsgs[rnd(0,fleeMsgs.length-1)]);}
       );
@@ -2839,7 +3021,16 @@ export default function NYC(){
       }
       const hg=rnd(2,4);const selfDmg=won?rnd(5,15):rnd(15,30);
       const cornerStolen=won&&world.corners?.[boro]===tName;
-      const ws={...world,pvpLog:[...(world.pvpLog||[]).slice(-29),{attacker:gs.name,victim:tName,won,stolen,boro,time:Date.now()}],
+     const tBounty=world.bounties?.[tName];
+        const bAmt2=tBounty&&typeof tBounty==="object"?tBounty.amount:tBounty||0;
+        if(won&&bAmt2>0){
+          const bc3={...world.bounties};delete bc3[tName];
+          const bcW3=broadcastActivity({...world,bounties:bc3},gs.name+" collected $"+bAmt2+" bounty on "+tName+".","💰");
+          setWorld(bcW3);saveWorld(bcW3);
+          updGs(g=>({...g,cash:g.cash+bAmt2}));
+          push("💰 Bounty collected! +$"+bAmt2+".");
+        }
+         const ws={...world,pvpLog:[...(world.pvpLog||[]).slice(-29),{attacker:gs.name,victim:tName,won,stolen,boro,time:Date.now()}],
         corners:{...world.corners,...(cornerStolen?{[boro]:gs.name}:{})},
         playerAlerts:{...(world.playerAlerts||{}),[tName]:[...((world.playerAlerts||{})[tName]||[]),
           {msg:`⚠ ${gs.name} attacked you in ${b.name}. Attack roll ${totalAttack}. ${won?`Lost $${stolen}.`:"They missed."}`,time:Date.now()}]}};
@@ -2862,7 +3053,28 @@ export default function NYC(){
     if(bnM){const amt=parseInt(bnM[2]);if(amt<10){push(`Min $10.`);return;}if(amt>gs.cash){push(`Don't have $${amt}.`);return;}
       const ws={...world,bounties:{...(world.bounties||{}),[bnM[1]]:((world.bounties||{})[bnM[1]]||0)+amt}};setWorld(ws);saveWorld(ws);
       updGs(g=>({...g,cash:g.cash-amt}));push(`$${amt} bounty on ${bnM[1]}.`);return;}
-    if(C==="BOUNTIES"){const e=Object.entries(world.bounties||{}).filter(([,v])=>v>0);push(`Bounties:`,...(e.length?e.map(([n,a])=>`  ${n}: $${a}`):[`  None.`]));return;}
+    if(C==="BOUNTIES"||C==="BOUNTY BOARD"){
+      const e=Object.entries(world.bounties||{}).filter(([,v])=>typeof v==="object"?v.amount>0:v>0);
+      push("","☠ BOUNTY BOARD","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ...(e.length?e.map(([n,b])=>{const amt=typeof b==="object"?b.amount:b;const poster=typeof b==="object"?b.by:"anon";return "  "+n+": $"+amt+" — by "+poster;}):[" None active. BOUNTY [player] [amount] to post."]),
+        "","Minimum $50. Collect by winning a FIGHT against the target.");return;
+    }
+    const bountySetM=C.match(/^BOUNTY ([A-Za-z0-9_]+) (\d+)$/);
+    if(bountySetM){
+      const bTarget=bountySetM[1];const bAmt=parseInt(bountySetM[2]);
+      if(bTarget.toLowerCase()===gs.name.toLowerCase()){push("Cannot bounty yourself.");return;}
+      if(bAmt<50){push("Minimum $50.");return;}
+      if(gs.cash<bAmt){push("Need $"+bAmt+".");return;}
+      if(!world.players?.[bTarget]){push(bTarget+" not in this world.");return;}
+      const existing=world.bounties?.[bTarget];
+      const existingAmt=typeof existing==="object"?existing.amount:existing||0;
+      const newBounty={amount:existingAmt+bAmt,by:gs.name,postedDay:gs.day};
+      const bws={...world,bounties:{...(world.bounties||{}),[bTarget]:newBounty}};
+      const bws2=broadcastActivity(bws,gs.name+" posted $"+bAmt+" bounty on "+bTarget+". Collect it.","☠");
+      const bws3=notifyPlayers(bws2,gs.name,"☠ "+gs.name+" put a $"+bAmt+" bounty on your head.");
+      updGs(g=>({...g,cash:g.cash-bAmt}));setWorld(bws3);saveWorld(bws3);
+      push("☠ $"+bAmt+" bounty on "+bTarget+". Live on the board.");return;
+    }
     if(C==="ALERTS"){const al=(world.playerAlerts||{})[gs.name]||[];if(!al.length){push(`No alerts.`);return;}
       push(`Alerts:`,...al.slice(-5).map(a=>a.msg));
       const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[gs.name]:[]}};setWorld(ws);saveWorld(ws);return;}
@@ -2930,6 +3142,39 @@ export default function NYC(){
       });
       push(`Mental +8. Rep with ${npc.name} up.`);return;}
 
+    // DECLARE WAR [crew]
+    const warM=C.match(/^DECLARE WAR (.+)$/);
+    if(warM){
+      if(!gs.crew){push("Not in a crew.");return;}
+      if(gs.crewRole!=="leader"&&gs.crewRole!=="captain"){push("Only crew leaders can declare war.");return;}
+      const wTarget=warM[1].trim();
+      const myCrewD=world.crews?.[gs.crew]||{};
+      if((myCrewD.wars||[]).includes(wTarget)){push("Already at war with "+wTarget+".");return;}
+      const upCrew={...myCrewD,wars:[...(myCrewD.wars||[]),wTarget]};
+      const wws={...world,crews:{...(world.crews||{}),[gs.crew]:upCrew}};
+      const wws2=broadcastActivity(wws,gs.crew+" DECLARED WAR on "+wTarget+". Corners contested.","⚔");
+      const wws3=notifyPlayers(wws2,gs.name,"⚔ "+gs.crew+" declared war on "+wTarget+". Watch your corners.");
+      setWorld(wws3);saveWorld(wws3);
+      push("⚔ WAR DECLARED on "+wTarget+".","2x XP on "+wTarget+" members.","Contested corners give double rep.","PEACE "+wTarget+" to end it.");return;
+    }
+    // PEACE [crew]
+    const peaceM=C.match(/^PEACE (.+)$/);
+    if(peaceM){
+      if(!gs.crew){push("Not in a crew.");return;}
+      const pTarget=peaceM[1].trim();
+      const myCrewD2=world.crews?.[gs.crew]||{};
+      const upCrew2={...myCrewD2,wars:(myCrewD2.wars||[]).filter(w=>w!==pTarget)};
+      const pws={...world,crews:{...(world.crews||{}),[gs.crew]:upCrew2}};
+      const pws2=broadcastActivity(pws,gs.crew+" called peace with "+pTarget+". War over.","🤝");
+      setWorld(pws2);saveWorld(pws2);
+      push("🤝 Peace called with "+pTarget+".");return;
+    }
+    // WAR STATUS
+    if(C==="WAR STATUS"||C==="WARS"){
+      const myW=world.crews?.[gs.crew]||{};
+      const wars=myW.wars||[];
+      push("⚔ "+(gs.crew||"No crew")+" — WARS",wars.length?"At war: "+wars.join(", "):"No active wars.","DECLARE WAR [crew] to start one.");return;
+    }
     // MSG
     const msgM=raw.match(/^[Mm][Ss][Gg] (.+)$/);
     if(msgM){const entry={from:gs.name,text:msgM[1],time:Date.now(),boro};
@@ -3005,6 +3250,7 @@ export default function NYC(){
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
           heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
+        dayJobDone:false,hasMetrocard:false,panhandleCount:0,
         dayJobDone:false,hasMetrocard:false,
 
           informsToday:0,patrolEncountered:false,feedUsed:false};
@@ -3149,17 +3395,31 @@ export default function NYC(){
     // PANHANDLE
     if(C==="PANHANDLE"){
       if(gs.isUndoc){push(`Too risky. You can't draw that kind of attention.`);return;}
-      const base=PANHANDLE_BASE[boro]||6;
-      const charmBonus=Math.floor(gs.stats.charm/2);
-      const weatherBonus=weather.id==="rain"||weather.id==="storm"?3:weather.id==="heatwave"?-2:0;
-      const success=Math.random()>0.3;
+      // Daily limit — diminishing returns
+      const panToday=gs.panhandleCount||0;
+      if(panToday>=4){push(`You've been on this corner too long. People stopped looking. Come back tomorrow.`);return;}
+      if(gs.survival.energy<15){push(`Too exhausted to hold your hand out properly.`);return;}
+      const base=PANHANDLE_BASE[boro]||5;
+      const dogBonus=gs.isDrifter?base:0; // dog doubles the base yield
+      const charmBonus=Math.floor((gs.stats.charm||5)/3);
+      const weatherBonus=weather.id==="rain"||weather.id==="storm"?2:weather.id==="heatwave"?-3:0;
+      const repeatPenalty=panToday*2;
+      const maxEarned=Math.max(1,base+dogBonus+charmBonus+weatherBonus-repeatPenalty);
+      const success=Math.random()>(0.25+panToday*0.1);
       if(success){
-        const earned=rnd(base-2,base+charmBonus+weatherBonus+4);
-        const mentalCost=rnd(3,8);
-        updGs(g=>applyXP({...g,cash:g.cash+earned,survival:{...g.survival,mental:clamp((g.survival.mental||70)-mentalCost,0,100)}},4,"hustle"));
-        push(PANHANDLE_MSGS[rnd(0,PANHANDLE_MSGS.length-1)],`+$${earned}. Mental health takes a hit.`);
+        const earned=rnd(Math.max(1,maxEarned-3),maxEarned);
+        const mentalCost=gs.isDrifter?3:rnd(5,12); // dog helps mental
+        const energyCost=rnd(5,10);
+        const panMsg=gs.isDrifter?
+          ["A woman stops for the dog first. You second. She gives $"+earned+". The dog gets a pet.",
+           "The dog sits. Looks up with those eyes. Three people stop. You end up with $"+earned+".",
+           "Guy in a suit walks past three times before the dog gets him. $"+earned+"."][rnd(0,2)]:
+          PANHANDLE_MSGS[rnd(0,PANHANDLE_MSGS.length-1)];
+        updGs(g=>applyXP({...g,cash:g.cash+earned,panhandleCount:(g.panhandleCount||0)+1,
+          survival:{...g.survival,mental:clamp((g.survival.mental||70)-mentalCost,0,100),energy:clamp(g.survival.energy-energyCost,0,100)}},gs.isDrifter?3:2,"hustle"));
+        push(panMsg,`+$${earned}. Mental -${mentalCost}. Energy -${energyCost}.`,panToday>=2?`People are recognizing you. Returns dropping.`:"");
       } else {
-        updGs(g=>({...g,survival:{...g.survival,mental:clamp((g.survival.mental||70)-12,0,100)}}));
+        updGs(g=>({...g,panhandleCount:(g.panhandleCount||0)+1,survival:{...g.survival,mental:clamp((g.survival.mental||70)-15,0,100),energy:clamp(g.survival.energy-8,0,100)}}));
         push(PANHANDLE_FAIL[rnd(0,PANHANDLE_FAIL.length-1)]);
       }
       return;
@@ -3178,6 +3438,7 @@ export default function NYC(){
 
     // CHECKIN — secure a shelter bed
     if(C==="CHECKIN"){
+      if(gs.isDrifter){push(`${gs.dogName||"Your dog"} is not allowed inside. No exceptions. You find somewhere else.`);return;}
       if(gs.isUndoc){push(`Can't check in without ID.`);return;}
       const s=SHELTERS[boro];if(!s){push(`No shelter here.`);return;}
       const beds=shelterBeds(boro,gs.day);
@@ -4306,6 +4567,18 @@ export default function NYC(){
       return;
     }
 
+    if(C==="VISION"){
+      if(!gs.isSchizo){push("You don't see visions. Type LOOK.");return;}
+      const hasVisionSkill=(gs.skills||[]).includes("the_knowing");
+      if(hasVisionSkill){
+        const others=Object.entries(world.players||{}).filter(([n])=>n!==gs.name);
+        if(others.length>0){
+          const [n2,d2]=others[rnd(0,others.length-1)];
+          push("🌀 TRUE VISION",n2+" is in "+getBoro(d2.borough)?.name+". Heat "+( d2.heat||0)+"/10.","The voices confirmed it.");
+        } else {push("🌀 You are the only one out here. The city belongs to you.");}
+      } else {push("🌀 VISION unlocks at Level 4 (The Knowing skill). Type LOOK for regular visions.");}
+      return;
+    }
     // HEAT command — alias for WANTED STATUS
     if(C==="HEAT"){
       const tier=getWantedTier(Math.round(gs.heat));
@@ -4781,6 +5054,9 @@ export default function NYC(){
               return <div key={i} style={{fontSize:div?10:13,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#d4c9b0",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.8,minHeight:s===""?7:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
             })}
             <span style={{color:"#e9c46a",animation:"blink 1.3s infinite",fontSize:12}}>█</span>
+              {gs&&gs.crew&&(world.crews?.[gs.crew]?.wars||[]).length>0&&(
+                <span style={{fontSize:8,color:"#e63946",letterSpacing:1,fontFamily:"'Share Tech Mono',monospace",marginLeft:8}}>⚔ AT WAR</span>
+              )}
           </div>
         </div>
 
