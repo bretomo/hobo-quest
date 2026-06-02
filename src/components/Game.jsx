@@ -4242,8 +4242,8 @@ export default function NYC(){
       push("","💱 TRADE OFFERS","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
         myOffers.length?"INCOMING:":"No incoming offers.",
         ...myOffers.map(o=>`  ${o.from}: ${o.qty}x ${o.product} for $${o.price} · ACCEPT ${o.id} or DECLINE ${o.id}`),
-        myOut.length?"
-OUTGOING:":"",
+        myOut.length?"OUTGOING:":"",
+
         ...myOut.map(o=>`  → ${o.to}: ${o.qty}x ${o.product} for $${o.price}`),
         "","OFFER [player] [product] [qty] [price] to make a trade.");
       return;
