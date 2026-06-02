@@ -3266,6 +3266,7 @@ export default function NYC(){
         queens:"Jackson Heights or Jamaica, more languages in two blocks than most countries have total.",
         staten:"Quieter here. The ferry terminal smell. Seagulls. A borough that always feels slightly left out.",
       };
+      const worldEvent=world.worldEvent||null;
       if(worldEvent){push(``,`${worldEvent.icon} WORLD EVENT: ${worldEvent.title}`,worldEvent.desc,``);}
       push(`${b.name} — Day ${gs.day} — ${weather.icon} ${weather.name}`,boroDesc[boro]||"",wPool[rnd(0,wPool.length-1)]);
       updGs(g=>applyXP(g,1,"look"));
@@ -6702,7 +6703,7 @@ export default function NYC(){
               return <div key={i} style={{fontSize:div?10:13,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#d4c9b0",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.8,minHeight:s===""?7:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
             })}
             <span style={{color:"#e9c46a",animation:"blink 1.3s infinite",fontSize:12}}>█</span>
-              {worldEvent&&<span style={{fontSize:8,color:"#e9c46a55",marginRight:6}} title={worldEvent.title}>{worldEvent.icon}</span>}
+              {world.worldEvent&&<span style={{fontSize:8,color:"#e9c46a55",marginRight:6}} title={world.worldEvent.title}>{world.worldEvent.icon}</span>}
               {gs&&gs.crew&&(world.crews?.[gs.crew]?.wars||[]).length>0&&(
                 <span style={{fontSize:8,color:"#e63946",letterSpacing:1,fontFamily:"'Share Tech Mono',monospace",marginLeft:8}}>⚔ AT WAR</span>
               )}
