@@ -2426,6 +2426,7 @@ export default function NYC(){
   const [mIn,setMIn]       =useState("");
   const [chatStrip,setChatStrip]=useState(true); // persistent bottom chat strip
   const [toast,setToast]   =useState(null);      // floating notification
+  const lastToastRef=useRef({});
   const [crewMsg,setCrewMsg]=useState(false);    // crew-only chat mode
   const [typingUser,setTypingUser]=useState(null);// typing indicator
   const [dungeon,setDungeon]=useState(null);      // active warehouse run state
@@ -2691,11 +2692,16 @@ export default function NYC(){
       );
       if(fromOthers.length>0){
         if(tab!=="chat")setUnread(u=>u+fromOthers.length);
-        // Toast only for direct player chat
+        // Toast only for direct player chat — once per sender per 60 seconds
         const latest=fromOthers[fromOthers.length-1];
         if(latest&&latest.from){
-          setToast({from:latest.from,text:latest.text,arch:latest.arch,time:Date.now()});
-          setTimeout(()=>setToast(null),4000);
+          const now=Date.now();
+          const lastShown=lastToastRef.current[latest.from]||0;
+          if(now-lastShown>60000){
+            lastToastRef.current[latest.from]=now;
+            setToast({from:latest.from,text:latest.text,arch:latest.arch,time:now});
+            setTimeout(()=>setToast(null),4000);
+          }
         }
       }
     }
