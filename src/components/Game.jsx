@@ -2634,8 +2634,8 @@ export default function NYC(){
   };
 
   const notifyPlayers=(ws,excludeName,msg)=>{
-    // add to world chat as a system message
-    const entry={from:"SYSTEM",text:msg,time:Date.now(),boro:"system",system:true};
+    // add to world chat as a system message — tagged so toast doesn't fire for these
+    const entry={from:"SYSTEM",text:msg,time:Date.now(),boro:"system",system:true,type:"system"};
     return{...ws,messages:[...(ws.messages||[]).slice(-19),entry]};
   };
   const saveChar=async(g,pin)=>{try{await saveCharacter(g,pin);}catch(e){console.error("saveChar",e)}};
@@ -2680,10 +2680,18 @@ export default function NYC(){
     // count unread from others
     if(newMsgs.length>prevMsgCount){
       const newOnes=newMsgs.slice(prevMsgCount);
-      const fromOthers=newOnes.filter(m=>m.from!==gsRef.current?.name);
+      // Only toast/count genuine player chat — filter out SYSTEM broadcasts and activity entries
+      const fromOthers=newOnes.filter(m=>
+        m.from &&
+        m.from!==gsRef.current?.name &&
+        m.from!=="SYSTEM" &&
+        !m.system &&
+        m.type!=="activity" && m.type!=="event" && m.type!=="prestige" &&
+        m.type!=="pvp" && m.type!=="world" && m.type!=="system"
+      );
       if(fromOthers.length>0){
         if(tab!=="chat")setUnread(u=>u+fromOthers.length);
-        // Show toast for latest message
+        // Toast only for direct player chat
         const latest=fromOthers[fromOthers.length-1];
         if(latest&&latest.from){
           setToast({from:latest.from,text:latest.text,arch:latest.arch,time:Date.now()});
