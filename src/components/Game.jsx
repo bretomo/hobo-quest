@@ -514,13 +514,13 @@ const RECIPES = {
 
 // ── WEATHER SYSTEM ────────────────────────────────────────────────────────────
 const WEATHER_TYPES = {
-  clear:    { id:"clear",    icon:"☀️",  name:"Clear",        warmthDrain:1,  bustMult:1.0, movePenalty:0, desc:"Good day to work." },
-  cloudy:   { id:"cloudy",   icon:"☁️",  name:"Overcast",     warmthDrain:1.5,bustMult:0.9, movePenalty:0, desc:"Cops are lazy today." },
-  rain:     { id:"rain",     icon:"🌧",  name:"Rain",         warmthDrain:2.5,bustMult:0.8, movePenalty:0, desc:"Rain keeps eyes indoors. Lower heat." },
-  fog:      { id:"fog",      icon:"🌫",  name:"Fog",          warmthDrain:1.5,bustMult:0.6, movePenalty:0, desc:"Can't see 10 feet. Hard to get clocked." },
-  blizzard: { id:"blizzard", icon:"❄️",  name:"Blizzard",     warmthDrain:5,  bustMult:0.5, movePenalty:15,desc:"Streets are empty. Warmth draining fast." },
-  heatwave: { id:"heatwave", icon:"🔥",  name:"Heat Wave",    warmthDrain:0,  bustMult:1.4, movePenalty:0, desc:"Cops are everywhere. Everyone's on edge." },
-  storm:    { id:"storm",    icon:"⛈",  name:"Thunderstorm", warmthDrain:3,  bustMult:0.7, movePenalty:5, desc:"Heavy rain. Nobody's watching the corners." },
+  clear:    { id:"clear",    icon:"☀️",  name:"Clear",        warmthDrain:1,  bustMult:1.0, movePenalty:0, desc:"Good day to work.",                          tempF:68 },
+  cloudy:   { id:"cloudy",   icon:"☁️",  name:"Overcast",     warmthDrain:1.5,bustMult:0.9, movePenalty:0, desc:"Cops are lazy today.",                       tempF:58 },
+  rain:     { id:"rain",     icon:"🌧",  name:"Rain",         warmthDrain:2.5,bustMult:0.8, movePenalty:0, desc:"Rain keeps eyes indoors. Lower heat.",        tempF:52 },
+  fog:      { id:"fog",      icon:"🌫",  name:"Fog",          warmthDrain:1.5,bustMult:0.6, movePenalty:0, desc:"Can't see 10 feet. Hard to get clocked.",     tempF:55 },
+  blizzard: { id:"blizzard", icon:"❄️",  name:"Blizzard",     warmthDrain:5,  bustMult:0.5, movePenalty:15,desc:"Streets are empty. Warmth draining fast.",   tempF:18 },
+  heatwave: { id:"heatwave", icon:"🔥",  name:"Heat Wave",    warmthDrain:0,  bustMult:1.4, movePenalty:0, desc:"Cops are everywhere. Everyone's on edge.",    tempF:97 },
+  storm:    { id:"storm",    icon:"⛈",  name:"Thunderstorm", warmthDrain:3,  bustMult:0.7, movePenalty:5, desc:"Heavy rain. Nobody's watching the corners.",  tempF:48 },
 };
 // borough-weighted weather probabilities by season (day % 4 = rough season)
 const WEATHER_POOL = {
@@ -2694,14 +2694,10 @@ export default function NYC(){
         if(tab!=="chat")setUnread(u=>u+fromOthers.length);
         // Toast only for direct player chat — once per sender per 60 seconds
         const latest=fromOthers[fromOthers.length-1];
-        if(latest&&latest.from){
-          const now=Date.now();
-          const lastShown=lastToastRef.current[latest.from]||0;
-          if(now-lastShown>60000){
-            lastToastRef.current[latest.from]=now;
-            setToast({from:latest.from,text:latest.text,arch:latest.arch,time:now});
-            setTimeout(()=>setToast(null),4000);
-          }
+        if(latest&&latest.from&&Date.now()-(lastToastRef.current[latest.from]||0)>60000){
+          lastToastRef.current[latest.from]=Date.now();
+          setToast({from:latest.from,text:latest.text,arch:latest.arch,time:Date.now()});
+          setTimeout(()=>setToast(null),4000);
         }
       }
     }
@@ -2778,19 +2774,7 @@ export default function NYC(){
     };
   },[]);
 
-  // Game clock — 1 real minute = 1 game minute (slow, atmospheric)
-  useEffect(()=>{
-    const clockTick=setInterval(()=>{
-      setGameTime(prev=>{
-        let {hour,minute}=prev;
-        minute+=1;
-        if(minute>=60){minute=0;hour++;}
-        if(hour>=26){return{hour:8,minute:0};}
-        return{hour,minute};
-      });
-    },60000); // every real minute = 1 game minute
-    return()=>clearInterval(clockTick);
-  },[]);
+  // Clock removed — replaced by temperature gauge in header
 
   // survival tick 60s — weather affects drain rates
   useEffect(()=>{
@@ -2812,7 +2796,23 @@ export default function NYC(){
           energy:clamp(p.survival.energy-2,0,100),
           mental:clamp((p.survival.mental||70)-mentalDrain+mentalBoost+dogMentalBoost,0,100),
         },heat:clamp(p.heat-0.1-safeHeatDrain,0,10)};
-        if(g.survival.warmth===0)g.survival.health=clamp(g.survival.health-3,0,100);
+        if(g.survival.warmth===0){
+          g.survival.health=clamp(g.survival.health-3,0,100);
+          setTimeout(()=>setFeed(f=>[...f,`❄️ Freezing. Health dropping. SHELTER NOW.`]),10);
+        }
+        if(g.survival.hunger===0){
+          g.survival.health=clamp(g.survival.health-2,0,100);
+          g.survival.energy=clamp(g.survival.energy-5,0,100);
+          setTimeout(()=>setFeed(f=>[...f,`🍞 Starving. Body failing. EAT something.`]),10);
+        }
+        if(g.survival.energy===0){
+          g.survival.health=clamp(g.survival.health-1,0,100);
+          setTimeout(()=>setFeed(f=>[...f,`😴 Collapsed from exhaustion. REST immediately.`]),10);
+        }
+        if((g.survival.mental||70)===0){
+          g.survival.health=clamp(g.survival.health-2,0,100);
+          setTimeout(()=>setFeed(f=>[...f,`🧠 Mind gone. Body following. Get help.`]),10);
+        }
         if(g.isUndoc){
           // undocumented: high heat = ghost mode (disappear), not wanted
           if(Math.round(g.heat)>=9&&!g.ghostMode){
@@ -2840,61 +2840,112 @@ export default function NYC(){
           const addFx=addLvl.effects||{};
           // Apply addiction stat penalties to display (not permanent — just active effects)
           if(addFx.energyDrain){
-            return{...prev,survival:{...prev.survival,energy:clamp(prev.survival.energy-addFx.energyDrain/60,0,100)}};
+            return{...g,survival:{...g.survival,energy:clamp(g.survival.energy-addFx.energyDrain/60,0,100)}};
           }
+          const hasSub=sub?.product&&(g.product[sub.product]||0)>0;
           const addiction=g.addiction||0;
           const daysSinceUse=g.day-(g.lastUsed||0);
           const withdrawThresh=Math.max(1,3-Math.floor(addiction/30));
-          if(daysSinceUse>withdrawThresh&&addiction>20){
+          const inWithdrawal=daysSinceUse>withdrawThresh&&addiction>20;
+          if(inWithdrawal){
             const wEvts=WITHDRAWAL_EVENTS[sub?.name]||WITHDRAWAL_EVENTS.stress;
             const wEvt=wEvts[Math.floor(Math.random()*wEvts.length)];
-            const severity=Math.floor(addiction/20);
-            setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,""]),10);
-            setGs(prev=>{
-              if(!prev)return prev;
-              return{...prev,survival:{...prev.survival,
-                health:clamp(prev.survival.health-(severity*4),0,100),
-                mental:clamp((prev.survival.mental||70)-(severity*6),0,100),
-                energy:clamp(prev.survival.energy-(severity*8),0,100),
-              },heat:addiction>80?clamp(prev.heat+1,0,10):prev.heat,
-              withdrawalDay:(prev.withdrawalDay||0)+1};
-            });
+            const severity=Math.floor(addiction/15);
+            setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,
+              addiction>60?`Hands shaking. Can't think straight. USE to stop this.`:"",
+              addiction>80?`⚠ SEVERE — every action costs double energy until you use.`:"",
+            ""]),10);
+            // Apply withdrawal directly to g (already inside setGs callback)
+            g.survival={...g.survival,
+              health:clamp(g.survival.health-(severity*5),0,100),
+              mental:clamp((g.survival.mental||70)-(severity*8),0,100),
+              energy:clamp(g.survival.energy-(severity*10),0,100),
+            };
+            if(addiction>70&&Math.random()<0.15)g.cash=Math.max(0,g.cash-rnd(10,30));
+            if(addiction>80)g.heat=clamp(g.heat+1,0,10);
+            g.withdrawalDay=(g.withdrawalDay||0)+1;
           }
-          const hasSub=sub?.product&&(g.product[sub.product]||0)>0;
-          const useChance=(addiction/100)*0.15;
-          if(hasSub&&Math.random()<useChance&&addiction>30){
-            const hEvts=HIGH_EVENTS[sub.name]||HIGH_EVENTS.weed;
-            const hEvt=hEvts[Math.floor(Math.random()*hEvts.length)];
-            setTimeout(()=>setFeed(f=>[...f,"",`${sub.icon} You dip into your own stash.`,hEvt.msg,""]),10);
-            setGs(prev=>{
-              if(!prev)return prev;
-              const eff=hEvt.effect||{};
-              let np={...prev,lastUsed:prev.day,withdrawalDay:0,highActive:true,addiction:Math.min(100,prev.addiction+rnd(2,5))};
-              if(eff.cash)np={...np,cash:Math.max(0,np.cash+eff.cash)};
-              if(eff.health)np={...np,survival:{...np.survival,health:clamp(np.survival.health+eff.health,0,100)}};
-              if(eff.mental)np={...np,survival:{...np.survival,mental:clamp((np.survival.mental||70)+eff.mental,0,100)}};
-              if(eff.energy)np={...np,survival:{...np.survival,energy:clamp(np.survival.energy+(eff.energy||0),0,100)}};
-              if(eff.heat)np={...np,heat:clamp(np.heat+eff.heat,0,10)};
-              if(sub.product)np={...np,product:{...np.product,[sub.product]:Math.max(0,np.product[sub.product]-1)}};
-              return np;
-            });
-          }
-          if(hasSub&&Math.random()<0.05)setGs(prev=>prev?{...prev,addiction:Math.min(100,prev.addiction+1)}:prev);
-          if(addiction>=95&&!hasSub&&daysSinceUse>1){
+          // Rock bottom
+          if(addiction>=90&&!hasSub&&daysSinceUse>1&&Math.random()<0.3){
+            setTimeout(()=>setFeed(f=>[...f,"","☠ OVERDRAW.",
+              "You haven't used. Your body is collecting the debt.",
+              "Health dropping. Mental collapsing.",
+              "USE · RECOVERY · or die here.",
+            ""]),10);
+            g.survival={...g.survival,
+              health:clamp(g.survival.health-15,0,100),
+              mental:clamp((g.survival.mental||70)-20,0,100),
+            };
+            g.heat=clamp(g.heat+2,0,10);
+          } else if(addiction>=95&&!hasSub&&daysSinceUse>1){
             setTimeout(()=>setFeed(f=>[...f,"","☠ Rock bottom.",getAddictionLevel(addiction).desc,"You'd do anything right now. That's the most dangerous place to be.",""]),10);
-            setGs(prev=>prev?{...prev,survival:{...prev.survival,health:clamp(prev.survival.health-10,0,100),mental:clamp((prev.survival.mental||70)-15,0,100)},heat:clamp(prev.heat+2,0,10)}:prev);
+            g.survival={...g.survival,
+              health:clamp(g.survival.health-10,0,100),
+              mental:clamp((g.survival.mental||70)-15,0,100),
+            };
+            g.heat=clamp(g.heat+2,0,10);
           }
         }
 
-        // cop patrol trigger — based on heat + borough cop presence
+        // ── RANDOM STREET ATTACKS ─────────────────────────────────────────────
+        // Chance increases with heat, cash carried, and borough danger
+        const boroDanger={manhattan:0.06,brooklyn:0.05,bronx:0.07,queens:0.04,staten:0.03};
+        const baseAttackChance=(boroDanger[boro]||0.05)+(g.heat/10)*0.04+(g.cash>100?0.02:0);
+        if(Math.random()<baseAttackChance){
+          const attackType=Math.random();
+          if(attackType<0.4){
+            const stolen=Math.min(g.cash,rnd(15,Math.min(g.cash,80)));
+            if(stolen>0){
+              const muggers=["A guy in a hoodie","Two kids","Someone you didn't hear coming","A crackhead moving faster than expected","Three dudes"];
+              setTimeout(()=>setFeed(f=>[...f,``,`🔪 ${muggers[rnd(0,muggers.length-1)]} got you. $${stolen} gone.`,`FIGHT to pursue.`,``]),10);
+              g.cash=Math.max(0,g.cash-stolen);
+            }
+          } else if(attackType<0.65){
+            const dmg=rnd(8,20);
+            const attackMsgs=["Sucker punched from behind. Nobody saw it.","Caught slipping near the corner. Hit once, hard.","Wrong block at the wrong time. Took a shot.","Somebody tested you. Didn't ask permission."];
+            setTimeout(()=>setFeed(f=>[...f,``,`🥊 ${attackMsgs[rnd(0,attackMsgs.length-1)]}`,`Health -${dmg}.`,``]),10);
+            g.survival={...g.survival,health:clamp(g.survival.health-dmg,0,100)};
+          } else if(attackType<0.8){
+            const prodKeys=Object.keys(g.product).filter(k=>g.product[k]>0);
+            if(prodKeys.length>0){
+              const pk=prodKeys[rnd(0,prodKeys.length-1)];
+              const qty=Math.min(g.product[pk],rnd(1,2));
+              setTimeout(()=>setFeed(f=>[...f,``,`📦 Someone picked your stash. Lost ${qty}x ${pk}.`,``]),10);
+              g.product={...g.product,[pk]:Math.max(0,g.product[pk]-qty)};
+            }
+          } else {
+            setTimeout(()=>setFeed(f=>[...f,`Someone rushed you. You moved. Nothing taken. Stay alert.`]),10);
+          }
+        }
+        // Auto-use when product available and addicted (compulsive)
+        if(!g.isVampire&&!g.isUndoc){
+          const sub2=CLASS_SUBSTANCE[g.archetype?.id||"veteran"];
+          const hasSub2=sub2?.product&&(g.product[sub2.product]||0)>0;
+          const addiction2=g.addiction||0;
+          const useChance=(addiction2/100)*0.18;
+          if(hasSub2&&Math.random()<useChance&&addiction2>25){
+            const hEvts=HIGH_EVENTS[sub2.name]||HIGH_EVENTS.weed;
+            const hEvt=hEvts[Math.floor(Math.random()*hEvts.length)];
+            setTimeout(()=>setFeed(f=>[...f,"",`${sub2.icon} You dip into your own stash. Couldn't help it.`,hEvt.msg,""]),10);
+            const eff=hEvt.effect||{};
+            g.lastUsed=g.day;g.withdrawalDay=0;g.highActive=true;
+            g.addiction=Math.min(100,g.addiction+rnd(3,7));
+            if(sub2.product)g.product={...g.product,[sub2.product]:Math.max(0,(g.product[sub2.product]||0)-1)};
+            if(eff.health)g.survival={...g.survival,health:clamp(g.survival.health+eff.health,0,100)};
+            if(eff.mental)g.survival={...g.survival,mental:clamp((g.survival.mental||70)+eff.mental,0,100)};
+            if(eff.energy)g.survival={...g.survival,energy:clamp(g.survival.energy+(eff.energy||0),0,100)};
+          }
+          // Passive addiction creep from handling product
+          if(hasSub2&&Math.random()<0.06)g.addiction=Math.min(100,(g.addiction||0)+1);
+        }
         const bCopPresence=getCopPresence(boro,world.copPresence,g.day);
         const patrolChance=(g.heat/10)*(bCopPresence/10)*0.3;
         if(Math.random()<patrolChance&&!g.patrolEncountered){
           const evt=PATROL_EVENTS[rnd(0,PATROL_EVENTS.length-1)];
           setTimeout(()=>setFeed(f=>[...f,``,`🚔 ${evt}`,`HIDE · RUN · BRIBE · TALK to respond.`,``]),10);
-          setGs(prev=>prev?{...prev,patrolEncountered:true}:prev);
+          g.patrolEncountered=true;
         } else if(g.patrolEncountered){
-          setGs(prev=>prev?{...prev,patrolEncountered:false}:prev);
+          g.patrolEncountered=false;
         }
         // cash over limit — robbery target
         if(g.cash>MAX_CARRY_CASH&&Math.random()<0.05){
@@ -3048,7 +3099,7 @@ export default function NYC(){
         mental: arch.id==="junkie"?Math.min(startMental,45):arch.id==="undocumented"?Math.min(startMental,65):startMental},
       inventory:[...arch.gear],product:{weed:0,pills:0,powder:0},cooked:{},
       rep:{bronx:0,brooklyn:0,manhattan:5,queens:0,staten:0},
-      heat:startHeat,day:1,cornersOwned:[],crew:null,crewRole:null,
+      heat:startHeat,day:1,cornersOwned:[],lastCollect:0,crew:null,crewRole:null,
       wanted:false,ghostMode:false,habitPaid:false,
       shelterCheckins:{},lastSearch:0,letterWritten:false,prestige:prestige||0,retireEligible:false,
       skills:[],skillPoints:1,
@@ -3146,6 +3197,16 @@ export default function NYC(){
       ``,
       `Step 1: `+TUTORIAL_STEPS[0].msg,
       TUTORIAL_STEPS[0].hint||"",
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `🗺 YOUR PATH FORWARD:`,
+      `  1. HUSTLE to earn cash`,
+      `  2. TALK to NPCs to unlock QUESTS`,
+      `  3. CLAIM a corner ($50) then COLLECT income`,
+      `  4. HIRE an army to protect it`,
+      `  5. Reach Level 3 → WAREHOUSES for big loot`,
+      ``,
+      `Type HELP anytime for a full guide.`,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``
     ),300);
     setTutStep(0);setTutDone(false);
@@ -3665,7 +3726,7 @@ export default function NYC(){
         push(``,choice.outcome,``);
         // Special broadcast for alien incident
         if(rareEvent.id==="alien_incident"){
-          const aWs=broadcastActivity(world,`🛸 Something happened near the ${getBoro(boro)?.name} waterfront at ${(()=>{const h=gameTime?.hour||3;return h>12?`${h-12}am`:`${h}am`;})()}. ${gs.name} was there.`,"🛸");
+          const aWs=broadcastActivity(world,`🛸 Something happened near the ${getBoro(boro)?.name} waterfront. ${gs.name} was there.`,"🛸");
           const aWs2=addWorldHistory(aWs,"alien",gs.name,`${gs.name} witnessed The Incident in ${getBoro(boro)?.name} on Day ${gs.day}.`,boro);
           setWorld(aWs2);saveWorld(aWs2);
           // Captain lays low
@@ -3692,21 +3753,59 @@ export default function NYC(){
       return;
     }
     if(C==="HELP"){
-      push(`COMMANDS:`,
-        `  LOOK · STATUS · INVENTORY · SCOUT · ARBITRAGE · USE · ADDICTION · NEWSPAPER`,`  HUSTLE · REST · EAT · FIGHT · CLAIM · UPGRADE CORNER · ABANDON CORNER`,`  CORNERS (map) · DEFEND`,
-        `  BUY [product] [qty] · SELL [product] [qty]`,`  COOK · SELL COOKED [name] [qty]`,
-        `  BUY SAFEHOUSE · UPGRADE SAFEHOUSE`,`  STASH [product] · UNSTASH [product] · REST SAFE · STASH CASH · RETRIEVE CASH`,
-        `  MOVE [borough] · ATTACK [name] · CAPTAIN · HEAT`,`  BOUNTY [name] [amt] · BOUNTIES · ALERTS`,
-        `  FORM CREW [name] · JOIN CREW [name] · LEAVE CREW`,`  CREW · CREWS · DEPOSIT [amt]`,
-        `  WANTED · WEATHER · HEAT · TALK [name] · SLEEP · FRONT [prod] [qty] · PAY DEBT`,`  LAY LOW · CHANGE UP · SKIP TOWN · LIE LOW · CONFESS`,`  MSG [text] · MARKET · NPCS · MAP · CHAT`,`  CONTRACTS · CONTRACT PROGRESS · WANTED POSTERS`,`  OFFER [player] [prod] [qty] [price] · TRADES · ACCEPT/DECLINE`,`  WRITE [player] [msg] · LETTERS · TITLE`,`  LEADERBOARD · RIVALS`,`  HISTORY · LEGENDS · RETIRE · CHOOSE [1/2]`,
-        `  PANHANDLE · SEARCH · SHELTER · CHECKIN · SHELTERS`,`  WORK · TAKE [job] · BODEGA · BUY [item] · CLIENT (Survivor only)`,
-        `  WRITE [message] · READ LETTERS`,
-        gs.isJunkie?`  SCORE — find street product cheap`:"",
-        gs.isVampire?`  FEED · MESMERIZE [npc] · MIST [borough] · DOMINATE [player] · THRALL [npc] · NIGHT MARKET · THIRST`:"",
-        gs.isFixer?`  WIRE [player] [amt] · BROKER [p1] [p2] · CLEAN [player] · CONNECTIONS · PRICES`:"",
-        gs.isRat?`  INFORM [player] · MISINFORM [player] · PLANT [player] · EXPOSE [player] · INTEL · PANIC · RAT STATUS`:"",
-        gs.isUndoc?`  CONNECT — tap community network · VANISH — emergency heat dump`:"",
-        gs.isHustler?`  FLIP — arbitrage analysis`:"");
+      const lvl=gs.level||1;
+      push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,`HOBO QUEST — QUICK START`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+      if(lvl<=3){
+        push(`🔰 YOU ARE LEVEL ${lvl} — START HERE:`,
+          `  1. LOOK — see your surroundings and earn XP`,
+          `  2. HUSTLE — make money (your main income early)`,
+          `  3. STATUS — check all your stats`,
+          `  4. TALK [RAY/SMOKE/CARLOS/DEE/MARIA] — find work`,
+          `  5. QUESTS — see available missions`,
+          `  6. SLEEP — advance the day, collect corner income`,
+          `  7. COLLECT — manually collect corner income anytime`,
+          ``);
+      }
+      if(lvl>=2){
+        push(`⚔ GETTING STRONGER:`,
+          `  CLAIM — take the corner in your borough ($50)`,
+          `  COLLECT — collect income from corners you own`,
+          `  HIRE [unit] — build your army (HIRE to see options)`,
+          `  LOOT — black market gear (EQUIP [item] to wear it)`,
+          `  FIGHT [npc name] — combat for XP and loot`,
+          ``);
+      }
+      if(lvl>=3){
+        push(`🏭 WAREHOUSE RUNS (Level 3+):`,
+          `  WAREHOUSES — see all available runs`,
+          `  ENTER WAREHOUSE — start a run in your current borough`,
+          `  Inside: ADVANCE · SNEAK · SEARCH · EXTRACT`,
+          ``);
+      }
+      push(`👥 YOUR ARMY (protect corners):`,
+        `  HIRE — see units (lookout $80, runner $120, enforcer $200, lieutenant $400)`,
+        `  HIRE LOOKOUT — buy that unit`,
+        `  ARMY — see your current roster`,
+        `  DEPLOY [borough] — station army there to protect corners`,
+        ``);
+      push(`📋 QUESTS (earn big rewards):`,
+        `  TALK [RAY/SMOKE/CARLOS/DEE/MARIA] — build rep with NPCs first`,
+        `  QUESTS — see what's available once you have rep`,
+        `  ACCEPT [NPC] [tier] — take the job`,
+        ``);
+      push(`🏠 SURVIVAL:`,
+        `  EAT · REST · SHELTER — keep bars above 0 or health drops`,
+        `  BODEGA — buy food`,`  SLEEP — resets day, drains survive bars moderately`,
+        `  USE · ADDICTION — manage your habit`,
+        ``);
+      push(`All commands: LOOK STATUS INVENTORY SCOUT HUSTLE REST EAT FIGHT CLAIM`,
+        `CORNERS COLLECT HIRE ARMY DEPLOY LOOT EQUIP GEAR QUESTS TALK NPCS`,
+        `WAREHOUSES BUY SELL COOK MOVE ATTACK SLEEP WEATHER HEAT BOUNTIES`,
+        `STASH SAFEHOUSE CREW CREWS MSG LETTERS SEARCH SCAVENGE PANHANDLE WORK`,
+        gs.isVampire?`FEED MESMERIZE MIST DOMINATE THRALL NIGHT MARKET THIRST`:"",
+        gs.isJunkie?`SCORE — find street product cheap`:"",
+        gs.isUndoc?`CONNECT VANISH`:"",gs.isHustler?`FLIP`:"",gs.isFixer?`WIRE BROKER`:"",
+        gs.isRat?`INFORM MISINFORM PLANT EXPOSE INTEL`:"");
       return;
     }
 
@@ -3765,6 +3864,52 @@ export default function NYC(){
       return;
     }
 
+    // ── COLLECT — manually collect accrued corner income ──────────────────────
+    // Income accrues continuously up to a 12-hour cap. COLLECT pockets it.
+    // Separate small passive drip also lands on SLEEP (can't be collected).
+    if(C==="COLLECT"||C==="COLLECT INCOME"){
+      const owned=gs.cornersOwned||[];
+      if(owned.length===0){push("You don't own any corners. CLAIM one first ($50). Then come back.");return;}
+      const now=Date.now();
+      const lastCollect=gs.lastCollect||gs.startTime||now;
+      const MAX_ACCRUAL_HOURS=12;
+      const hoursAccrued=Math.min((now-lastCollect)/(1000*60*60),MAX_ACCRUAL_HOURS);
+      const breakdown=[];
+      let total=0;
+      owned.forEach(bId=>{
+        const lvl=world.cornerLevels?.[bId]||0;
+        const lastVisit=world.cornerLastVisit?.[gs.name+":"+bId]||0;
+        const daysSince=gs.day-(lastVisit||0);
+        const cold=daysSince>2;
+        const hasLt=(gs.army||[]).some(u=>u.id==="lieutenant");
+        if(cold&&!hasLt){
+          breakdown.push(`  ❄ ${getBoro(bId)?.short}: COLD — visit this corner to reactivate`);
+        } else {
+          const dailyRate=getCornerIncome(bId,lvl,gs);
+          const hourlyRate=dailyRate/24;
+          const maxAccrual=Math.floor(hourlyRate*MAX_ACCRUAL_HOURS);
+          const earned=Math.floor(hourlyRate*hoursAccrued);
+          const fillPct=Math.round((hoursAccrued/MAX_ACCRUAL_HOURS)*100);
+          const bar="█".repeat(Math.floor(fillPct/10))+"░".repeat(10-Math.floor(fillPct/10));
+          total+=earned;
+          breakdown.push(`  ${getBoro(bId)?.short} L${lvl}: [${bar}] ${fillPct}% · +$${earned} (max $${maxAccrual}/12h)`);
+        }
+      });
+      if(total===0){
+        push("","💰 CORNER INCOME","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+          ...breakdown,"",
+          hoursAccrued<0.5?"Check back soon — income accrues over time.":"All corners cold. MOVE to your borough and LOOK to reactivate.",
+          "Income caps at 12 hours. Collect before it maxes out.");return;
+      }
+      updGs(g=>({...g,cash:g.cash+total,lastCollect:now}));
+      const hoursLeft=MAX_ACCRUAL_HOURS-hoursAccrued;
+      push("","💰 CORNER INCOME COLLECTED","━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ...breakdown,"",
+        `Total: +$${total}  (${hoursAccrued.toFixed(1)}h accrued)`,
+        hoursLeft>0.5?`Accrual restarted. Cap fills again in ${MAX_ACCRUAL_HOURS}h. Next max: +$${total}.`:"",
+        "💡 Tip: Income caps at 12h. Collect twice a day for max earnings.");
+      return;
+    }
     if(C==="WEATHER"){
       push(`${weather.icon} ${weather.name.toUpperCase()}`,weather.desc,
         "Bust rate: "+(weather.bustMult<1?"-"+Math.round((1-weather.bustMult)*100)+"%":weather.bustMult>1?"+"+Math.round((weather.bustMult-1)*100)+"%":"normal"),
@@ -3818,8 +3963,7 @@ export default function NYC(){
       }
       // rare event roll on LOOK
       if(!rareEvent){
-        const _hour=gameTime?.hour||12;
-        const _isNight=_hour>=22||_hour<4;
+        const _isNight=false; // clock removed — night events can happen anytime now
         const triggered=RARE_EVENTS.filter(ev=>{
           if(ev.nightOnly&&!_isNight)return false;
           if(ev.boroughs&&!ev.boroughs.includes(boro))return false;
@@ -4092,7 +4236,7 @@ export default function NYC(){
       const clientsToday=gs.hustleCount||0;
       const maxClients=6;
       if(clientsToday>=maxClients){push(`You've hit your limit for today. Come back tomorrow.`);return;}
-      const isNight=gameTime.hour>=20||gameTime.hour<4;
+      const isNight=(gs.day%2===0); // alternate day/night cycle
       const nightBonus=isNight?1.4:1.0;
       const charmMod=Math.floor((gs.stats?.charm||10)/2);
       const basePay=rnd(30,70);
@@ -4887,7 +5031,8 @@ export default function NYC(){
         });
         updGs(g=>{const na={...g.activeQuests};expiredQuests.forEach(([qid])=>delete na[qid]);return{...g,activeQuests:na};});
       }
-      // Corner income — tiered by borough, level, presence
+      // Corner passive drip on SLEEP — 25% of daily rate lands automatically
+      // The other 75% accrues toward the COLLECT cap (manual collection)
       let income=0;const coldCorners=[];const hotCorners=[];
       gs.cornersOwned.forEach(bId=>{
         const lvl=world.cornerLevels?.[bId]||0;
@@ -4898,9 +5043,10 @@ export default function NYC(){
         if(cold&&!hasLt){coldCorners.push(getBoro(bId)?.short||bId);}
         else if(cold&&hasLt){} // lieutenant keeps it running
         else{
-          const earned=getCornerIncome(bId,lvl,gs);
-          income+=earned;
-          // Passive heat from high-value corners
+          // 25% passive drip — lands on sleep automatically
+          const dailyRate=getCornerIncome(bId,lvl,gs);
+          const passiveDrip=Math.floor(dailyRate*0.25);
+          income+=passiveDrip;
           const heatDrain=CORNER_HEAT_DRAIN[bId]||0.1;
           updGs(g=>({...g,heat:clamp(g.heat+heatDrain,0,10)}));
         }
@@ -4999,7 +5145,7 @@ export default function NYC(){
         paper.personal,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
-        `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners: +$"+income+(coldCorners.length?" ("+coldCorners.join(",")+": COLD)":"")+". ":""}`+
+        `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners (passive drip): +$"+income+(coldCorners.length?" ("+coldCorners.join(",")+": COLD)":"")+". 💡 COLLECT for accrued income. ":""}`+
         (crewBonus>0?"Crew added $"+crewBonus+". ":"")+
         (safePassive>0?"Safe houses: +$"+safePassive+". ":"")+
         (commBonus>0?"Community network: +$"+commBonus+". ":"")+
@@ -5906,8 +6052,8 @@ export default function NYC(){
       const arch2=gs.archetype?.id||"veteran";
       const frame=PORTRAIT_FRAMES[arch2]||PORTRAIT_FRAMES.veteran;
       const label=gs.name.slice(0,4).toUpperCase();
-      const weapon=gs.equipment?.weapon?getItemById(gs.equipment.weapon):null;
-      const chest=gs.equipment?.chest?getItemById(gs.equipment.chest):null;
+      const weapon=gs.equipment?.weapon?(typeof gs.equipment.weapon==="object"&&gs.equipment.weapon._rolled?gs.equipment.weapon:getItemById(gs.equipment.weapon)):null;
+      const chest=gs.equipment?.chest?(typeof gs.equipment.chest==="object"&&gs.equipment.chest._rolled?gs.equipment.chest:getItemById(gs.equipment.chest)):null;
       push(``,`— ${gs.name.toUpperCase()} —`,...frame.map(l=>l.replace("{}",label.padEnd(4).slice(0,4))),
         `HP: ${gs.survival.health}% · Mental: ${gs.survival.mental||70}%`,
         chest?`Wearing: ${chest.name}`:`No chest gear`,weapon?`Armed: ${weapon.name}`:`No weapon`,``);
@@ -7246,17 +7392,15 @@ export default function NYC(){
         {/* TOP BAR */}
         <div style={{borderBottom:"1px solid #111",display:"flex",alignItems:"center",padding:"0 12px",gap:10,background:"#080808",height:38,flexShrink:0}}>
           <div style={{fontFamily:"'VT323',monospace",fontSize:21,color:"#e9c46a",letterSpacing:3,textShadow:"0 0 10px #e9c46a55"}}>HOBO QUEST</div>
-          {gs&&<div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:"#666",marginLeft:8,letterSpacing:1}}>
-            {(()=>{
-              const h=gameTime.hour>=24?gameTime.hour-24:gameTime.hour;
-              const ampm=gameTime.hour<12?"AM":gameTime.hour<24?"PM":"AM";
-              const h12=h===0?12:h>12?h-12:h;
-              const m=String(gameTime.minute).padStart(2,"0");
-              const isNight=gameTime.hour>=20||gameTime.hour<6;
-              const isDawn=gameTime.hour>=6&&gameTime.hour<10;
-              return <span style={{color:isNight?"#9d4edd":isDawn?"#f4a261":"#666"}}>{h12}:{m}{ampm} {isNight?"🌙":isDawn?"🌅":"☀️"}</span>;
-            })()}
-          </div>}
+          {gs&&(()=>{
+            const tempF=weather?.tempF??68;
+            const tempColor=tempF<=25?"#a8dadc":tempF<=40?"#90e0ef":tempF<=60?"#74c69d":tempF<=75?"#e9c46a":tempF<=88?"#f4a261":"#e63946";
+            const tempIcon=tempF<=25?"🥶":tempF<=40?"❄️":tempF<=60?"🌥":tempF<=75?"🌤":tempF<=88?"☀️":"🔥";
+            return <div style={{fontFamily:"'Share Tech Mono',monospace",fontSize:10,color:tempColor,marginLeft:8,letterSpacing:1,display:"flex",alignItems:"center",gap:3}}>
+              <span>{tempIcon}</span>
+              <span style={{fontFamily:"'VT323',monospace",fontSize:14}}>{tempF}°F</span>
+            </div>;
+          })()}
           <div style={{fontSize:8,color:"#191919"}}>|</div>
           <div style={{fontSize:9,color:arch.color}}>{gs.name}</div>
           {gs.crew&&<div style={{fontSize:7,padding:"1px 5px",border:"1px solid #e9c46a33",color:"#e9c46a66"}}>{gs.crew.toUpperCase()}</div>}
@@ -7366,13 +7510,13 @@ export default function NYC(){
               const isCombat   = s.startsWith("⚔")||s.startsWith("💥")||s.startsWith("🥊")||s.startsWith("🔥")||s.startsWith("FIGHT")||s.startsWith("FLEE")||s.includes("damage")||s.includes("HP:")||s.includes("Attack roll")||s.includes("MISS")||s.includes("CRITICAL")||s.startsWith("Round ")||s.includes("combat");
               const isLoot     = s.startsWith("🎁")||s.startsWith("📦")||s.startsWith("💰")||s.includes("LOOT DROP")||s.includes("Acquired:")||s.includes("Bought:")||s.includes("street tax");
               const isLevelUp  = s.startsWith("★")||s.includes("LEVEL UP")||s.includes("Level up")||s.includes("skill point");
-              const isWarning  = s.startsWith("⚠")||s.startsWith("🚨")||s.startsWith("☠")||s.startsWith("❄️")||s.startsWith("💀")||s.includes("BUSTED")||s.includes("arrested")||s.includes("DEAD");
+              const isWarning  = s.startsWith("⚠")||s.startsWith("🚨")||s.startsWith("☠")||s.startsWith("❄️")||s.startsWith("💀")||s.includes("BUSTED")||s.includes("arrested")||s.includes("YOU DIED")||s.includes("went down");
               const isHeat     = s.includes("Heat +")||s.includes("heat +")||s.includes("HEAT:")||(s.includes("🌡")||s.includes("heat:")&&!s.includes("cold"));
               const isCash     = (s.startsWith("+$")||s.startsWith("-$")||s.match(/^\+\$\d/)||s.includes("+$")&&s.length<40)||s.includes("TRADE COMPLETE")||s.includes("Paid $");
               const isMove     = s.startsWith("🚇")||s.startsWith("🚌")||s.startsWith("Arrived")||s.includes("borough")||s.includes("Borough");
               const isDungeon  = s.startsWith("🏭")||s.startsWith("ROOM ")||s.startsWith("WAREHOUSE")||s.includes("EXTRACT")||s.includes("rooms");
               const isQuest    = s.startsWith("📋")||s.startsWith("✓ Quest")||s.startsWith("⚠ Quest")||s.includes("QUEST")||s.includes("quest");
-              const isNarrative= s.startsWith('"')||s.startsWith("You ")||s.startsWith("The ")||s.startsWith("A ")||s.startsWith("An ");
+              const isNarrative= s.startsWith('"')||(s.startsWith("You ")&&!s.includes("$")&&!s.includes("+")&&!s.includes("Heat")&&!s.includes("XP"))||s.startsWith("The street")||s.startsWith("A man")||s.startsWith("An old");
               const isSectionHdr=s.startsWith("—")||s.startsWith("  —")||s.match(/^[A-Z ·]{4,}$/);
               const isCmd      = s.startsWith(">");
               const isStat     = s.includes("·")&&(s.includes("HP")||s.includes("AC")||s.includes("XP")||s.includes("Energy")||s.includes("Hunger"));
@@ -7516,7 +7660,7 @@ export default function NYC(){
                   </div>;})()}
                   {/* Body */}
                   <div style={{fontSize:28,lineHeight:1,color:"#1a1a1a",margin:"4px 0",fontFamily:"monospace"}}>
-                    {(()=>{const bodyItem=gs.equipment?.chest?getItemById(gs.equipment.chest):null;return bodyItem?"🥼":"👕";})()}
+                    {(()=>{const chestRaw=gs.equipment?.chest;const bodyItem=chestRaw?(typeof chestRaw==="object"&&chestRaw._rolled?chestRaw:getItemById(chestRaw)):null;return bodyItem?"🥼":"👕";})()}
                   </div>
                   {/* Feet */}
                   {(()=>{const slot="feet";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
