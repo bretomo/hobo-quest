@@ -5483,10 +5483,9 @@ export default function NYC(){
       if(!choice){push(`Invalid choice.`);return;}
       updGs(g=>choice.fn(g));
       push(``,choice.outcome,``);
-      // log to world history
+      // log to world history only — no broadcast, rare events are personal
       const ws=addWorldHistory(world,"event",gs.name,`${gs.name} faced "${rareEvent.title}" — chose: ${choice.label}`,boro);
-      const ws2=notifyPlayers(ws,gs.name,`⚡ ${gs.name} just faced "${rareEvent.title}" on the street.`);
-      setWorld(ws2);saveWorld(ws2);setWMsgs(ws2.messages||[]);
+      setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
       setRareEvent(null);return;
     }
 
@@ -7718,8 +7717,7 @@ export default function NYC(){
                 {rareEvent.choices.map((ch,i)=>(
                   <div key={i} onClick={()=>{updGs(g=>ch.fn(g));push(``,ch.outcome,``);
                     const ws=addWorldHistory(world,"event",gs.name,`${gs.name} faced "${rareEvent.title}"`,boro);
-                    const ws2=notifyPlayers(ws,gs.name,`⚡ ${gs.name} just faced a rare event on the street.`);
-                    setWorld(ws2);saveWorld(ws2);setWMsgs(ws2.messages||[]);
+                    setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
                     setRareEvent(null);}}
                     style={{padding:"10px 14px",border:"1px solid #e9c46a33",background:"#e9c46a08",color:"#e9c46a",cursor:"pointer",fontSize:11,transition:"all 0.2s"}}>
                     {i+1}. {ch.label}
