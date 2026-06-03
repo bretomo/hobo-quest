@@ -1070,7 +1070,169 @@ const BASE_ITEMS = [
   {id:"oregon_medal",name:"Oregon Trail Medal",     slot:"accessory", rarity:"legendary", stats:{charm:3,toughness:2,mental:20,hustle:2}, desc:"You forded the Hudson. Nobody believes you.", quest:true},
 ];
 
-const getItemById=id=>BASE_ITEMS.find(i=>i.id===id);
+const getItemById=id=>{
+  if(!id)return null;
+  if(typeof id==="object"&&id._rolled)return id; // rolled item object
+  return BASE_ITEMS.find(i=>i.id===id);
+};
+
+// ── LOOT TREADMILL — ITEM TEMPLATES & ROLL SYSTEM ─────────────────────────────
+// Stat ranges per slot. Each stat is [min, max] — min 0 means it sometimes doesn't roll.
+const ITEM_TEMPLATES = [
+  // HEAD
+  {id:"t_beanie",    name:"Beanie",          slot:"head",    weights:{common:60,uncommon:30,rare:8,legendary:2},
+   statRanges:{warmth:[2,12],hustle:[0,2],streetiq:[0,1],heat:[0,-2]}},
+  {id:"t_cap",       name:"Street Cap",       slot:"head",    weights:{common:40,uncommon:35,rare:20,legendary:5},
+   statRanges:{charm:[0,3],heat:[0,-2],streetiq:[0,2]}},
+  {id:"t_hood",      name:"Hood",             slot:"head",    weights:{common:50,uncommon:30,rare:15,legendary:5},
+   statRanges:{heat:[0,-3],hustle:[0,2],streetiq:[0,1]}},
+  {id:"t_balaclava", name:"Balaclava",        slot:"head",    weights:{common:10,uncommon:40,rare:35,legendary:15},
+   statRanges:{heat:[-1,-4],toughness:[0,2],streetiq:[0,2],bustReduction:[0,0.15]}},
+  // CHEST
+  {id:"t_hoodie",    name:"Hoodie",           slot:"chest",   weights:{common:50,uncommon:35,rare:12,legendary:3},
+   statRanges:{warmth:[3,12],heat:[0,-2],toughness:[0,2]}},
+  {id:"t_jacket",    name:"Jacket",           slot:"chest",   weights:{common:20,uncommon:40,rare:30,legendary:10},
+   statRanges:{toughness:[1,4],warmth:[3,15],charm:[0,3],heat:[0,-2]}},
+  {id:"t_vest",      name:"Vest",             slot:"chest",   weights:{common:5,uncommon:20,rare:45,legendary:30},
+   statRanges:{toughness:[2,5],noOneShot:[0,1],warmth:[0,8],fightBonus:[0,2]}},
+  {id:"t_coat",      name:"Coat",             slot:"chest",   weights:{common:20,uncommon:35,rare:30,legendary:15},
+   statRanges:{warmth:[5,18],charm:[0,3],heat:[0,-2],toughness:[0,2]}},
+  // HANDS
+  {id:"t_gloves",    name:"Gloves",           slot:"hands",   weights:{common:50,uncommon:35,rare:12,legendary:3},
+   statRanges:{warmth:[2,10],toughness:[0,2],fightBonus:[0,2],bustReduction:[0,0.08]}},
+  {id:"t_knuckles",  name:"Knuckles",         slot:"hands",   weights:{common:15,uncommon:40,rare:35,legendary:10},
+   statRanges:{fightBonus:[2,6],toughness:[0,3],intimidate:[0,1]}},
+  {id:"t_rings",     name:"Rings",            slot:"hands",   weights:{common:20,uncommon:40,rare:30,legendary:10},
+   statRanges:{charm:[1,4],fightBonus:[0,3],hustle:[0,2]}},
+  // FEET
+  {id:"t_sneakers",  name:"Sneakers",         slot:"feet",    weights:{common:40,uncommon:35,rare:18,legendary:7},
+   statRanges:{hustle:[0,3],charm:[0,2],energy:[0,8]}},
+  {id:"t_boots",     name:"Boots",            slot:"feet",    weights:{common:35,uncommon:40,rare:20,legendary:5},
+   statRanges:{toughness:[1,4],warmth:[3,12],fightBonus:[0,2]}},
+  {id:"t_kicks",     name:"Kicks",            slot:"feet",    weights:{common:20,uncommon:40,rare:30,legendary:10},
+   statRanges:{hustle:[1,3],charm:[1,4],heat:[0,-1]}},
+  // WEAPON
+  {id:"t_blade",     name:"Blade",            slot:"weapon",  weights:{common:30,uncommon:40,rare:22,legendary:8},
+   statRanges:{fightBonus:[2,7],heat:[0,2],toughness:[0,2]}},
+  {id:"t_blunt",     name:"Blunt",            slot:"weapon",  weights:{common:35,uncommon:38,rare:20,legendary:7},
+   statRanges:{fightBonus:[2,6],toughness:[1,3],intimidate:[0,1]}},
+  {id:"t_piece",     name:"The Piece",        slot:"weapon",  weights:{common:2,uncommon:10,rare:40,legendary:48},
+   statRanges:{fightBonus:[5,10],heat:[1,3],toughness:[0,2]}},
+  {id:"t_improvised",name:"Improvised Weapon",slot:"weapon",  weights:{common:60,uncommon:30,rare:8,legendary:2},
+   statRanges:{fightBonus:[1,4],toughness:[0,1]}},
+  // ACCESSORY
+  {id:"t_burner",    name:"Burner",           slot:"accessory",weights:{common:50,uncommon:35,rare:12,legendary:3},
+   statRanges:{hustle:[0,2],streetiq:[0,2],bustReduction:[0,0.1]}},
+  {id:"t_jewelry",   name:"Jewelry",          slot:"accessory",weights:{common:20,uncommon:40,rare:30,legendary:10},
+   statRanges:{charm:[1,4],hustle:[0,2],heat:[0,-1]}},
+  {id:"t_tool",      name:"Street Tool",      slot:"accessory",weights:{common:40,uncommon:40,rare:15,legendary:5},
+   statRanges:{streetiq:[0,3],hustle:[0,2],bustReduction:[0,0.12]}},
+  {id:"t_scanner",   name:"Scanner",          slot:"accessory",weights:{common:10,uncommon:35,rare:40,legendary:15},
+   statRanges:{bustReduction:[0.1,0.3],streetiq:[0,3],heat:[0,-2]}},
+];
+
+// Unique legendary item names — rolled legendaries get a special name
+const LEGENDARY_PREFIXES = ["Bronx","Brooklyn","Queens","Harlem","Flatbush","Bushwick","Bed-Stuy","East New York","Hunts Point","South Bronx","Staten","Midtown"];
+const LEGENDARY_SUFFIXES_BY_SLOT = {
+  head:    ["of the Five Boroughs","of Invisibility","of the Streets","Hood of Legend","of Eternal Night"],
+  chest:   ["of the Untouchable","of Iron","of Shadow","of the Boss","of Last Resort"],
+  hands:   ["of the Reaper","of Fury","of the Phantom","of Reckoning","of Retribution"],
+  feet:    ["of the Wind","of the Ghost","of Escape","of the Grind","of Endless Miles"],
+  weapon:  ["of Last Words","of the Reckoning","of Cold Logic","of Street Justice","of the Final Word"],
+  accessory:["of the Fixer","of the Rat","of Perfect Timing","of the Inner Circle","of the Unknown"],
+};
+
+// Adjectives for rare item names
+const RARE_ADJECTIVES = ["Scarred","Cracked","Weathered","Midnight","Blood-Stained","Well-Worn","Custom","Modified","Reinforced","Stolen","Salvaged","Street-Forged"];
+
+function rollItem(templateId, luckBonus=0) {
+  const template = ITEM_TEMPLATES.find(t=>t.id===templateId)
+    || ITEM_TEMPLATES[Math.floor(Math.random()*ITEM_TEMPLATES.length)];
+
+  // Determine rarity via weighted roll
+  const rarityWeights = template.weights || {common:50,uncommon:30,rare:15,legendary:5};
+  const totalW = Object.values(rarityWeights).reduce((a,b)=>a+b,0);
+  let rarityRoll = Math.random()*(totalW + luckBonus*10);
+  let rarity = "common";
+  for(const [r,w] of Object.entries(rarityWeights)){
+    rarityRoll -= w;
+    if(rarityRoll<=0){rarity=r;break;}
+  }
+  // luck can push up one tier
+  if(luckBonus>0&&Math.random()<luckBonus*0.05){
+    const tiers=["common","uncommon","rare","legendary"];
+    const idx=tiers.indexOf(rarity);
+    if(idx<3)rarity=tiers[idx+1];
+  }
+
+  // Roll stats
+  const stats = {};
+  for(const [stat,[min,max]] of Object.entries(template.statRanges||{})){
+    // negative stats (like heat:-2) need special handling
+    const absMin=Math.min(Math.abs(min),Math.abs(max));
+    const absMax=Math.max(Math.abs(min),Math.abs(max));
+    const sign = min<0||max<0 ? -1 : 1;
+    // higher rarity = higher end of the range
+    const rarityMult = {common:0.4,uncommon:0.65,rare:0.85,legendary:1.0}[rarity];
+    const rolledAbs = Math.floor(absMin + Math.random()*(absMax-absMin+1)*rarityMult);
+    if(rolledAbs>0) stats[stat] = sign*rolledAbs;
+  }
+
+  // Generate flavored name
+  let name;
+  if(rarity==="legendary"){
+    const prefix=LEGENDARY_PREFIXES[Math.floor(Math.random()*LEGENDARY_PREFIXES.length)];
+    const suffixes=LEGENDARY_SUFFIXES_BY_SLOT[template.slot]||["of the Streets"];
+    const suffix=suffixes[Math.floor(Math.random()*suffixes.length)];
+    name=`${prefix} ${template.name} ${suffix}`;
+  } else if(rarity==="rare"){
+    const adj=RARE_ADJECTIVES[Math.floor(Math.random()*RARE_ADJECTIVES.length)];
+    name=`${adj} ${template.name}`;
+  } else {
+    name=template.name;
+  }
+
+  // Generate flavor desc from stats
+  const statStr=Object.entries(stats).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+  const desc=`${rarity.charAt(0).toUpperCase()+rarity.slice(1)} drop. ${statStr||"No bonuses"}.`;
+
+  return {
+    _rolled: true,                    // marks as rolled item (not static BASE_ITEMS)
+    id: templateId+"_"+Date.now()+"_"+Math.floor(Math.random()*9999),
+    templateId,
+    name,
+    slot: template.slot,
+    rarity,
+    stats,
+    desc,
+  };
+}
+
+function rollItemFromSlot(slot, luckBonus=0){
+  const slotTemplates=ITEM_TEMPLATES.filter(t=>t.slot===slot);
+  if(!slotTemplates.length)return rollItem(ITEM_TEMPLATES[0].id,luckBonus);
+  const t=slotTemplates[Math.floor(Math.random()*slotTemplates.length)];
+  return rollItem(t.id,luckBonus);
+}
+
+function rollRandomItem(luckBonus=0){
+  const t=ITEM_TEMPLATES[Math.floor(Math.random()*ITEM_TEMPLATES.length)];
+  return rollItem(t.id,luckBonus);
+}
+
+// Get a display-ready item object from either a string ID or a rolled item object
+function resolveItem(itemOrId){
+  if(!itemOrId)return null;
+  if(typeof itemOrId==="object"&&itemOrId._rolled)return itemOrId;
+  return BASE_ITEMS.find(i=>i.id===itemOrId||i.name===itemOrId)||null;
+}
+
+// Format a rolled item for the feed
+function itemDropMsg(item){
+  const rar=ITEM_RARITY[item.rarity]||ITEM_RARITY.common;
+  const statStr=Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+  return `${rar.prefix}${item.name} [${item.slot}]${statStr?" — "+statStr:""}`;
+}
 
 // ── D&D COMBAT ENGINE ─────────────────────────────────────────────────────────
 // Dice roller
@@ -1163,7 +1325,106 @@ const applyBossSpecial=(special,playerHp,enemyHp,log)=>{
   return{playerHp,enemyHp};
 };
 
-// Special abilities per archetype — usable in combat
+// ── WAREHOUSE RUN SYSTEM ──────────────────────────────────────────────────────
+// Each warehouse is a 3-room dungeon. Rooms have: enemies, events, or loot caches.
+// Player enters, fights/navigates room by room, collects loot at the end.
+// Cooldown: 1 run per warehouse per day. Difficulty scales with player level.
+
+const WAREHOUSE_ROOMS = {
+  // Room archetypes — picked randomly per run
+  entry: [
+    {id:"empty_dock",   desc:"Loading dock. Empty. Crates stacked high. Dusty light through broken skylights.", event:"clear"},
+    {id:"watchman",     desc:"A bored watchman with a folding chair and a radio. He hasn't seen you yet.", event:"stealth_or_fight", enemy:"thug"},
+    {id:"two_lookouts", desc:"Two teenagers on phones at the door. Lookouts. They clock you the second you enter.", event:"fight_two", enemies:["thug","thug"]},
+    {id:"tripwire",     desc:"Fishing line across the doorframe. Alarm wire. You notice it just in time.", event:"skill_check", stat:"streetiq", dc:10},
+    {id:"sleeping_guard",desc:"Guard asleep at a desk. Empty bottle of Henny next to him.", event:"stealth_or_skip"},
+  ],
+  middle: [
+    {id:"stash_room",   desc:"A back room. Shelves of product. Someone was moving weight here.", event:"loot_cache"},
+    {id:"office",       desc:"Manager's office. File cabinet, safe, cheap desk. Someone left in a hurry.", event:"loot_cache_small"},
+    {id:"enforcer_post",desc:"Heavy sitting in a chair blocking the passage. Arms crossed. Waiting.", event:"fight", enemy:"enforcer"},
+    {id:"two_dealers",  desc:"Two dealers cutting product at a folding table. They see you the same time you see them.", event:"fight_two", enemies:["dealer","dealer"]},
+    {id:"trap_door",    desc:"Floor grate with a padlock. Something below it. The lock is old.", event:"skill_check", stat:"hustle", dc:12, reward:"loot_bonus"},
+    {id:"burned_room",  desc:"Fire damage. Exposed wires. Structural damage. Something is still here though.", event:"loot_cache"},
+    {id:"snitch",       desc:"A scared kid huddled behind boxes. Not crew. Offers to tell you where the stash is for $20.", event:"npc_choice"},
+  ],
+  boss: [
+    {id:"kingpin_office",desc:"Corner office. Someone important works here. They are here right now.", event:"boss_fight", enemy:"kingpin", bossLoot:true},
+    {id:"captain_trap", desc:"The room is set up wrong. Too clean. Too quiet. The Captain steps out of the shadows.", event:"boss_fight", enemy:"boss_captain", bossLoot:true},
+    {id:"iceman_cold",  desc:"Walk-in freezer converted to office. Iceman is at the desk. He has been expecting someone.", event:"boss_fight", enemy:"boss_iceman", bossLoot:true},
+    {id:"duchess_salon",desc:"The back of the warehouse is set up like a real office. The Duchess is running numbers.", event:"boss_fight", enemy:"boss_duchess", bossLoot:true},
+    {id:"main_stash",   desc:"The mother lode. Product stacked floor to ceiling. No guard in sight. Take what you can carry.", event:"loot_jackpot"},
+    {id:"safe_room",    desc:"Reinforced door, open. Safe inside, door hanging open. Someone cleaned it out but left the extras.", event:"loot_cache_large"},
+  ],
+};
+
+const WAREHOUSE_LOCATIONS = {
+  manhattan: {
+    id:"manhattan", name:"Midtown Facility", short:"MIDT",
+    desc:"A converted parking structure off 10th Ave. Four floors. Crew runs product through the freight elevator.",
+    minLevel:8, cooldownH:22,
+    lootMultiplier:2.0, cashRange:[200,600], heatOnEnter:1,
+    flavor:"The security here is real. Cameras. Dogs. Professionals.",
+  },
+  brooklyn: {
+    id:"brooklyn", name:"Atlantic Ave Warehouse", short:"ATL",
+    desc:"Industrial block near the BQE. Corrugated steel walls. Smells like motor oil and weed.",
+    minLevel:3, cooldownH:20,
+    lootMultiplier:1.2, cashRange:[80,220], heatOnEnter:0,
+    flavor:"Crew territory. You will see faces you know. That cuts both ways.",
+  },
+  bronx: {
+    id:"bronx", name:"Hunts Point Cold Storage", short:"HUNT",
+    desc:"Legitimate-looking outside. Inside it is entirely not that.",
+    minLevel:5, cooldownH:21,
+    lootMultiplier:1.4, cashRange:[100,300], heatOnEnter:1,
+    flavor:"Three exits that you can see. Probably more you cannot.",
+  },
+  queens: {
+    id:"queens", name:"Flushing Depot", short:"FLSH",
+    desc:"Export company front. Shipping containers stacked outside. The real operation is inside.",
+    minLevel:4, cooldownH:20,
+    lootMultiplier:1.3, cashRange:[90,260], heatOnEnter:0,
+    flavor:"Mixed crew. Multiple factions run through here. Complicated.",
+  },
+  staten: {
+    id:"staten", name:"Bayway Terminal", short:"BAY",
+    desc:"Ferry-adjacent. Easy to get product on and off the island. That is the whole reason it exists.",
+    minLevel:1, cooldownH:18,
+    lootMultiplier:1.0, cashRange:[50,150], heatOnEnter:0,
+    flavor:"Small operation. But it is where people learn.",
+  },
+};
+
+function generateWarehouseRun(warehouseId, playerLevel, luckBonus=0) {
+  const wh = WAREHOUSE_LOCATIONS[warehouseId];
+  if(!wh) return null;
+  // Pick rooms: 1 entry + 1-2 middle + 1 boss
+  const entryRoom = WAREHOUSE_ROOMS.entry[rnd(0, WAREHOUSE_ROOMS.entry.length-1)];
+  const midCount = playerLevel >= 6 ? 2 : 1;
+  const midRooms = [];
+  const midPool = [...WAREHOUSE_ROOMS.middle];
+  for(let i=0;i<midCount;i++){
+    const idx=rnd(0,midPool.length-1);
+    midRooms.push(midPool.splice(idx,1)[0]);
+  }
+  const bossRoom = WAREHOUSE_ROOMS.boss[rnd(0,WAREHOUSE_ROOMS.boss.length-1)];
+  const rooms = [entryRoom, ...midRooms, bossRoom];
+  return {
+    warehouseId,
+    warehouseName: wh.name,
+    rooms,
+    currentRoom: 0,
+    totalRooms: rooms.length,
+    loot: [],           // items collected during run
+    cashFound: 0,       // cash found during run
+    lootMultiplier: wh.lootMultiplier,
+    cashRange: wh.cashRange,
+    status: "active",   // active | complete | failed | fled
+    startTime: Date.now(),
+    heatOnEnter: wh.heatOnEnter,
+  };
+}
 const COMBAT_ABILITIES = {
   veteran:      [{id:"power_strike", name:"Power Strike",  cooldown:3, desc:"Strike hard. 2d8+STR damage.",       fn:(gs,enemy)=>{const r=rollStr(8,2);const dmg=r.total+mod(gs.stats?.toughness||5)+2;return{log:[`⚔ POWER STRIKE! Rolled ${r.rolls.join("+")}=${r.total}. +${mod(gs.stats?.toughness||5)+2} bonus. ${dmg} damage!`],enemyDmg:dmg,selfDmg:0};}},
                  {id:"endure_hit",   name:"Endure",        cooldown:5, desc:"Brace. Take half damage this round.", fn:(gs,enemy)=>{return{log:[`🛡 ENDURE activated. Damage halved this round.`],enemyDmg:0,selfDmg:0,halfDmg:true};}}],
@@ -1281,11 +1542,10 @@ const checkNotoriety=(gs,updGs,push,worldRef,saveWorld)=>{
 };
 
 const getItemStats=(equipment)=>{
-  // sum all equipped item stats
   const totals={};
-  Object.values(equipment||{}).forEach(itemId=>{
-    if(!itemId)return;
-    const item=getItemById(itemId);
+  Object.values(equipment||{}).forEach(itemOrId=>{
+    if(!itemOrId)return;
+    const item=typeof itemOrId==="object"&&itemOrId._rolled ? itemOrId : getItemById(itemOrId);
     if(!item)return;
     Object.entries(item.stats||{}).forEach(([k,v])=>{
       totals[k]=(totals[k]||0)+(typeof v==="boolean"?1:v);
@@ -1837,10 +2097,10 @@ function CharPortrait({gs}){
   const color=gs.archetype?.color||"#e9c46a";
   const id=ARCH_IDENTITY[archId]||ARCH_IDENTITY.veteran;
 
-  const weapon=gs.equipment?.weapon?getItemById(gs.equipment.weapon):null;
-  const chest=gs.equipment?.chest?getItemById(gs.equipment.chest):null;
-  const head=gs.equipment?.head?getItemById(gs.equipment.head):null;
-  const acc=gs.equipment?.accessory?getItemById(gs.equipment.accessory):null;
+  const weapon=gs.equipment?.weapon?(typeof gs.equipment.weapon==="object"&&gs.equipment.weapon._rolled?gs.equipment.weapon:getItemById(gs.equipment.weapon)):null;
+  const chest=gs.equipment?.chest?(typeof gs.equipment.chest==="object"&&gs.equipment.chest._rolled?gs.equipment.chest:getItemById(gs.equipment.chest)):null;
+  const head=gs.equipment?.head?(typeof gs.equipment.head==="object"&&gs.equipment.head._rolled?gs.equipment.head:getItemById(gs.equipment.head)):null;
+  const acc=gs.equipment?.accessory?(typeof gs.equipment.accessory==="object"&&gs.equipment.accessory._rolled?gs.equipment.accessory:getItemById(gs.equipment.accessory)):null;
 
   const hpPct=gs.survival.health;
   const mpPct=gs.survival.mental||70;
@@ -1911,23 +2171,26 @@ function CharPortrait({gs}){
 }
 
 function InvGrid({items,equipment,onEquip}){
-  // Merge inventory strings with equipped item names for display
-  const equippedNames=Object.values(equipment||{}).filter(Boolean).map(id=>{const i=getItemById(id);return i?.name;}).filter(Boolean);
+  const equippedIds=new Set(Object.values(equipment||{}).filter(Boolean).map(i=>typeof i==="object"&&i._rolled?i.id:i));
   return <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:2}}>
     {(items||[]).map((item,i)=>{
-      const baseItem=BASE_ITEMS.find(b=>b.name===item||b.id===item);
+      const isRolled=typeof item==="object"&&item._rolled;
+      const baseItem=isRolled?item:BASE_ITEMS.find(b=>b.name===item||b.id===item);
       const rar=baseItem?ITEM_RARITY[baseItem.rarity]:null;
-      const isEquipped=equippedNames.includes(item);
-      return <div key={i} onClick={()=>baseItem&&onEquip&&onEquip(baseItem)} style={{
-        height:38,border:"1px solid "+(isEquipped?rar?.color||"#2a9d8f":rar?rar.color+"44":"#1a1a1a"),
+      const isEquipped=isRolled?equippedIds.has(item.id):equippedIds.has(item)||equippedIds.has(baseItem?.id);
+      const displayName=isRolled?item.name:(typeof item==="string"?item:"?");
+      return <div key={i} onClick={()=>baseItem&&onEquip&&onEquip(isRolled?item:baseItem)} style={{
+        height:42,border:"1px solid "+(isEquipped?rar?.color||"#2a9d8f":rar?rar.color+"44":"#1a1a1a"),
         background:isEquipped?(rar?.color||"#2a9d8f")+"15":baseItem?"#0f0f0f":"#080808",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
         fontSize:6,fontFamily:"'Share Tech Mono',monospace",
         color:isEquipped?rar?.color||"#2a9d8f":rar?.color||"#666",
         textAlign:"center",padding:2,lineHeight:1.3,cursor:baseItem?"pointer":"default",
+        position:"relative",
       }}>
-        {baseItem&&<div style={{fontSize:8,marginBottom:1}}>{RARITY_SYMBOL[baseItem.rarity]||"·"}</div>}
-        <div>{item||"·"}</div>
+        {rar&&<div style={{fontSize:7,marginBottom:1}}>{RARITY_SYMBOL[baseItem.rarity]||"·"}</div>}
+        <div style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"100%",padding:"0 2px"}}>{displayName||"·"}</div>
+        {isRolled&&<div style={{fontSize:5,color:rar?.color||"#888",marginTop:1}}>{Object.entries(item.stats||{}).filter(([,v])=>v).slice(0,2).map(([k,v])=>(v>0?"+":"")+v+k).join(" ")}</div>}
         {isEquipped&&<div style={{fontSize:5,color:rar?.color||"#2a9d8f"}}>EQP</div>}
       </div>;
     })}
@@ -2165,6 +2428,7 @@ export default function NYC(){
   const [toast,setToast]   =useState(null);      // floating notification
   const [crewMsg,setCrewMsg]=useState(false);    // crew-only chat mode
   const [typingUser,setTypingUser]=useState(null);// typing indicator
+  const [dungeon,setDungeon]=useState(null);      // active warehouse run state
   const gsRef=useRef(null);
   const pinRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
   const chatRef=useRef(null);
@@ -3039,16 +3303,15 @@ export default function NYC(){
       // chance for gear drop
       const dropRoll=roll(20);
       let droppedItem=null;
-      if(dropRoll>=17){
-        const rarityRoll=roll(20);
-        const pool=rarityRoll>=19?BASE_ITEMS.filter(i=>i.rarity==="rare"):rarityRoll>=15?BASE_ITEMS.filter(i=>i.rarity==="uncommon"):BASE_ITEMS.filter(i=>i.rarity==="common");
-        droppedItem=pool[Math.floor(Math.random()*pool.length)];
-        if(droppedItem)newLog.push(`  🎁 LOOT DROP: ${ITEM_RARITY[droppedItem.rarity].prefix}${droppedItem.name}! (${droppedItem.slot})`);
+      const luckBonus=(getItemStats(gs.equipment||{}).luck||0);
+      if(dropRoll>=15){
+        droppedItem=rollRandomItem(luckBonus);
+        if(droppedItem)newLog.push(`  🎁 LOOT DROP: ${itemDropMsg(droppedItem)}`);
       }
       push(...newLog);
       updGs(g=>{
         const ng=applyXP({...g,cash:g.cash+loot-cashCost,
-          inventory:droppedItem?[...g.inventory,droppedItem.name]:g.inventory,
+          inventory:droppedItem?[...g.inventory,droppedItem]:g.inventory,
           survival:{...g.survival,health:clamp(Math.round(g.survival.health*(playerHp/cs.hp)),1,100)}},xpGain,"fight");
         return ng;
       });
@@ -3168,6 +3431,215 @@ export default function NYC(){
       }
       push(`In combat! FIGHT · FLEE · USE [ability]`);return;
     }
+
+    // ── DUNGEON / WAREHOUSE RUN COMMANDS ──────────────────────────────────────
+    if(dungeon&&dungeon.status==="active"){
+      const room=dungeon.rooms[dungeon.currentRoom];
+      const isLastRoom=dungeon.currentRoom===dungeon.rooms.length-1;
+
+      // ADVANCE — move to next room
+      if(C==="ADVANCE"||C==="NEXT"||C==="FORWARD"){
+        if(dungeon.currentRoom>=dungeon.rooms.length){
+          push("You've cleared the warehouse. EXTRACT to leave.");return;
+        }
+        const nextRoom=dungeon.rooms[dungeon.currentRoom];
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `ROOM ${dungeon.currentRoom+1}/${dungeon.rooms.length} — ${nextRoom.id.replace(/_/g," ").toUpperCase()}`,
+          nextRoom.desc,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        const ev=nextRoom.event;
+        if(ev==="clear"){push("Clear. Nothing here. Move on — ADVANCE.");return;}
+        if(ev==="loot_cache"||ev==="loot_cache_small"||ev==="loot_cache_large"||ev==="loot_jackpot"){
+          const mult=ev==="loot_jackpot"?3:ev==="loot_cache_large"?2:ev==="loot_cache_small"?0.5:1;
+          const cashMin=Math.floor(dungeon.cashRange[0]*mult*dungeon.lootMultiplier);
+          const cashMax=Math.floor(dungeon.cashRange[1]*mult*dungeon.lootMultiplier);
+          const cash=rnd(cashMin,cashMax);
+          const luckBonus=getItemStats(gs.equipment||{}).luck||0;
+          const item=rollRandomItem(luckBonus+(ev==="loot_jackpot"?3:0));
+          setDungeon(d=>({...d,cashFound:d.cashFound+cash,loot:[...d.loot,item],currentRoom:d.currentRoom+1}));
+          push(`💰 Found $${cash} in cash.`,`📦 Loot: ${itemDropMsg(item)}`,``,isLastRoom?"EXTRACT to leave.":"ADVANCE to continue.");
+          return;
+        }
+        if(ev==="fight"||ev==="boss_fight"){
+          const enemyKey=nextRoom.enemy||(isLastRoom?"kingpin":"dealer");
+          const scaledEnemy={...ENEMIES[enemyKey]};
+          // Scale enemy to player level
+          const lvDiff=Math.max(0,gs.level-5);
+          scaledEnemy.hp=Math.floor((scaledEnemy.hp||20)*(1+lvDiff*0.1));
+          scaledEnemy.attackBonus=(scaledEnemy.attackBonus||3)+Math.floor(lvDiff*0.5);
+          const isBoss=nextRoom.event==="boss_fight";
+          push(`⚔ ${scaledEnemy.name} blocks the way.`,scaledEnemy.desc||"");
+          resolveCombat(
+            {...gs},
+            enemyKey,
+            (loot,droppedItem)=>{
+              // Win
+              const cash=rnd(dungeon.cashRange[0],dungeon.cashRange[1]);
+              const luckBonus=getItemStats(gs.equipment||{}).luck||0;
+              const bonusItem=isBoss?rollRandomItem(luckBonus+2):null;
+              const newLoot=droppedItem?[...dungeon.loot,droppedItem]:[...dungeon.loot];
+              if(bonusItem)newLoot.push(bonusItem);
+              setDungeon(d=>({...d,cashFound:d.cashFound+cash,loot:newLoot,currentRoom:d.currentRoom+1}));
+              push(``,isBoss?`💀 BOSS DOWN.`:`✓ Clear.`,`+$${cash}`,
+                bonusItem?`🎁 Boss drop: ${itemDropMsg(bonusItem)}`:"",
+                isLastRoom?"EXTRACT to leave with your haul.":"ADVANCE to the next room.");
+            },
+            ()=>{
+              // Lose
+              setDungeon(d=>({...d,status:"failed"}));
+              push(``,`☠ You went down.`,`Dragged out of the warehouse. Nothing to show for it.`,`Run over.`);
+            },
+            ()=>{
+              // Flee from combat — still in dungeon
+              push(`You backed off. Still inside. ADVANCE to try again or EXTRACT to bail.`);
+            }
+          );
+          return;
+        }
+        if(ev==="fight_two"){
+          const enemies=nextRoom.enemies||["thug","thug"];
+          push(`⚔ ${enemies.length} enemies. Taking them one at a time.`);
+          // Fight first one
+          resolveCombat({...gs}, enemies[0],
+            ()=>{
+              push(`First one down. Second is coming — ADVANCE.`);
+              setDungeon(d=>({...d,currentRoom:d.currentRoom})); // stay, second fight pending
+            },
+            ()=>{setDungeon(d=>({...d,status:"failed"}));push(`Overwhelmed. Run over.`);},
+            ()=>{push(`Backed off. ADVANCE to re-engage or EXTRACT.`);}
+          );
+          return;
+        }
+        if(ev==="stealth_or_fight"){
+          push(`SNEAK to attempt stealth (streetiq check) or FIGHT to engage.`);
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+        }
+        if(ev==="stealth_or_skip"){
+          push(`SNEAK past while they sleep or SEARCH the room.`);
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+        }
+        if(ev==="skill_check"){
+          const stat=nextRoom.stat||"streetiq";const dc=nextRoom.dc||10;
+          const statVal=gs.stats?.[stat]||5;
+          const d20=roll(20);const total=d20+Math.floor(statVal/2);
+          push(`${stat.toUpperCase()} CHECK: d20=${d20}+${Math.floor(statVal/2)}=${total} vs DC${dc}`);
+          if(total>=dc){
+            const cash=rnd(30,120);
+            setDungeon(d=>({...d,cashFound:d.cashFound+cash,currentRoom:d.currentRoom+1}));
+            push(`✓ SUCCESS. $${cash} found.`,isLastRoom?"EXTRACT to leave.":"ADVANCE.");
+          } else {
+            push(`✗ FAIL. Alerted. Moving on — ADVANCE quickly.`);
+            updGs(g=>({...g,heat:clamp(g.heat+1,0,10)}));
+            setDungeon(d=>({...d,currentRoom:d.currentRoom+1}));
+          }
+          return;
+        }
+        if(ev==="npc_choice"){
+          push(`Kid says he'll show you the stash for $20. PAY to take the deal or IGNORE.`);
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+        }
+        // Default: just advance
+        setDungeon(d=>({...d,currentRoom:d.currentRoom+1}));
+        push(isLastRoom?"EXTRACT to leave.":"ADVANCE to continue.");
+        return;
+      }
+
+      // SNEAK — stealth past guards
+      if(C==="SNEAK"){
+        const siq=gs.stats?.streetiq||5;const d20=roll(20);const total=d20+Math.floor(siq/2);const dc=12;
+        push(`STEALTH: d20=${d20}+${Math.floor(siq/2)}=${total} vs DC${dc}`);
+        if(total>=dc){
+          push(`✓ Slipped past. Clear.`);
+          setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:null}));
+          push(dungeon.currentRoom+1>=dungeon.rooms.length?"EXTRACT to leave.":"ADVANCE.");
+        } else {
+          push(`✗ Spotted. FIGHT.`);
+          resolveCombat({...gs},"thug",
+            ()=>{setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:null}));push("Guard down. ADVANCE.");},
+            ()=>{setDungeon(d=>({...d,status:"failed"}));push("Run over.");},
+            ()=>{push("Fled combat. Still in dungeon. ADVANCE or EXTRACT.");}
+          );
+        }
+        return;
+      }
+
+      // PAY — pay snitch NPC
+      if(C==="PAY"){
+        if(gs.cash<20){push("Need $20.");return;}
+        const cash=rnd(80,250);const luckBonus=getItemStats(gs.equipment||{}).luck||0;
+        const item=rollRandomItem(luckBonus+1);
+        updGs(g=>({...g,cash:g.cash-20}));
+        setDungeon(d=>({...d,cashFound:d.cashFound+cash,loot:[...d.loot,item],currentRoom:d.currentRoom+1,pendingEvent:null}));
+        push(`Paid $20. Kid leads you to a side room.`,`Found: $${cash} + ${itemDropMsg(item)}`,
+          dungeon.currentRoom+1>=dungeon.rooms.length?"EXTRACT.":"ADVANCE.");
+        return;
+      }
+
+      // IGNORE — skip NPC
+      if(C==="IGNORE"){
+        setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:null}));
+        push("Left the kid there. Moved on.");
+        push(dungeon.currentRoom+1>=dungeon.rooms.length?"EXTRACT.":"ADVANCE.");
+        return;
+      }
+
+      // SEARCH — search current room for bonus loot
+      if(C==="SEARCH"&&dungeon){
+        const luckBonus=getItemStats(gs.equipment||{}).luck||0;
+        if(Math.random()<0.4+luckBonus*0.05){
+          const cash=rnd(20,80);
+          setDungeon(d=>({...d,cashFound:d.cashFound+cash,currentRoom:d.currentRoom+1,pendingEvent:null}));
+          push(`Found $${cash} tucked away.`,dungeon.currentRoom+1>=dungeon.rooms.length?"EXTRACT.":"ADVANCE.");
+        } else {
+          setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:null}));
+          push("Nothing extra here. ADVANCE.");
+        }
+        return;
+      }
+
+      // EXTRACT — exit the warehouse with what you have
+      if(C==="EXTRACT"||C==="EXIT"||C==="LEAVE"){
+        const d=dungeon;
+        const totalCash=d.cashFound;
+        const items=d.loot;
+        const completed=d.currentRoom>=d.rooms.length;
+        setDungeon({...d,status:completed?"complete":"fled"});
+        // Award everything
+        if(totalCash>0||items.length>0){
+          updGs(g=>({...g,
+            cash:g.cash+totalCash,
+            inventory:[...g.inventory,...items],
+            heat:clamp(g.heat+(d.heatOnEnter||0),0,10),
+          }));
+          updGs(g=>applyXP(g,(completed?150:60)+(d.currentRoom*20),"fight"));
+        }
+        const roomsCleared=d.currentRoom;
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          completed?`✓ WAREHOUSE CLEARED`:`EXTRACTED — ${roomsCleared}/${d.rooms.length} rooms`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          totalCash>0?`💰 Cash: +$${totalCash}`:"",
+          ...items.map(i=>`📦 ${itemDropMsg(i)}`),
+          items.length===0&&totalCash===0?"Nothing to show for it.":"",
+          `Heat +${d.heatOnEnter||0}. XP awarded.`,
+          ``,`Cooldown active. Run WAREHOUSES for the list.`);
+        // Mark cooldown in gamestate
+        updGs(g=>({...g,warehouseCooldowns:{...(g.warehouseCooldowns||{}),[d.warehouseId]:Date.now()}}));
+        setDungeon(null);
+        return;
+      }
+
+      // STATUS — show current dungeon status
+      if(C==="STATUS"||C==="WHERE"){
+        push(``,`📍 ${dungeon.warehouseName}`,
+          `Room ${dungeon.currentRoom+1} of ${dungeon.rooms.length}`,
+          `Cash found so far: $${dungeon.cashFound}`,
+          `Items: ${dungeon.loot.length}`,
+          ``,`ADVANCE · EXTRACT · SEARCH · SNEAK`);
+        return;
+      }
+
+      // Catch-all while in dungeon
+      push(`Inside ${dungeon.warehouseName}. ADVANCE · EXTRACT · STATUS`);return;
+    }
     // rare event requires response before anything else
     if(rareEvent){
       const chooseM=C.match(/^CHOOSE ([12])$/);
@@ -3221,6 +3693,61 @@ export default function NYC(){
         gs.isRat?`  INFORM [player] · MISINFORM [player] · PLANT [player] · EXPOSE [player] · INTEL · PANIC · RAT STATUS`:"",
         gs.isUndoc?`  CONNECT — tap community network · VANISH — emergency heat dump`:"",
         gs.isHustler?`  FLIP — arbitrage analysis`:"");
+      return;
+    }
+
+    // ── WAREHOUSE COMMANDS ────────────────────────────────────────────────────
+    if(C==="WAREHOUSES"||C==="RUNS"||C==="DUNGEON"){
+      push(``,`🏭 WAREHOUSE RUNS`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `Abandoned warehouses controlled by crews. Enter, clear rooms, take loot.`,
+        `Each has a cooldown. Scale up as you level.`,``);
+      Object.values(WAREHOUSE_LOCATIONS).forEach(wh=>{
+        const cooldown=wh.cooldownH*3600000;
+        const lastRun=(gs.warehouseCooldowns||{})[wh.id]||0;
+        const ready=Date.now()-lastRun>cooldown;
+        const minLeft=ready?0:Math.ceil((cooldown-(Date.now()-lastRun))/60000);
+        const inRange=boro===wh.id;
+        push(`  ${ready?"✓":"🕐"} ${wh.name} [${wh.short}] — Min Level ${wh.minLevel}`+(ready?"":" ("+minLeft+"m cooldown)"),
+          `     ${wh.desc}`,
+          `     Cash: $${wh.cashRange[0]}-${Math.floor(wh.cashRange[1]*wh.lootMultiplier*3)} · ${wh.flavor}`,
+          inRange&&ready&&gs.level>=wh.minLevel?`     → ENTER WAREHOUSE to run this now.`:"",``);
+      });
+      push(`ENTER WAREHOUSE to start a run in your current borough.`,
+        `You must be in the right borough. MOVE [borough] to travel.`);
+      return;
+    }
+
+    if(C==="ENTER WAREHOUSE"||C==="ENTER"||C==="RUN WAREHOUSE"){
+      if(dungeon){push("Already inside a warehouse. EXTRACT to leave first.");return;}
+      if(combat){push("Can't enter a warehouse in combat.");return;}
+      const wh=WAREHOUSE_LOCATIONS[boro];
+      if(!wh){push(`No warehouse in ${getBoro(boro)?.name}. Try another borough.`);return;}
+      if(gs.level<wh.minLevel){push(`Need Level ${wh.minLevel} to run ${wh.name}. You're Level ${gs.level}.`);return;}
+      const cooldown=wh.cooldownH*3600000;
+      const lastRun=(gs.warehouseCooldowns||{})[boro]||0;
+      if(Date.now()-lastRun<cooldown){
+        const minLeft=Math.ceil((cooldown-(Date.now()-lastRun))/60000);
+        push(`${wh.name} is on cooldown. ${minLeft} more minutes.`);return;
+      }
+      if(gs.survival.health<25){push("Too hurt to run a warehouse. REST or heal first.");return;}
+      if(gs.survival.energy<20){push("Too exhausted. REST first.");return;}
+      const luckBonus=getItemStats(gs.equipment||{}).luck||0;
+      const run=generateWarehouseRun(boro,gs.level,luckBonus);
+      setDungeon(run);
+      const firstRoom=run.rooms[0];
+      push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `🏭 ${wh.name.toUpperCase()}`,wh.desc,wh.flavor,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+        `${run.totalRooms} rooms. Unknown layout. Stay sharp.`,``,
+        `ROOM 1/${run.totalRooms} — ${firstRoom.id.replace(/_/g," ").toUpperCase()}`,
+        firstRoom.desc,``,
+        firstRoom.event==="clear"?"Clear room. ADVANCE to continue.":
+        firstRoom.event.includes("fight")?"⚔ Hostile. ADVANCE to engage.":
+        firstRoom.event.includes("stealth")?"SNEAK past or FIGHT.":
+        firstRoom.event.includes("loot")?"💰 Loot here. ADVANCE to collect.":
+        "ADVANCE to proceed.",
+        ``,`ADVANCE · SNEAK · SEARCH · STATUS · EXTRACT`);
+      updGs(g=>({...g,heat:clamp(g.heat+(wh.heatOnEnter||0),0,10)}));
       return;
     }
 
@@ -3357,17 +3884,26 @@ export default function NYC(){
     if(C==="INVENTORY"||C==="INV"){
       const rC={common:"⬜",uncommon:"🟩",rare:"🟦",legendary:"🟨"};
       const iLines=gs.inventory.map(i=>{
+        if(typeof i==="object"&&i._rolled){
+          const rc=rC[i.rarity]||"⬜";
+          const statStr=Object.entries(i.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(" ");
+          return "  "+rc+" "+(ITEM_RARITY[i.rarity]?.prefix||"")+i.name+" [EQUIP] ("+statStr+")";
+        }
         const d=BASE_ITEMS.find(x=>x.name===i||x.id===i);
         const rc=rC[d?.rarity]||"⬜";
         const tag=d?.slot==="consumable"?"[USE]":d?.slot?"[EQUIP]":"";
         const statStr=d?Object.entries(d.stats||{}).filter(([,v])=>v&&v!==0).map(([k,v])=>"+"+k).join(" "):"";
         return "  "+rc+" "+i+(tag?" "+tag:"")+(statStr?" ("+statStr+")":"");
       });
-      const eqLines=Object.entries(gs.equipment||{}).filter(([,v])=>v).map(([slot,id])=>{const d=BASE_ITEMS.find(x=>x.id===id);return "  "+slot+": "+(d?.name||id);});
+      const eqLines=Object.entries(gs.equipment||{}).filter(([,v])=>v).map(([slot,itemOrId])=>{
+        const d=typeof itemOrId==="object"&&itemOrId._rolled?itemOrId:getItemById(itemOrId);
+        const statStr=d?Object.entries(d.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", "):"";
+        return "  "+slot+": "+(d?.name||itemOrId)+(statStr?" ["+statStr+"]":"");
+      });
       push("Inventory ("+gs.inventory.length+" items):",
         ...iLines,gs.inventory.length===0?"  Nothing. SEARCH or SCAVENGE to find gear.":"",
         "","Equipped:",...(eqLines.length?eqLines:["  Nothing equipped."]),
-        "","INSPECT [item] · USE [item] · EQUIP [item] · DROP [item] · SCAVENGE");return;
+        "","INSPECT [item] · USE [item] · EQUIP [item] · DROP [item] · LOOT (market)");return;
     }
     if(C==="MARKET"){setTab("market");push(`Market open.`);return;}
     if(C==="NPCS")  {setTab("npcs"); push(`Contacts open.`);return;}
@@ -3955,8 +4491,14 @@ export default function NYC(){
         const bAmt2=tBounty&&typeof tBounty==="object"?tBounty.amount:tBounty||0;
         // Chance to steal an item on PvP win
         if(won&&(tData.inventory||[]).length>0&&Math.random()<0.3){
-          const stealable=(tData.inventory||[]).filter(i=>!["Oregon Trail Medal","Rope","Waterproof Bag","Raft Materials"].includes(i));
-          if(stealable.length>0){const si2=stealable[rnd(0,stealable.length-1)];updGs(g=>({...g,inventory:[...g.inventory,si2]}));setTimeout(()=>push("📦 Also grabbed: "+si2+" from "+tName+"."),150);}
+          const stealable=(tData.inventory||[]).filter(i=>{const n=typeof i==="object"?i.name:i;return !["Oregon Trail Medal","Rope","Waterproof Bag","Raft Materials"].includes(n);});
+          if(stealable.length>0){const si2=stealable[rnd(0,stealable.length-1)];updGs(g=>({...g,inventory:[...g.inventory,si2]}));setTimeout(()=>push("📦 Also grabbed: "+(typeof si2==="object"?si2.name:si2)+" from "+tName+"."),150);}
+        }
+        // Bonus: 20% chance to drop a random rolled item on PvP win
+        if(won&&Math.random()<0.2){
+          const pvpDrop=rollRandomItem(getItemStats(gs.equipment||{}).luck||0);
+          updGs(g=>({...g,inventory:[...g.inventory,pvpDrop]}));
+          setTimeout(()=>push("💀 Street tax: "+itemDropMsg(pvpDrop)),200);
         }
         if(won&&bAmt2>0){
           const bc3={...world.bounties};delete bc3[tName];
@@ -4816,6 +5358,13 @@ export default function NYC(){
       const totalW=pool.reduce((s,e)=>s+e.w,0);
       let roll=Math.random()*totalW,result="Nothing worth taking here.";
       for(const e of pool){roll-=e.w;if(roll<=0){result=e.fn();break;}}
+      // 25% chance to also find a rolled gear item while scavenging
+      const luckBonus=(getItemStats(gs.equipment||{}).luck||0);
+      if(Math.random()<0.25){
+        const scavItem=rollItemFromSlot(["weapon","hands","feet","accessory"][rnd(0,3)],luckBonus);
+        updGs(g=>({...g,inventory:[...g.inventory,scavItem]}));
+        result+=" Also found: "+itemDropMsg(scavItem)+".";
+      }
       updGs(g=>({...g,lastScavenge:now2,survival:{...g.survival,energy:clamp(g.survival.energy-30,0,100)}}));
       push("","🔍 SCAVENGE — "+b.name,"",result,"","Energy -30. Cooldown 1 hour. SEARCH for quick finds anytime.");
       return;
@@ -5034,11 +5583,12 @@ export default function NYC(){
     if(C==="GEAR"){
       const eqStats=getItemStats(gs.equipment);
       push(`— EQUIPMENT —`,...EQUIPMENT_SLOTS.map(slot=>{
-        const itemId=gs.equipment?.[slot];
-        const item=itemId?getItemById(itemId):null;
+        const itemOrId=gs.equipment?.[slot];
+        const item=itemOrId?(typeof itemOrId==="object"&&itemOrId._rolled?itemOrId:getItemById(itemOrId)):null;
         const rar=item?ITEM_RARITY[item.rarity]:null;
-        return "  "+slot.toUpperCase()+": "+(item?(rar?.prefix||"")+item.name+" ["+Object.entries(item.stats).map(([k,v])=>k+"+"+v).join(", ")+"]":"(empty)");
-      }),``,`Stat bonuses: ${Object.entries(eqStats).map(([k,v])=>`${k}+${v}`).join(", ")||"none"}`);
+        const statStr=item?Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", "):"";
+        return "  "+slot.toUpperCase()+": "+(item?(rar?.prefix||"")+item.name+(statStr?" ["+statStr+"]":""):"(empty)");
+      }),``,`Stat bonuses: ${Object.entries(eqStats).filter(([,v])=>v).map(([k,v])=>`${k}+${v}`).join(", ")||"none"}`);
       return;
     }
 
@@ -5046,12 +5596,29 @@ export default function NYC(){
     const equipM=C.match(/^EQUIP (.+)$/);
     if(equipM){
       const iName=raw.slice(6).trim().toLowerCase();
+      // Check rolled items in inventory first
+      const rolledMatch=gs.inventory.find(i=>typeof i==="object"&&i._rolled&&i.name.toLowerCase()===iName);
+      if(rolledMatch){
+        const slot=rolledMatch.slot;
+        const oldEquipped=gs.equipment?.[slot];
+        const newInv=gs.inventory.filter(i=>i!==rolledMatch);
+        if(oldEquipped){
+          // put old item back in inventory
+          const oldItem=typeof oldEquipped==="object"&&oldEquipped._rolled?oldEquipped:getItemById(oldEquipped);
+          if(oldItem)newInv.push(oldItem);
+        }
+        updGs(g=>({...g,equipment:{...g.equipment,[slot]:rolledMatch},inventory:newInv}));
+        const statStr=Object.entries(rolledMatch.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+        push(`Equipped: ${ITEM_RARITY[rolledMatch.rarity]?.prefix||""}${rolledMatch.name} (${slot})`,`Stats: ${statStr||"none"}`);
+        return;
+      }
+      // Fall back to static BASE_ITEMS
       const item=BASE_ITEMS.find(i=>i.name.toLowerCase()===iName||i.id===iName.replace(/ /g,"_"));
-      if(!item){push(`Don't know that item.`);return;}
+      if(!item){push(`Don't know that item. Check INVENTORY for exact name.`);return;}
       if(!gs.inventory.includes(item.name)&&!gs.inventory.includes(item.id)){push(`Don't have ${item.name}.`);return;}
       const oldItem=gs.equipment?.[item.slot];
       const newInv=gs.inventory.filter(i=>i!==item.name&&i!==item.id);
-      if(oldItem){const old=getItemById(oldItem);if(old)newInv.push(old.name);}
+      if(oldItem){const old=typeof oldItem==="object"&&oldItem._rolled?oldItem:getItemById(oldItem);if(old)newInv.push(old._rolled?old:old.name);}
       updGs(g=>({...g,equipment:{...g.equipment,[item.slot]:item.id},inventory:newInv}));
       push(`Equipped: ${ITEM_RARITY[item.rarity].prefix}${item.name} (${item.slot})`,`Stats: ${Object.entries(item.stats).map(([k,v])=>`${k}+${v}`).join(", ")}`);
       return;
@@ -5062,38 +5629,111 @@ export default function NYC(){
     if(unequipM){
       const slot=unequipM[1].toLowerCase();
       if(!EQUIPMENT_SLOTS.includes(slot)){push(`Slots: ${EQUIPMENT_SLOTS.join(", ")}`);return;}
-      const itemId=gs.equipment?.[slot];
-      if(!itemId){push(`Nothing equipped in ${slot}.`);return;}
-      const item=getItemById(itemId);
-      updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:item?[...g.inventory,item.name]:g.inventory}));
+      const itemOrId=gs.equipment?.[slot];
+      if(!itemOrId){push(`Nothing equipped in ${slot}.`);return;}
+      const item=typeof itemOrId==="object"&&itemOrId._rolled?itemOrId:getItemById(itemOrId);
+      // Put item back in inventory as object (if rolled) or name (if static)
+      const invItem=item?._rolled?item:(item?.name||null);
+      updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:invItem?[...g.inventory,invItem]:g.inventory}));
       push(`Unequipped ${item?.name||slot}.`);return;
     }
 
-    // LOOT — show available items to find/buy (from search or black market)
+    // LOOT — show available items to find/buy (black market — rolled items)
     if(C==="LOOT"){
-      // 3 random items available in current borough today
-      const seed=(gs.day+boro.length)%BASE_ITEMS.length;
-      const available=[BASE_ITEMS[seed%BASE_ITEMS.length],BASE_ITEMS[(seed+7)%BASE_ITEMS.length],BASE_ITEMS[(seed+13)%BASE_ITEMS.length]];
-      const prices={common:50,uncommon:150,rare:400,legendary:1200};
-      push(`— BLACK MARKET (${getBoro(boro)?.short}) —`,...available.map(item=>{
-        const rar=ITEM_RARITY[item.rarity];
-        const price=prices[item.rarity];
-        return `  ${rar.prefix}${item.name} [${item.slot}] $${price} — ${Object.entries(item.stats).map(([k,v])=>`${k}+${v}`).join(", ")}`;
-      }),``,`Type BUY ITEM [name] to purchase.`);
+      const luckBonus=(getItemStats(gs.equipment||{}).luck||0);
+      // Generate today's market using day+boro as seed for consistency
+      const seed=(gs.day*7+boro.length*3)%ITEM_TEMPLATES.length;
+      const todayTemplates=[
+        ITEM_TEMPLATES[seed%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+5)%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+11)%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+17)%ITEM_TEMPLATES.length],
+      ];
+      // Store today's market in local variable so BUY ITEM can reference same rolls
+      // Roll items deterministically with day seed
+      const mkRng=(n)=>{let s=gs.day*1000+n;return()=>{s=s*16807%2147483647;return(s-1)/2147483646;};};
+      const marketItems=todayTemplates.map((t,idx)=>{
+        const rng=mkRng(idx*99+boro.length);
+        // roll deterministically
+        const rItem={_rolled:true,id:t.id+"_mkt_"+gs.day+"_"+idx,templateId:t.id,slot:t.slot};
+        const rw=t.weights||{common:50,uncommon:30,rare:15,legendary:5};
+        let rr=rng()*(Object.values(rw).reduce((a,b)=>a+b,0)+luckBonus*10);
+        let rarity="common";
+        for(const [r,w] of Object.entries(rw)){rr-=w;if(rr<=0){rarity=r;break;}}
+        const stats={};
+        for(const [stat,[min,max]] of Object.entries(t.statRanges||{})){
+          const sign=min<0||max<0?-1:1;
+          const absMax=Math.max(Math.abs(min),Math.abs(max));
+          const absMin2=Math.min(Math.abs(min),Math.abs(max));
+          const rm={common:0.4,uncommon:0.65,rare:0.85,legendary:1.0}[rarity];
+          const v=Math.floor(absMin2+rng()*(absMax-absMin2+1)*rm);
+          if(v>0)stats[stat]=sign*v;
+        }
+        let name=t.name;
+        if(rarity==="legendary"){
+          const pfx=LEGENDARY_PREFIXES[Math.floor(rng()*LEGENDARY_PREFIXES.length)];
+          const sfx=(LEGENDARY_SUFFIXES_BY_SLOT[t.slot]||["of the Streets"])[Math.floor(rng()*(LEGENDARY_SUFFIXES_BY_SLOT[t.slot]||["of the Streets"]).length)];
+          name=pfx+" "+t.name+" "+sfx;
+        } else if(rarity==="rare"){
+          name=RARE_ADJECTIVES[Math.floor(rng()*RARE_ADJECTIVES.length)]+" "+t.name;
+        }
+        rItem.name=name;rItem.rarity=rarity;rItem.stats=stats;
+        rItem.desc=rarity.charAt(0).toUpperCase()+rarity.slice(1)+" — "+Object.entries(stats).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+        return rItem;
+      });
+      const prices={common:60,uncommon:180,rare:480,legendary:1400};
+      push(``,`🛒 BLACK MARKET — ${getBoro(boro)?.short} (Day ${gs.day})`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        ...marketItems.map((item,i)=>{
+          const rar=ITEM_RARITY[item.rarity]||ITEM_RARITY.common;
+          const price=prices[item.rarity];
+          const statStr=Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+          return `  ${i+1}. ${rar.prefix}${item.name} [${item.slot}] $${price}`;
+        }),
+        ``,
+        ...marketItems.map((item,i)=>{
+          const statStr=Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>(v>0?"+":"")+v+" "+k).join(", ");
+          return `     Stats: ${statStr||"none"}`;
+        }),
+        ``,`BUY MARKET [1-4] to purchase. Resets daily.`);
       return;
     }
 
-    // BUY ITEM [name] — buy gear from black market
-    const buyItemM=C.match(/^BUY ITEM (.+)$/);
-    if(buyItemM){
-      const iName=raw.slice(9).trim().toLowerCase();
-      const item=BASE_ITEMS.find(i=>i.name.toLowerCase()===iName||i.id===iName.replace(/ /g,"_"));
-      if(!item){push(`Unknown item. Type LOOT to see what's available.`);return;}
-      const prices={common:50,uncommon:150,rare:400,legendary:1200};
-      const price=prices[item.rarity];
+    // BUY MARKET [1-4] — buy from today's rolled black market
+    const buyMktM=C.match(/^BUY MARKET ([1-4])$/);
+    if(buyMktM){
+      const idx=parseInt(buyMktM[1])-1;
+      const luckBonus=(getItemStats(gs.equipment||{}).luck||0);
+      const seed=(gs.day*7+boro.length*3)%ITEM_TEMPLATES.length;
+      const todayTemplates=[
+        ITEM_TEMPLATES[seed%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+5)%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+11)%ITEM_TEMPLATES.length],
+        ITEM_TEMPLATES[(seed+17)%ITEM_TEMPLATES.length],
+      ];
+      const t=todayTemplates[idx];
+      if(!t){push("Invalid slot. Choose 1-4.");return;}
+      const mkRng=(n)=>{let s=gs.day*1000+n;return()=>{s=s*16807%2147483647;return(s-1)/2147483646;};};
+      const rng=mkRng(idx*99+boro.length);
+      const rw=t.weights||{common:50,uncommon:30,rare:15,legendary:5};
+      let rr=rng()*(Object.values(rw).reduce((a,b)=>a+b,0)+luckBonus*10);
+      let rarity="common";
+      for(const [r,w] of Object.entries(rw)){rr-=w;if(rr<=0){rarity=r;break;}}
+      const stats={};
+      for(const [stat,[min,max]] of Object.entries(t.statRanges||{})){
+        const sign=min<0||max<0?-1:1;const absMax=Math.max(Math.abs(min),Math.abs(max));const absMin2=Math.min(Math.abs(min),Math.abs(max));
+        const rm={common:0.4,uncommon:0.65,rare:0.85,legendary:1.0}[rarity];
+        const v=Math.floor(absMin2+rng()*(absMax-absMin2+1)*rm);
+        if(v>0)stats[stat]=sign*v;
+      }
+      let name=t.name;
+      if(rarity==="legendary"){const pfx=LEGENDARY_PREFIXES[Math.floor(rng()*LEGENDARY_PREFIXES.length)];const sfx=(LEGENDARY_SUFFIXES_BY_SLOT[t.slot]||["of the Streets"])[Math.floor(rng()*(LEGENDARY_SUFFIXES_BY_SLOT[t.slot]||["of the Streets"]).length)];name=pfx+" "+t.name+" "+sfx;}
+      else if(rarity==="rare"){name=RARE_ADJECTIVES[Math.floor(rng()*RARE_ADJECTIVES.length)]+" "+t.name;}
+      const item={_rolled:true,id:t.id+"_mkt_"+gs.day+"_"+idx,templateId:t.id,slot:t.slot,name,rarity,stats,desc:rarity+" drop"};
+      const prices={common:60,uncommon:180,rare:480,legendary:1400};
+      const price=prices[rarity];
       if(gs.cash<price){push(`Need $${price}. Have $${gs.cash}.`);return;}
-      updGs(g=>({...g,cash:g.cash-price,inventory:[...g.inventory,item.name]}));
-      push(`Acquired: ${ITEM_RARITY[item.rarity].prefix}${item.name} for $${price}.`,`Type EQUIP ${item.name.toLowerCase()} to wear it.`);
+      updGs(g=>({...g,cash:g.cash-price,inventory:[...g.inventory,item]}));
+      push(`Bought: ${ITEM_RARITY[rarity].prefix}${name} ($${price})`,`Slot: ${t.slot} — EQUIP ${name} to wear it.`);
       return;
     }
 
@@ -6327,9 +6967,10 @@ export default function NYC(){
   };
   const unequipSlot=(slot)=>{
     if(!gs)return;
-    const itemId=gs.equipment?.[slot];if(!itemId)return;
-    const item=getItemById(itemId);
-    updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:item?[...g.inventory,item.name]:g.inventory}));
+    const itemOrId=gs.equipment?.[slot];if(!itemOrId)return;
+    const item=typeof itemOrId==="object"&&itemOrId._rolled?itemOrId:getItemById(itemOrId);
+    const invItem=item?._rolled?item:(item?.name||null);
+    updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:invItem?[...g.inventory,invItem]:g.inventory}));
     push(`Unequipped ${item?.name||slot}.`);
   };
   const others=Object.entries(world.players||{}).filter(([n,d])=>n!==gs?.name&&(Date.now()-(d.lastSeen||0))<86400000).map(([n,d])=>({name:n,...d}));
@@ -6678,12 +7319,15 @@ export default function NYC(){
           <div>
             <div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:4}}>// INVENTORY ({gs.inventory.length})</div>
             <InvGrid items={gs.inventory} equipment={gs.equipment} onEquip={(item)=>{
-              const slot=item.slot;const oldItemId=gs.equipment?.[slot];
-              const oldItem=oldItemId?getItemById(oldItemId):null;
-              const newInv=gs.inventory.filter(i=>i!==item.name&&i!==item.id);
-              if(oldItem)newInv.push(oldItem.name);
-              updGs(g=>({...g,equipment:{...g.equipment,[slot]:item.id},inventory:newInv}));
-              push(`Equipped: ${ITEM_RARITY[item.rarity].prefix||""}${item.name}`);
+              const isRolled=item&&item._rolled;
+              const slot=item.slot;
+              const oldEquipped=gs.equipment?.[slot];
+              const oldItem=oldEquipped?(typeof oldEquipped==="object"&&oldEquipped._rolled?oldEquipped:getItemById(oldEquipped)):null;
+              const newInv=gs.inventory.filter(i=>isRolled?(i!==item):(i!==item.name&&i!==item.id));
+              if(oldItem)newInv.push(oldItem._rolled?oldItem:oldItem.name);
+              const equipVal=isRolled?item:item.id;
+              updGs(g=>({...g,equipment:{...g.equipment,[slot]:equipVal},inventory:newInv}));
+              push(`Equipped: ${ITEM_RARITY[item.rarity]?.prefix||""}${item.name}`);
             }}/>
           </div>
         </div>
@@ -7035,6 +7679,30 @@ export default function NYC(){
                   return <div key={i} style={{fontSize:9,color:isCrit?"#f4a261":isHit?"#e63946":isMiss?"#777":"#888",marginBottom:2,lineHeight:1.5}}>{s}</div>;
                 })}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* DUNGEON / WAREHOUSE RUN HUD */}
+        {dungeon&&dungeon.status==="active"&&(
+          <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#060606ee",borderTop:"1px solid #2a9d8f44",padding:"8px 14px",fontFamily:"'Share Tech Mono',monospace",zIndex:90,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,flex:1,minWidth:0}}>
+              <span style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:14,color:"#2a9d8f",letterSpacing:2,whiteSpace:"nowrap"}}>🏭 {dungeon.warehouseName}</span>
+              {/* Room progress dots */}
+              <div style={{display:"flex",gap:3}}>
+                {dungeon.rooms.map((_,i)=>(
+                  <div key={i} style={{width:8,height:8,borderRadius:"50%",
+                    background:i<dungeon.currentRoom?"#2a9d8f":i===dungeon.currentRoom?"#e9c46a":"#1a1a1a",
+                    border:"1px solid "+(i<dungeon.currentRoom?"#2a9d8f44":i===dungeon.currentRoom?"#e9c46a":"#222")}}/>
+                ))}
+              </div>
+              <span style={{fontSize:8,color:"#666",whiteSpace:"nowrap"}}>Room {Math.min(dungeon.currentRoom+1,dungeon.rooms.length)}/{dungeon.rooms.length}</span>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+              {dungeon.cashFound>0&&<span style={{fontSize:9,color:"#e9c46a"}}>💰${dungeon.cashFound}</span>}
+              {dungeon.loot.length>0&&<span style={{fontSize:9,color:"#f4a261"}}>📦{dungeon.loot.length}</span>}
+              <div onClick={()=>handleCmd("ADVANCE")} style={{padding:"4px 10px",background:"#2a9d8f20",border:"1px solid #2a9d8f",color:"#2a9d8f",cursor:"pointer",fontSize:9,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>ADVANCE</div>
+              <div onClick={()=>handleCmd("EXTRACT")} style={{padding:"4px 8px",background:"transparent",border:"1px solid #333",color:"#555",cursor:"pointer",fontSize:9,fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>EXTRACT</div>
             </div>
           </div>
         )}
