@@ -1454,6 +1454,36 @@ const SKILL_TREES = {
     { id:"thrall",        name:"Thrall",          level:8, cost:2, desc:"THRALL [npc] — bind an NPC to you. They provide daily passive income $30.", effect:{ability:"thrall"}},
     { id:"ancient_blood", name:"Ancient Blood",   level:9, cost:3, desc:"Feeding restores full health. Can't be one-shot. Night income x3.",     effect:{ancientBlood:true, noOneShot:true}},
   ],
+  schizo: [
+    { id:"pattern_sense",  name:"Pattern Sense",  level:2, cost:1, desc:"LOOK reveals hidden intel others miss — cop locations, rival movements.", effect:{lookBonus:true}},
+    { id:"chaos_theory",   name:"Chaos Theory",   level:3, cost:1, desc:"Combat random events favor you 60% of the time instead of 50%.",         effect:{chaosFavor:0.6}},
+    { id:"the_signal",     name:"The Signal",     level:4, cost:2, desc:"SIGNAL command. Get a tip about the best money opportunity today.",       effect:{ability:"signal"}},
+    { id:"breakdown",      name:"Breakthrough",   level:5, cost:1, desc:"When mental hits 0, gain +10 to all stats for 1 hour instead of dying.", effect:{breakdownBoost:true}},
+    { id:"sixth_sense",    name:"Sixth Sense",    level:6, cost:2, desc:"Warned 1 turn before cop raids, PvP attacks, and rival pressure.",        effect:{earlyWarn:true}},
+    { id:"prophet",        name:"Prophet",        level:7, cost:2, desc:"PROPHECY command. Predict market prices 2 days ahead with 70% accuracy.", effect:{ability:"prophecy"}},
+    { id:"static",         name:"Static",         level:8, cost:2, desc:"Mental damage from withdrawal halved. Voices become white noise.",        effect:{withdrawalResist:0.5}},
+    { id:"the_frequency",  name:"The Frequency",  level:9, cost:3, desc:"All LOOK and SEARCH finds doubled. The city speaks directly to you.",     effect:{scoutDouble:true}},
+  ],
+  drifter: [
+    { id:"dog_sense",      name:"Dog Sense",      level:2, cost:1, desc:"Your dog warns you before attacks. Can't be sucker-punched.",             effect:{noSuckerPunch:true}},
+    { id:"found_it",       name:"Found It",       level:3, cost:1, desc:"SEARCH finds items twice as often. The dog has a nose for things.",       effect:{searchBonus:2}},
+    { id:"pack_bond",      name:"Pack Bond",      level:4, cost:2, desc:"Dog fights with you. +1d6 damage in combat. Auto-hits.",                  effect:{dogFight:true}},
+    { id:"road_wisdom",    name:"Road Wisdom",    level:5, cost:1, desc:"Moving costs no energy. You've walked every borough a thousand times.",   effect:{freeMoves:true}},
+    { id:"shelter_network",name:"Shelter Network",level:6, cost:2, desc:"SHELTER always succeeds and restores +20hp. Dog is always welcome.",      effect:{shelterBonus:20}},
+    { id:"invisible_man",  name:"Invisible Man",  level:7, cost:2, desc:"Heat passively drops 0.5/day. Police don't look twice at drifters.",      effect:{heatDecay:0.5}},
+    { id:"scavenger",      name:"Scavenger",      level:8, cost:2, desc:"SCAVENGE costs no energy and has no cooldown.",                           effect:{scavengeFree:true}},
+    { id:"old_road",       name:"Old Road",       level:9, cost:3, desc:"Moving between boroughs drops heat -1. You know how to disappear.",       effect:{moveHeatDrop:1}},
+  ],
+  hooker: [
+    { id:"read_em",        name:"Read Em",        level:2, cost:1, desc:"CLIENT command reveals how much they'll pay before you commit.",          effect:{clientPreview:true}},
+    { id:"regular",        name:"Regular",        level:3, cost:1, desc:"Clients become regulars after 2 visits. Regulars pay +30%.",              effect:{regularBonus:0.3}},
+    { id:"the_book",       name:"The Book",       level:4, cost:2, desc:"Maintain a client list. Up to 5 regulars each paying daily.",             effect:{clientBook:5}},
+    { id:"network_effect", name:"Network Effect", level:5, cost:1, desc:"Regulars refer friends. CLIENT command available twice/day.",             effect:{clientDouble:true}},
+    { id:"hush_money",     name:"Hush Money",     level:6, cost:2, desc:"Paying $30 to a regular reduces your heat by 2.",                        effect:{ability:"hush"}},
+    { id:"the_stroll",     name:"The Stroll",     level:7, cost:2, desc:"Owning a corner in your boro doubles CLIENT income.",                     effect:{strollCornerMult:2}},
+    { id:"untouchable_k",  name:"Connected",      level:8, cost:2, desc:"Three NPCs owe you. Call one favor/day — cash, heat drop, or intel.",     effect:{npcFavor:3}},
+    { id:"madame",         name:"Madame",         level:9, cost:3, desc:"Hire 2 workers. Each earns $40/day. You manage the operation.",           effect:{madame:true}},
+  ],
 };
 
 // ── EQUIPMENT SYSTEM ──────────────────────────────────────────────────────────
