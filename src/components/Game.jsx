@@ -7356,8 +7356,92 @@ export default function NYC(){
           <div ref={feedRef} style={{flex:1,padding:"10px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:2,minHeight:0,scrollBehavior:"smooth"}}>
             {feed.map((line,i)=>{
               const s=typeof line==="string"?line:"";
-              const div=s.startsWith("—");const isC=s.startsWith(">");const lvl=s.startsWith("★");const warn=s.startsWith("⚠")||s.startsWith("🚨")||s.startsWith("☠")||s.startsWith("❄️");
-              return <div key={i} style={{fontSize:div?10:13,color:lvl?"#e9c46a":warn?"#ff6b6b":isC?"#6aaa6a":div?"#3a3a3a":"#d4c9b0",letterSpacing:div?2:0,borderBottom:div?"1px solid #1a1a1a":"none",paddingBottom:div?4:0,marginBottom:div?4:0,lineHeight:1.8,minHeight:s===""?7:"auto",fontWeight:lvl||warn?"bold":"normal"}}>{s}</div>;
+              if(s===""){return <div key={i} style={{minHeight:6}}/>;} // blank spacer
+
+              // ── Dividers / headers ─────────────────────────────────────────
+              const isDivider=s.startsWith("━")||s.startsWith("—")||s.match(/^─+$/);
+              if(isDivider)return <div key={i} style={{fontSize:9,color:"#1e1e1e",letterSpacing:2,borderBottom:"1px solid #141414",paddingBottom:3,marginBottom:3,fontFamily:"'Share Tech Mono',monospace"}}>{s}</div>;
+
+              // ── Category detection ─────────────────────────────────────────
+              const isCombat   = s.startsWith("⚔")||s.startsWith("💥")||s.startsWith("🥊")||s.startsWith("🔥")||s.startsWith("FIGHT")||s.startsWith("FLEE")||s.includes("damage")||s.includes("HP:")||s.includes("Attack roll")||s.includes("MISS")||s.includes("CRITICAL")||s.startsWith("Round ")||s.includes("combat");
+              const isLoot     = s.startsWith("🎁")||s.startsWith("📦")||s.startsWith("💰")||s.includes("LOOT DROP")||s.includes("Acquired:")||s.includes("Bought:")||s.includes("street tax");
+              const isLevelUp  = s.startsWith("★")||s.includes("LEVEL UP")||s.includes("Level up")||s.includes("skill point");
+              const isWarning  = s.startsWith("⚠")||s.startsWith("🚨")||s.startsWith("☠")||s.startsWith("❄️")||s.startsWith("💀")||s.includes("BUSTED")||s.includes("arrested")||s.includes("DEAD");
+              const isHeat     = s.includes("Heat +")||s.includes("heat +")||s.includes("HEAT:")||(s.includes("🌡")||s.includes("heat:")&&!s.includes("cold"));
+              const isCash     = (s.startsWith("+$")||s.startsWith("-$")||s.match(/^\+\$\d/)||s.includes("+$")&&s.length<40)||s.includes("TRADE COMPLETE")||s.includes("Paid $");
+              const isMove     = s.startsWith("🚇")||s.startsWith("🚌")||s.startsWith("Arrived")||s.includes("borough")||s.includes("Borough");
+              const isDungeon  = s.startsWith("🏭")||s.startsWith("ROOM ")||s.startsWith("WAREHOUSE")||s.includes("EXTRACT")||s.includes("rooms");
+              const isQuest    = s.startsWith("📋")||s.startsWith("✓ Quest")||s.startsWith("⚠ Quest")||s.includes("QUEST")||s.includes("quest");
+              const isNarrative= s.startsWith('"')||s.startsWith("You ")||s.startsWith("The ")||s.startsWith("A ")||s.startsWith("An ");
+              const isSectionHdr=s.startsWith("—")||s.startsWith("  —")||s.match(/^[A-Z ·]{4,}$/);
+              const isCmd      = s.startsWith(">");
+              const isStat     = s.includes("·")&&(s.includes("HP")||s.includes("AC")||s.includes("XP")||s.includes("Energy")||s.includes("Hunger"));
+              const isBoss     = s.includes("BOSS")||s.includes("Captain")||s.includes("Kingpin")||s.includes("Iceman")||s.includes("Duchess");
+              const isMail     = s.startsWith("✉")||s.startsWith("📨")||s.startsWith("📡");
+              const isSystem   = s.startsWith("📍")||s.startsWith("Day ")||s.startsWith("DAY ")||s.match(/^━+$/);
+
+              // ── Style resolution ───────────────────────────────────────────
+              let color="#d4c9b0";       // default: warm off-white
+              let fontSize=12;
+              let fontWeight="normal";
+              let fontFamily="inherit";
+              let background="transparent";
+              let borderLeft="none";
+              let paddingLeft=0;
+              let opacity=1;
+              let letterSpacing=0;
+
+              if(isLevelUp){
+                color="#e9c46a"; fontWeight="bold"; fontSize=13;
+                background="#e9c46a08"; borderLeft="2px solid #e9c46a"; paddingLeft=8;
+              } else if(isWarning){
+                color="#ff6b6b"; fontWeight="bold";
+                borderLeft="2px solid #e6394644"; paddingLeft=6;
+              } else if(isBoss){
+                color="#f4a261"; fontWeight="bold"; fontSize=13;
+                background="#f4a26108"; borderLeft="2px solid #f4a261"; paddingLeft=8;
+              } else if(isCombat){
+                color="#e07070"; fontSize=12;
+                borderLeft="2px solid #e6394622"; paddingLeft=6;
+              } else if(isLoot){
+                color="#f4a261"; fontWeight="bold";
+                borderLeft="2px solid #f4a26144"; paddingLeft=6;
+              } else if(isDungeon){
+                color="#2a9d8f"; fontSize=12;
+                borderLeft="2px solid #2a9d8f33"; paddingLeft=6;
+              } else if(isCash){
+                color=s.startsWith("-$")||s.includes("Lost")||s.includes("Paid")?"#e07070":"#6aaa6a";
+                fontWeight="bold";
+              } else if(isHeat){
+                color="#e67a3a";
+              } else if(isQuest){
+                color="#8b8bf4";
+                borderLeft="2px solid #8b8bf422"; paddingLeft=6;
+              } else if(isMail){
+                color="#a8dadc";
+              } else if(isStat){
+                color="#666"; fontSize=11;
+              } else if(isNarrative){
+                color="#a09080"; fontSize=12; fontFamily="Georgia, serif";
+              } else if(isSectionHdr){
+                color="#555"; fontSize=10; letterSpacing=1;
+              } else if(isCmd){
+                color="#6aaa6a"; fontSize=12;
+              } else if(isSystem){
+                color="#3a3a3a"; fontSize=10; letterSpacing=1;
+              } else if(isMove){
+                color="#a8dadc";
+              }
+
+              return <div key={i} style={{
+                fontSize,color,fontWeight,fontFamily,background,
+                borderLeft,paddingLeft,opacity,letterSpacing,
+                lineHeight:1.75,
+                paddingTop:background!=="transparent"?2:0,
+                paddingBottom:background!=="transparent"?2:0,
+                marginBottom:background!=="transparent"?2:0,
+                borderRadius:background!=="transparent"?2:0,
+              }}>{s}</div>;
             })}
             <span style={{color:"#e9c46a",animation:"blink 1.3s infinite",fontSize:12}}>█</span>
               {world.worldEvent&&<span style={{fontSize:8,color:"#e9c46a55",marginRight:6}} title={world.worldEvent.title}>{world.worldEvent.icon}</span>}
