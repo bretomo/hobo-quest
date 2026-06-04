@@ -1326,6 +1326,8 @@ const SEARCH_FINDS = [
 
 const rnd=(a,b)=>Math.floor(Math.random()*(b-a+1))+a;
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const ONLINE_WINDOW=3*60*1000;  // 3 min = truly online
+const ACTIVE_WINDOW=20*60*1000; // 20 min = recently active
 const getBoro=id=>BOROUGHS.find(b=>b.id===id);
 const getLvl=xp=>LVL_XP.filter(t=>xp>=t).length;
 const xpNext=xp=>{const l=getLvl(xp);return l>=LVL_XP.length?"MAX":LVL_XP[l]-xp;};
@@ -2094,6 +2096,86 @@ const NOTORIETY_TITLES = [
   {id:"the_corner_king",title:"CORNER KING",    icon:"🚩", test:(l)=>l.corners>=10,         desc:"10 corners claimed. The map is yours."},
   {id:"the_legend",     title:"THE LEGEND",     icon:"👑", test:(l,gs)=>gs.level>=8&&l.daysAlive>=15&&l.deals>=30, desc:"Level 8+, 15 days, 30 deals. There is nobody else."},
 ];
+
+// ── DAILY GOAL ENGINE ─────────────────────────────────────────────────────────
+// Returns one clear, specific thing for the player to do tomorrow.
+const getDailyGoal=(gs,world,boro,boros,warehouseLocs)=>{
+  if(!gs)return null;
+  const lvl=gs.level||1;
+  const h=gs.survival?.health||100;
+  const hunger=gs.survival?.hunger||100;
+  const warmth=gs.survival?.warmth||100;
+  const addiction=gs.addiction||0;
+  const cornersOwned=gs.cornersOwned||[];
+  const heat=gs.heat||0;
+
+  // URGENT: survival critical
+  if(h<25)return{icon:"🚨",text:"HEAL UP. Health at "+h+"%. REST, BUY BANDAGE, or CLINIC before doing anything else.",urgent:true};
+  if(hunger<20)return{icon:"🍞",text:"You're starving. EAT or BODEGA — health will start dropping soon.",urgent:true};
+  if(warmth<20)return{icon:"❄️",text:"Freezing. SHELTER or REST somewhere warm before you take damage.",urgent:true};
+  if(addiction>70&&!gs.highActive)return{icon:"🤢",text:"Withdrawal hitting hard. USE to stabilize or RECOVERY to fight it.",urgent:true};
+
+  // URGENT: corner contested
+  const contestedCorner=cornersOwned.find(b=>(world?.cornerContested||{})[b]);
+  if(contestedCorner){
+    const rival=(world?.cornerContestedBy||{})[contestedCorner];
+    const bn=(boros||[]).find(b=>b.id===contestedCorner)?.name||contestedCorner;
+    return{icon:"⚔",text:bn+" corner being taken by "+(rival||"rivals")+". MOVE "+contestedCorner.toUpperCase()+" and LOOK to defend it. 1 day.",urgent:true};
+  }
+
+  // URGENT: heat critical
+  if(heat>=8)return{icon:"🚔",text:"Heat "+heat+"/10. One more incident = wanted. LAY LOW to cool down.",urgent:true};
+
+  // STORY: active chapter
+  const storyChapter=getStoryChapter(gs);
+  if(storyChapter&&lvl>=(storyChapter.lvlReq||1)){
+    const done=isChapterComplete(gs,storyChapter);
+    if(done)return{icon:"📖",text:"Chapter complete: \""+storyChapter.title+"\". STORY COMPLETE to claim reward."};
+    if(storyChapter.boss)return{icon:"📖",text:"Story: "+storyChapter.task.split(".")[0]+". FIGHT STORY BOSS when ready."};
+    return{icon:"📖",text:"Story: "+storyChapter.task.split(".")[0]+"."};
+  }
+
+  // PROGRESSION gates
+  if(lvl===1)return{icon:"⭐",text:"HUSTLE "+(gs.hustleCount||0)+"/3 today to reach Level 2 and unlock corners, NPCs, and your class story."};
+
+  // Cold corner
+  const coldCorner=cornersOwned.find(b=>{
+    const last=world?.cornerLastVisit?.[gs.name+":"+b]||0;
+    return gs.day-(last||0)>2&&!(gs.armyDeployedBoro||{})[b];
+  });
+  if(coldCorner){
+    const bn=(boros||[]).find(b=>b.id===coldCorner)?.name||coldCorner;
+    return{icon:"❄️",text:bn+" corner going cold. MOVE "+coldCorner.toUpperCase()+" and LOOK to reactivate, or DEPLOY army."};
+  }
+
+  // Collect income
+  if(lvl>=2&&cornersOwned.length>0){
+    const hoursAccrued=Math.min((Date.now()-(gs.lastCollect||0))/(1000*60*60),12);
+    if(hoursAccrued>=6)return{icon:"💰",text:"Corner income: "+Math.floor(hoursAccrued)+"h accrued. Type COLLECT to pocket it."};
+  }
+
+  // No corner yet
+  if(lvl>=2&&cornersOwned.length===0)return{icon:"🚩",text:"CLAIM a corner ($50) — earns passive income while you sleep."};
+
+  // Army
+  if(lvl>=3&&(!gs.army||gs.army.length===0))return{icon:"💪",text:"HIRE units to protect your corners. Lookouts start at $80."};
+
+  // Warehouse
+  if(lvl>=3&&warehouseLocs){
+    const wh=warehouseLocs.find(w=>w.id===boro);
+    if(wh&&lvl>=wh.minLevel){
+      const ready=(Date.now()-((gs.warehouseCooldowns||{})[boro]||0))>(wh.cooldownH||20)*3600000;
+      if(ready)return{icon:"🏭",text:wh.name+" run available. ENTER WAREHOUSE for gear and cash."};
+    }
+    return{icon:"📋",text:"TALK to an NPC to build rep, then QUESTS for jobs."};
+  }
+
+  // Money
+  if((gs.cash||0)<50)return{icon:"💵",text:"Low cash. HUSTLE or SCOUT prices, then BUY low and SELL high."};
+
+  return{icon:"🌆",text:"SCOUT the market, LOOK around, or check STORY for your next chapter."};
+};
+
 
 const getNotorietyTitle=(gs)=>{
   if(!gs?.lifetime||gs.day<10)return null; // need 10 days before title
@@ -2989,6 +3071,7 @@ export default function NYC(){
   const [gs,setGs]         =useState(null);
   const [world,setWorld]   =useState(defWorld());
   const [cmd,setCmd]       =useState("");
+  const [inlineChoice,setInlineChoice]=useState(null);
   const [feed,setFeed]     =useState([]);
   const [boro,setBoro]     =useState("manhattan");
   const [tab,setTab]       =useState("map");
@@ -3318,23 +3401,35 @@ export default function NYC(){
     try{
       channel=subscribeToWorld((fresh)=>handleWorldUpdate(fresh));
     }catch(e){console.error("Realtime sub error",e);}
-    // Heartbeat — update lastSeen every 30s + clean stale players (24h)
+    // Heartbeat — update lastSeen every 20s + borough entry notification
     const heartbeat=setInterval(()=>{
       const g=gsRef.current;if(!g)return;
       const freshWorld=worldRef?.current;if(!freshWorld)return;
       const cutoff24=Date.now()-(24*60*60*1000);
+      const curBoro=boroRef?.current||"manhattan";
       const cleanedPlayers=Object.fromEntries(
         Object.entries(freshWorld.players||{}).filter(([n,d])=>
           n===g.name||(d.lastSeen&&d.lastSeen>cutoff24)
         )
       );
+      const prevBoro=freshWorld.players?.[g.name]?.borough;
       const ws={...freshWorld,players:{...cleanedPlayers,[g.name]:{
-        level:g.level,borough:boroRef?.current||"manhattan",
+        level:g.level,borough:curBoro,
         lastSeen:Date.now(),heat:Math.round(g.heat),
-        archId:g.archetype?.id||"veteran",name:g.name
+        archId:g.archetype?.id||"veteran",name:g.name,
+        cash:g.cash,day:g.day,
       }}};
+      if(prevBoro&&prevBoro!==curBoro){
+        const hbHere=Object.entries(ws.players||{}).filter(([n,d])=>
+          n!==g.name&&d.borough===curBoro&&Date.now()-(d.lastSeen||0)<ACTIVE_WINDOW
+        );
+        if(hbHere.length>0){
+          const nm=hbHere.map(([n])=>n).join(", ");
+          setTimeout(()=>setFeed(f=>[...f,``,`📍 ${nm} ${hbHere.length===1?"is":"are"} in ${getBoro(curBoro)?.name||curBoro}.`,``]),100);
+        }
+      }
       saveWorld(ws);
-    },30000);
+    },20000);
     // Fallback poll every 8 seconds (covers any missed real-time events)
     const iv=setInterval(async()=>{
       try{
@@ -3520,7 +3615,15 @@ export default function NYC(){
         const patrolChance=(g.heat/10)*(bCopPresence/10)*0.3;
         if(Math.random()<patrolChance&&!g.patrolEncountered){
           const evt=PATROL_EVENTS[rnd(0,PATROL_EVENTS.length-1)];
-          setTimeout(()=>setFeed(f=>[...f,``,`🚔 ${evt}`,`HIDE · RUN · BRIBE · TALK to respond.`,``]),10);
+          setTimeout(()=>{
+            setFeed(f=>[...f,``,`🚔 ${evt}`,``]);
+            setInlineChoice({prompt:"Cop encounter — choose your response:",choices:[
+              {label:"HIDE",  icon:"🥻",cmd:"HIDE",  color:"#2a9d8f"},
+              {label:"TALK",  icon:"🗣",cmd:"TALK",     color:"#e9c46a"},
+              {label:"BRIBE", icon:"💵",cmd:"BRIBE",  color:"#f4a261"},
+              {label:"RUN",   icon:"🏃",cmd:"RUN",    color:"#e63946"},
+            ]});
+          },10);
           g.patrolEncountered=true;
         } else if(g.patrolEncountered){
           g.patrolEncountered=false;
@@ -4018,6 +4121,60 @@ export default function NYC(){
     setAbilityCooldowns(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{if(v>0)n[k]=v-1;});return n;});
   };
 
+  // ── CONTEXT BUTTON ENGINE ────────────────────────────────────────────────
+  const getContextButtons=()=>{
+    if(!gs)return [];
+    const btnLvl=gs.level||1;
+    const h=gs.survival?.health||100;
+    const hunger=gs.survival?.hunger||100;
+    const energy=gs.survival?.energy||100;
+    const owned=gs.cornersOwned||[];
+    const lastC=gs.lastCollect||0;
+    const hoursA=Math.min((Date.now()-lastC)/3600000,12);
+    const contestedC=owned.find(b=>(world?.cornerContested||{})[b]);
+    const wh=Object.values(WAREHOUSE_LOCATIONS).find(w=>w.id===boro);
+    const whReady=wh&&btnLvl>=(wh.minLevel||1)&&Date.now()-((gs.warehouseCooldowns||{})[boro]||0)>((wh.cooldownH||20)*3600000);
+    const hasArmy=(gs.army||[]).length>0;
+    const cornerHere=owned.includes(boro);
+    const heat=gs.heat||0;
+    if(combat){
+      const archA=COMBAT_ABILITIES[gs.archetype?.id]||[];
+      const btns=[
+        {label:"FIGHT",icon:"⚔",cmd:"FIGHT",color:"#e63946"},
+        {label:"FLEE", icon:"🏃",cmd:"FLEE", color:"#888"},
+      ];
+      archA.forEach(a=>{const cd=(combat?.abilitiesUsed?.[a.id]||0);btns.push({label:a.name.slice(0,8).toUpperCase(),icon:"⚡",cmd:"USE "+a.id,color:"#e9c46a",disabled:cd>0});});
+      return btns;
+    }
+    if(dungeon&&dungeon.status==="active"){
+      return[
+        {label:"ADVANCE",icon:"➡",cmd:"ADVANCE",color:"#2a9d8f"},
+        {label:"SEARCH", icon:"🔍",cmd:"SEARCH"},
+        {label:"SNEAK",  icon:"👣",cmd:"SNEAK"},
+        {label:"STATUS", icon:"📍",cmd:"STATUS",color:"#555"},
+        {label:"EXTRACT",icon:"🚪",cmd:"EXTRACT",color:"#333"},
+      ];
+    }
+    const btns=[];
+    if(h<30)       btns.push({label:"HEAL",   icon:"🩹",cmd:"HEAL",   color:"#e63946"});
+    else if(hunger<25)btns.push({label:"EAT",    icon:"🍞",cmd:"EAT",    color:"#f4a261"});
+    else if(energy<20)btns.push({label:"REST",   icon:"😴",cmd:"REST",   color:"#888"});
+    btns.push({label:"LOOK",  icon:"👁",cmd:"LOOK"});
+    btns.push({label:"HUSTLE",icon:"💵",cmd:"HUSTLE"});
+    if(cornerHere&&hoursA>=2)btns.push({label:`COLLECT ${Math.floor(hoursA)}h`,icon:"💰",cmd:"COLLECT",color:"#e9c46a"});
+    else if(btnLvl>=2&&!cornerHere)btns.push({label:"CLAIM",icon:"🚩",cmd:"CLAIM",color:"#2a9d8f"});
+    if(contestedC)btns.push({label:"RECLAIM",icon:"⚔",cmd:"RECLAIM",color:"#e63946"});
+    if(whReady)btns.push({label:"RUN",icon:"🏭",cmd:"ENTER WAREHOUSE",color:"#f4a261"});
+    const chapter=getStoryChapter(gs);
+    if(chapter?.boss&&btnLvl>=(chapter.lvlReq||1))btns.push({label:"BOSS",icon:"💀",cmd:"FIGHT STORY BOSS",color:"#9d4edd"});
+    if(heat>=7)btns.push({label:"LAY LOW",icon:"🥻",cmd:"LAY LOW",color:"#e67a3a"});
+    if(onlineNow.length>0)btns.push({label:`WHO (${onlineNow.length})`,icon:"👥",cmd:"WHO",color:"#2a9d8f"});
+    btns.push({label:"STATUS",icon:"📊",cmd:"STATUS",color:"#555"});
+    btns.push({label:"SLEEP", icon:"🌙",cmd:"SLEEP", color:"#444"});
+    return btns.slice(0,8);
+  };
+  const tapCmd=(c)=>{setInlineChoice(null);handleCmd({key:"Enter",target:{value:c}});};
+  const handleCmdWithChoice=(e)=>{if(e.key==="Enter"&&e.target?.value?.trim())setInlineChoice(null);handleCmd(e);};
   const handleCmd=(e)=>{
     if(e.key!=="Enter"||!cmd.trim())return;
     const raw=cmd.trim();const C=raw.toUpperCase();
@@ -4076,6 +4233,53 @@ export default function NYC(){
       pool[rnd(0,pool.length-1)]();
     }
     // advance tutorial on matching commands
+    // ── COMMAND GATING — commands reveal progressively by level/day ──────────
+    // Core survival always available. Deeper systems unlock as player progresses.
+    const lvl=gs.level||1;
+    const day=gs.day||1;
+    const GATED={
+      // [command pattern]: {level, day, hint}
+      "CLAIM":       {level:2, hint:"Reach Level 2 to CLAIM corners."},
+      "CORNERS":     {level:2, hint:"Reach Level 2 to manage corners."},
+      "COLLECT":     {level:2, hint:"Reach Level 2 to collect corner income."},
+      "UPGRADE CORNER":{level:3, hint:"Reach Level 3 to upgrade corners."},
+      "HIRE":        {level:3, hint:"Reach Level 3 to HIRE army units."},
+      "ARMY":        {level:3, hint:"Reach Level 3 to build your army."},
+      "DEPLOY":      {level:3, hint:"Reach Level 3 to deploy your army."},
+      "FIRE":        {level:3, hint:"Reach Level 3 to manage your army."},
+      "QUESTS":      {level:3, hint:"Reach Level 3 to unlock QUESTS."},
+      "TALK":        {level:2, hint:"Reach Level 2 to TALK to NPCs."},
+      "NPCS":        {level:2, hint:"Reach Level 2 to find NPCs."},
+      "ACCEPT":      {level:2, hint:"Reach Level 2 to accept quests."},
+      "SKILLS":      {level:2, hint:"Reach Level 2 to spend skill points."},
+      "SKILL":       {level:2, hint:"Reach Level 2 to unlock skills."},
+      "CONTRACTS":   {level:3, hint:"Reach Level 3 for contracts."},
+      "WAREHOUSES":  {level:3, hint:"Reach Level 3 to run warehouses."},
+      "ENTER WAREHOUSE":{level:3, hint:"Reach Level 3 to run warehouses."},
+      "ATTACK":      {level:4, hint:"Reach Level 4 to challenge other players."},
+      "BOUNTY":      {level:4, hint:"Reach Level 4 to place bounties."},
+      "BOUNTIES":    {level:4, hint:"Reach Level 4 to see bounties."},
+      "FORM CREW":   {level:4, hint:"Reach Level 4 to form a crew."},
+      "JOIN CREW":   {level:4, hint:"Reach Level 4 to join a crew."},
+      "STORY":       {level:2, hint:"Reach Level 2 to start your class storyline."},
+      "FIGHT STORY BOSS":{level:3, hint:"Reach Level 3 to face story bosses."},
+      "SAFEHOUSE":   {level:5, hint:"Reach Level 5 to buy a safe house."},
+      "BUY SAFEHOUSE":{level:5, hint:"Reach Level 5 to buy a safe house."},
+      "LOOT":        {level:2, hint:"Reach Level 2 to access the black market."},
+      "ARBITRAGE":   {level:2, hint:"Reach Level 2 for arbitrage intel."},
+      "SCAVENGE":    {level:2, hint:"Reach Level 2 to scavenge gear."},
+      "CLINIC":      {level:1, day:3, hint:"Available from Day 3."},
+    };
+    // Check if this command is gated
+    const gateKey=Object.keys(GATED).find(k=>C===k||C.startsWith(k+" "));
+    if(gateKey){
+      const gate=GATED[gateKey];
+      if((gate.level&&lvl<gate.level)||(gate.day&&day<gate.day)){
+        push(`🔒 ${gate.hint}`+(gate.level?` (You are Level ${lvl})`:""));
+        return;
+      }
+    }
+
     advanceTutorial(C);
     // route combat commands if in combat
     if(combat){
@@ -4169,12 +4373,22 @@ export default function NYC(){
           return;
         }
         if(ev==="stealth_or_fight"){
-          push(`SNEAK to attempt stealth (streetiq check) or FIGHT to engage.`);
-          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+          push(`Choose your approach:`);
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));
+          setInlineChoice({prompt:nextRoom.desc,choices:[
+            {label:"SNEAK",icon:"👣",cmd:"SNEAK"},
+            {label:"FIGHT",icon:"⚔",    cmd:"FIGHT",color:"#e63946"},
+            {label:"BACK", icon:"🚪",cmd:"EXTRACT"},
+          ]});return;
         }
         if(ev==="stealth_or_skip"){
-          push(`SNEAK past while they sleep or SEARCH the room.`);
-          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+          push(`Choose your approach:`);
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));
+          setInlineChoice({prompt:nextRoom.desc,choices:[
+            {label:"SNEAK",  icon:"👣",cmd:"SNEAK"},
+            {label:"SEARCH", icon:"🔍",cmd:"SEARCH"},
+            {label:"ADVANCE",icon:"➡",    cmd:"ADVANCE",color:"#2a9d8f"},
+          ]});return;
         }
         if(ev==="skill_check"){
           const stat=nextRoom.stat||"streetiq";const dc=nextRoom.dc||10;
@@ -4193,8 +4407,11 @@ export default function NYC(){
           return;
         }
         if(ev==="npc_choice"){
-          push(`Kid says he'll show you the stash for $20. PAY to take the deal or IGNORE.`);
-          setDungeon(d=>({...d,pendingEvent:nextRoom}));return;
+          setDungeon(d=>({...d,pendingEvent:nextRoom}));
+          setInlineChoice({prompt:"Scared kid: \"I know where they keep it. Twenty bucks.\"",choices:[
+            {label:"PAY $20",icon:"💵",cmd:"PAY",  color:"#e9c46a"},
+            {label:"IGNORE", icon:"🚶",cmd:"IGNORE",color:"#555"},
+          ]});return;
         }
         // Default: just advance
         setDungeon(d=>({...d,currentRoom:d.currentRoom+1}));
@@ -4337,37 +4554,36 @@ export default function NYC(){
       return;
     }
     if(C==="HELP"){
-      const lvl=gs.level||1;
-      push(``,
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-        `HOBO QUEST  ·  Level ${lvl}  ·  Day ${gs.day}`,
+      const lvl2=gs.level||1;
+      push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `HOBO QUEST  ·  Level ${lvl2}  ·  Day ${gs.day}`,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
-      if(lvl<=2){
-        push(`📍 WHERE TO START:`,
-          `  LOOK      — see the block, earn XP`,
-          `  HUSTLE    — make money`,
-          `  STATUS    — all your stats`,
-          `  BODEGA    — buy food`,
-          `  SLEEP     — end the day`,
-          ``);
+      push(`🟢 ALWAYS AVAILABLE:`,
+        `  LOOK  STATUS  HUSTLE  REST  EAT  BODEGA  HEAL  SLEEP`,
+        `  SCOUT  BUY  SELL  SEARCH  WEATHER  MOVE  PANHANDLE`,``);
+      if(lvl2>=2){
+        push(`🔵 LEVEL 2+:`,
+          `  TALK [name] — NPCs: RAY SMOKE CARLOS DEE MARIA`,
+          `  CLAIM $50 · CORNERS · COLLECT (income) · SKILLS · STORY`,
+          `  LOOT (black market) · SCAVENGE · ARBITRAGE`,``);
+      } else {
+        push(`🔒 Reach Level 2: TALK · CLAIM · CORNERS · SKILLS · STORY`,``);
       }
-      push(
-        `📖 HELP TOPICS — type any of these:`,
-        `  HELP MONEY     — hustling, corners, collecting income`,
-        `  HELP SURVIVAL  — health, hunger, warmth, addiction`,
-        `  HELP COMBAT    — fighting, weapons, army`,
-        `  HELP QUESTS    — NPCs, missions, reputation`,
-        `  HELP GEAR      — items, loot, equipment`,
-        lvl>=3?`  HELP WAREHOUSE — dungeon runs, loot`:"",
-        `  HELP WORLD     — multiplayer, crews, PvP`,
-        gs.isVampire||gs.isJunkie||gs.isUndoc||gs.isHustler||gs.isFixer||gs.isRat?
-          `  HELP CLASS     — your archetype abilities`:
-          `  HELP CLASS     — archetype abilities`,
-        ``,
-        `  HELP ALL       — every command (long)`,
-        ``,
-        `📖 STORY          — your class storyline & chapter progress`,
-      );
+      if(lvl2>=3){
+        push(`🟡 LEVEL 3+:`,
+          `  HIRE (lookout$80 runner$120 enforcer$200 lieutenant$400)`,
+          `  ARMY · DEPLOY [boro] · QUESTS · WAREHOUSES · ENTER WAREHOUSE`,
+          `  STORY COMPLETE · FIGHT STORY BOSS`,``);
+      } else if(lvl2>=2){
+        push(`🔒 Reach Level 3: HIRE · ARMY · QUESTS · WAREHOUSES`,``);
+      }
+      if(lvl2>=4){
+        push(`🔴 LEVEL 4+: ATTACK · BOUNTY · FORM CREW · JOIN CREW`,``);
+      }
+      push(`📖 HELP TOPICS for detail:`,
+        `  HELP MONEY · HELP SURVIVAL · HELP COMBAT`,
+        `  HELP QUESTS · HELP GEAR · HELP WAREHOUSE`,
+        `  HELP WORLD · HELP CLASS · HELP ALL`,``);
       return;
     }
 
@@ -4826,6 +5042,41 @@ export default function NYC(){
       }
       return;
     }
+    // WHO — see who is online right now
+    if(C==="WHO"||C==="ONLINE"){
+      const now2=Date.now();
+      const allP=Object.entries(world.players||{}).filter(([n])=>n!==gs.name).map(([n,d])=>({name:n,...d}));
+      const nowOnline=allP.filter(p=>now2-(p.lastSeen||0)<ONLINE_WINDOW);
+      const nowActive=allP.filter(p=>now2-(p.lastSeen||0)<ACTIVE_WINDOW&&now2-(p.lastSeen||0)>=ONLINE_WINDOW);
+      const hereNow=nowOnline.filter(p=>p.borough===boro);
+      push(``,`👥 WHO'S ONLINE`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      if(nowOnline.length===0&&nowActive.length===0){
+        push(`Nobody online right now. You have the city to yourself.`,``);
+      } else {
+        if(nowOnline.length>0){
+          push(`🟢 ONLINE NOW (${nowOnline.length}):`);
+          nowOnline.forEach(p=>{
+            const here2=p.borough===boro;
+            const minsAgo=Math.floor((now2-(p.lastSeen||0))/60000);
+            push(`  ${here2?"📍":"  "} ${p.name} · Lvl ${p.level||"?"} · ${getBoro(p.borough)?.name||p.borough||"?"}${here2?" ← HERE":""}${(p.heat||0)>=7?" 🔥":""}${minsAgo>0?` · ${minsAgo}m ago`:""}`);
+          });
+          push(``);
+        }
+        if(nowActive.length>0){
+          push(`🟡 ACTIVE RECENTLY (${nowActive.length}):`);
+          nowActive.forEach(p=>{
+            const minsAgo=Math.floor((now2-(p.lastSeen||0))/60000);
+            push(`     ${p.name} · Lvl ${p.level||"?"} · ${getBoro(p.borough)?.name||"?"} · ${minsAgo}m ago`);
+          });
+          push(``);
+        }
+        if(hereNow.length>0){
+          push(`⚠ ${hereNow.length} player${hereNow.length>1?"s":""} in YOUR BOROUGH right now.`);
+        }
+      }
+      push(`MSG [text] to broadcast · ATTACK [name] to challenge · OFFER to trade`);
+      return;
+    }
     if(C==="WEATHER"){
       push(`${weather.icon} ${weather.name.toUpperCase()}`,weather.desc,
         "Bust rate: "+(weather.bustMult<1?"-"+Math.round((1-weather.bustMult)*100)+"%":weather.bustMult>1?"+"+Math.round((weather.bustMult-1)*100)+"%":"normal"),
@@ -4871,6 +5122,14 @@ export default function NYC(){
       const worldEvent=world.worldEvent||null;
       if(worldEvent){push(``,`${worldEvent.icon} WORLD EVENT: ${worldEvent.title}`,worldEvent.desc,``);}
       push(`${b.name} — Day ${gs.day} — ${weather.icon} ${weather.name}`,boroDesc[boro]||"",wPool[rnd(0,wPool.length-1)]);
+      // Show other active players in this borough
+      const lookNow=Date.now();
+      const lookHere=Object.entries(world.players||{})
+        .filter(([n,d])=>n!==gs.name&&d.borough===boro&&lookNow-(d.lastSeen||0)<ACTIVE_WINDOW)
+        .map(([n,d])=>({name:n,...d,io:lookNow-(d.lastSeen||0)<ONLINE_WINDOW}));
+      if(lookHere.length>0){
+        push(``,...lookHere.map(p=>`${p.io?"🟢":"🟡"} ${p.name} (Lvl ${p.level||"?"})${(p.heat||0)>=7?" 🔥 hot":""}${world.corners?.[boro]===p.name?" — owns this corner":""}`),``);
+      }
       updGs(g=>applyXP({...g,lookCount:(g.lookCount||0)+1},1,"look"));
       // Update corner presence — track last visit to each owned corner
       if(gs.cornersOwned?.includes(boro)){
@@ -4912,6 +5171,9 @@ export default function NYC(){
       const nextStat=LEVEL_STAT_GROWTH[archId]?.[(gs.level-1)%10]||"?";
       const wt=getWantedTier(Math.round(gs.heat));
       const pw=getCarryWeight(gs.product);
+      // Daily goal — show at top of STATUS so player always knows what to do next
+      const goalNow=getDailyGoal(gs,world,boro,BOROUGHS,Object.values(WAREHOUSE_LOCATIONS));
+      if(goalNow)push(``,goalNow.urgent?`${goalNow.icon} URGENT: ${goalNow.text}`:`${goalNow.icon} FOCUS: ${goalNow.text}`,``);
       push(`${gs.name} · Lvl ${gs.level} · Day ${gs.day}${gs.wanted?" · 🚨 WANTED":""}${gs.ghostMode?" · 👻 GHOST":""}`,
         "Cash: $"+gs.cash+(gs.cash>MAX_CARRY_CASH?" ⚠ TARGET":"")+(gs.cashStash>0?" · Stashed: $"+gs.cashStash:""),
         `Heat: ${Math.round(gs.heat)}/10 · ${wt.stars>0?"★".repeat(wt.stars):"☆"} ${wt.name}`,
@@ -4997,7 +5259,22 @@ export default function NYC(){
         "","INSPECT [item] · USE [item] · EQUIP [item] · DROP [item] · LOOT (market)");return;
     }
     if(C==="MARKET"){setTab("market");push(`Market open.`);return;}
-    if(C==="NPCS")  {setTab("npcs"); push(`Contacts open.`);return;}
+    if(C==="NPCS"){
+      push(``,`👥 CONTACTS`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `TALK to build rep. Rep 2 = quests unlock.`,``);
+      NPCS.forEach(n=>{
+        const rep=npcs.find(x=>x.id===n.id)?.rep||0;
+        const here=n.b===boro;
+        const bar="█".repeat(rep)+"░".repeat(10-rep);
+        const questCount=Object.values(NPC_QUESTS[n.id]||[]).filter(q=>rep>=q.repRequired&&!(gs.completedQuests||[]).includes(q.id)).length;
+        push(`  ${n.icon} ${n.name} — ${getBoro(n.b)?.name||n.b} ${here?"(HERE)":"← MOVE "+n.b.toUpperCase()}`,
+          `     Rep: [${bar}] ${rep}/10`+(rep>=2?questCount>0?` · ${questCount} quest${questCount>1?"s":""} available — type QUESTS`:` · quests seen — QUESTS`:" · need 2 rep to unlock quests"),
+          ``);
+      });
+      push(`TALK [name] to build rep. Must be in their borough.`,
+        `QUESTS to see available missions. ACCEPT [name] [tier] to take one.`);
+      return;
+    }
     if(C==="MAP")   {setTab("map");  push(`Map open.`);return;}
     if(C==="CHAT")  {setTab("chat"); push(`Chat open.`);return;}
     if(C==="CREWS") {setTab("crews");push(`Crews open.`);return;}
@@ -5820,7 +6097,14 @@ export default function NYC(){
     // TALK
     const tlkM=C.match(/^TALK (.+)$/);
     if(tlkM){const nN=tlkM[1].toLowerCase();const npc=npcs.find(n=>n.name.toLowerCase()===nN||n.id===nN);
-      if(!npc){push(`Don't know ${tlkM[1]}.`);return;}if(npc.b!==boro){push(`${npc.name} isn't here. Try ${getBoro(npc.b)?.name}.`);return;}
+      if(!npc){push(`Don't know ${tlkM[1]}. Try NPCS to see who's around.`);return;}
+      if(npc.b!==boro){
+        const rep=npcs.find(x=>x.id===npc.id)?.rep||0;
+        push(`${npc.name} is in ${getBoro(npc.b)?.name}, not here.`,
+          `Type MOVE ${npc.b.toUpperCase()} to go there.`,
+          rep>0?`You have ${rep} rep with ${npc.name}.`:`Talk to them to build rep — quests unlock at rep 2.`);
+        return;
+      }
       // dynamic dialogue based on rep
       const npcRep=npc.rep||0;
       const deepLines=NPC_DEEP_DIALOGUE[npc.id];
@@ -5866,7 +6150,20 @@ export default function NYC(){
         if(storyFlag)return{...withHelpedDrifters,storyFlags:[...new Set([...(withHelpedDrifters.storyFlags||[]),storyFlag])]};
         return withHelpedDrifters;
       });
-      push(`Mental +8. Rep with ${npc.name} up.`);return;}
+      push(`Mental +8. Rep with ${npc.name} up.`);
+      // Show quest unlock progress after rep update
+      const newRep=(npcs.find(x=>x.id===npc.id)?.rep||0)+1; // +1 since setNpcs hasn't re-rendered yet
+      const npcQuests=NPC_QUESTS[npc.id]||[];
+      if(newRep===2){
+        const q1=npcQuests.find(q=>q.tier===1);
+        if(q1)push(``,`🔓 ${npc.name} trusts you now. Quest unlocked: "${q1.title}"`,`Type QUESTS to see it, then ACCEPT ${npc.id} 1 to take it.`,``);
+      } else if(newRep<2){
+        push(`${npc.name} rep: ${newRep}/10 — talk ${2-newRep} more time${2-newRep>1?"s":""} to unlock quests.`);
+      } else if(newRep===5){
+        const q2=npcQuests.find(q=>q.tier===2);
+        if(q2)push(``,`🔓 Tier 2 quest from ${npc.name}: "${q2.title}"`,`Type QUESTS to see it.`,``);
+      }
+      return;}
 
     // DECLARE WAR [crew]
     // OFFER [player] [product] [qty] [price] — trade offer
@@ -6248,6 +6545,14 @@ export default function NYC(){
       }
       if(coldCorners.length>0){
         push("","⚠ COLD CORNERS: "+coldCorners.join(", "),"You haven't visited in "+CORNER_PRESENCE_DAYS+"+ days. No income until you show up.","");
+      }
+      // ── DAILY GOAL — one clear thing to do tomorrow ─────────────────────────
+      const goal=getDailyGoal({...gs,day:nextDay},world,boro,BOROUGHS,Object.values(WAREHOUSE_LOCATIONS));
+      if(goal){
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          goal.urgent?`${goal.icon} PRIORITY FOR TOMORROW:`:`${goal.icon} TOMORROW'S FOCUS:`,
+          `  ${goal.text}`,
+          `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
       }
       return;
     }
@@ -7332,7 +7637,15 @@ export default function NYC(){
         }));
       }
       if(available.length>0){
-        push(`— AVAILABLE —`,...available.map(q=>`  ${q.npc.toUpperCase()} [Tier ${q.tier}] "${q.title}" — ACCEPT ${q.npc.toUpperCase()} ${q.tier}`));
+        push(`— AVAILABLE — type the command shown to accept:`);
+        available.forEach(q=>{
+          const npcObj=NPCS.find(n=>n.id===q.npc);
+          const inBoro=npcObj?.b===boro;
+          push(`  ACCEPT ${q.npc.toUpperCase()} ${q.tier}  →  "${q.title}"`,
+            `     ${q.briefing?.slice(0,80)||q.task?.slice(0,80)}...`,
+            inBoro?`     ✓ ${npcObj?.name} is here`:`     ⚠ ${npcObj?.name} is in ${getBoro(npcObj?.b)?.name} — MOVE ${npcObj?.b?.toUpperCase()} first`,
+            ``);
+        });
       }
       return;
     }
@@ -8230,7 +8543,15 @@ export default function NYC(){
     updGs(g=>({...g,equipment:{...g.equipment,[slot]:null},inventory:invItem?[...g.inventory,invItem]:g.inventory}));
     push(`Unequipped ${item?.name||slot}.`);
   };
-  const others=Object.entries(world.players||{}).filter(([n,d])=>n!==gs?.name&&(Date.now()-(d.lastSeen||0))<86400000).map(([n,d])=>({name:n,...d}));
+  const others=Object.entries(world.players||{})
+    .filter(([n,d])=>n!==gs?.name&&(Date.now()-(d.lastSeen||0))<24*60*60*1000)
+    .map(([n,d])=>({name:n,...d,
+      isOnline:Date.now()-(d.lastSeen||0)<ONLINE_WINDOW,
+      isActive:Date.now()-(d.lastSeen||0)<ACTIVE_WINDOW,
+    }));
+  const onlineNow=others.filter(p=>p.isOnline);
+  const activeRecent=others.filter(p=>p.isActive&&!p.isOnline);
+  const inMyBoro=others.filter(p=>p.borough===boro&&p.isActive);
 
   // ── BOOT ──────────────────────────────────────────────────────────────────
   if(phase==="boot")return(<>
@@ -8524,7 +8845,22 @@ export default function NYC(){
             <div style={{fontSize:7,color:"#666"}}>{xpNext(gs.xp)} XP</div>
           </div>
           <div style={{width:6,height:6,borderRadius:"50%",background:pulse?"#2a9d8f":"#1a1a1a",transition:"background 0.3s"}}/>
-          {others.slice(0,3).map(p=><div key={p.name} style={{fontSize:7,color:p.borough===boro?"#e63946":"#1e6e62"}}>● {p.name}</div>)}
+          {onlineNow.length>0?(
+            <div style={{display:"flex",alignItems:"center",gap:4,padding:"2px 6px",
+              background:"#2a9d8f15",border:"1px solid #2a9d8f44",borderRadius:2,
+              cursor:"pointer",flexShrink:0}} onClick={()=>tapCmd("WHO")}>
+              <div style={{width:5,height:5,borderRadius:"50%",background:"#2a9d8f",
+                animation:"blink 2s infinite",boxShadow:"0 0 4px #2a9d8f55"}}/>
+              <span style={{fontSize:7,color:"#2a9d8f",fontFamily:"'Share Tech Mono',monospace",whiteSpace:"nowrap"}}>
+                {onlineNow.length} online{inMyBoro.length>0?` · ${inMyBoro.length} here`:""}
+              </span>
+            </div>
+          ):activeRecent.length>0?(
+            <div style={{fontSize:7,color:"#2a2a2a",padding:"2px 5px",cursor:"pointer",flexShrink:0}}
+              onClick={()=>tapCmd("WHO")}>
+              ● {activeRecent.length} recent
+            </div>
+          ):null}
         </div>
 
         {/* MAIN CONTENT ROW */}
@@ -9113,10 +9449,56 @@ export default function NYC(){
         })()}
         {gs&&!chatStrip&&<div onClick={()=>setChatStrip(true)} style={{borderTop:"1px solid #111",background:"#060606",padding:"3px 12px",fontSize:6,color:"#333",cursor:"pointer",flexShrink:0}}>📡 show chat strip</div>}
 
+        {/* INLINE CHOICE — Option B */}
+        {inlineChoice&&(
+          <div style={{borderTop:"1px solid #1a1a2e",padding:"10px 14px",background:"#060610",flexShrink:0}}>
+            <div style={{fontSize:9,color:"#555",fontFamily:"'Share Tech Mono',monospace",marginBottom:8}}>{inlineChoice.prompt?.slice(0,90)}</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {inlineChoice.choices.map((ch,i)=>(
+                <div key={i} onClick={()=>tapCmd(ch.cmd)}
+                  style={{padding:"7px 11px",background:(ch.color||"#2a9d8f")+"18",
+                    border:`1px solid ${ch.color||"#2a9d8f"}`,color:ch.color||"#2a9d8f",
+                    cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",
+                    fontSize:12,letterSpacing:1,display:"flex",alignItems:"center",
+                    gap:5,borderRadius:2,flexShrink:0}}>
+                  <span style={{fontSize:15,lineHeight:1}}>{ch.icon}</span>{ch.label}
+                </div>
+              ))}
+              <div onClick={()=>setInlineChoice(null)}
+                style={{padding:"7px 9px",background:"transparent",border:"1px solid #222",
+                  color:"#333",cursor:"pointer",fontFamily:"'Bebas Neue',sans-serif",
+                  fontSize:11,letterSpacing:1,borderRadius:2}}>✕</div>
+            </div>
+          </div>
+        )}
+
+        {/* CONTEXT BUTTONS — Option A */}
+        {gs&&phase==="game"&&(
+          <div style={{borderTop:"1px solid #0f0f0f",padding:"5px 8px",background:"#050505",
+            display:"flex",gap:5,overflowX:"auto",flexShrink:0,
+            scrollbarWidth:"none",WebkitOverflowScrolling:"touch"}}>
+            {getContextButtons().map((btn,i)=>(
+              <div key={i} onClick={()=>!btn.disabled&&tapCmd(btn.cmd)}
+                title={btn.cmd}
+                style={{padding:"4px 8px",
+                  background:btn.disabled?"#0a0a0a":(btn.color||"#2a9d8f")+"15",
+                  border:`1px solid ${btn.disabled?"#1a1a1a":btn.color||"#2a9d8f"}`,
+                  color:btn.disabled?"#222":btn.color||"#2a9d8f",
+                  cursor:btn.disabled?"not-allowed":"pointer",
+                  fontFamily:"'Bebas Neue',sans-serif",fontSize:10,letterSpacing:1,
+                  display:"flex",flexDirection:"column",alignItems:"center",
+                  gap:1,borderRadius:2,flexShrink:0,minWidth:40,opacity:btn.disabled?0.4:1}}>
+                <span style={{fontSize:16,lineHeight:1}}>{btn.icon}</span>
+                <span style={{fontSize:7,whiteSpace:"nowrap"}}>{btn.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
           <span style={{color:"#f4d03f",fontSize:13,flexShrink:0}}>▶</span>
-          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmd} placeholder={(()=>{
+          <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmdWithChoice} placeholder={(()=>{
               if(!gs)return "command  ·  /message to chat";
               if(gs.survival.health<30)return "⚠ Health critical — REST or EAT";
               if(gs.heat>7)return "🚔 Heat critical — LAY LOW · SKIP TOWN · HIDE";
