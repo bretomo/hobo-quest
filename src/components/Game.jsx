@@ -12,6 +12,49 @@ const BOROUGHS = [
   { id:"staten",    name:"STATEN IS.", short:"STN", color:"#457b9d", heat:3, opp:4, base:{weed:70, pills:10, powder:55}, adjacent:["brooklyn"],                   copBase:2},
 ];
 
+
+// ── FIVE BOROUGHS ENDGAME ─────────────────────────────────────────────────────
+// Win condition: hold all 5 borough corners for 7 consecutive days
+// Escalation: rival pressure, Captain hunting, heat floors, upkeep spikes
+const FIVE_BORO_HOLD_DAYS = 7;        // days must hold all 5
+const FIVE_BORO_HEAT_FLOOR = 6;       // heat can't drop below this
+const FIVE_BORO_UPKEEP_MULT = 2;      // army upkeep doubles
+const KING_TITLE = "KING OF NEW YORK";
+const KING_RESET_DAYS = 30;           // monthly reset
+
+const ENDGAME_RIVALS = [
+  {id:"los_primos_boss",   name:"El Jefe",        power:8,  boro:"bronx",     desc:"Los Primos sent their top enforcer."},
+  {id:"albanian_boss",     name:"Gjon",           power:9,  boro:"staten",    desc:"The Albanians don't negotiate."},
+  {id:"fifth_ave_boss",    name:"The Banker",     power:7,  boro:"manhattan", desc:"Fifth Ave Crew's money man. Has lawyers."},
+  {id:"bedstuy_boss",      name:"OG Buck",        power:8,  boro:"brooklyn",  desc:"Been on that corner since before you were born."},
+  {id:"hunts_boss",        name:"La Sombra",      power:10, boro:"queens",    desc:"Nobody has ever seen La Sombra coming."},
+];
+
+const checkFiveBoroWin=(gs, world)=>{
+  if(!gs||!gs.cornersOwned)return false;
+  const allBoros=BOROUGHS.map(b=>b.id);
+  const ownsAll=allBoros.every(b=>gs.cornersOwned.includes(b)&&world?.corners?.[b]===gs.name);
+  return ownsAll;
+};
+
+const checkFiveBoroStreak=(gs, world)=>{
+  // Returns days the player has held all 5 boroughs consecutively
+  return gs.fiveBoroStreak||0;
+};
+
+const getFiveBoroStatus=(gs, world)=>{
+  if(!gs)return null;
+  const allBoros=BOROUGHS.map(b=>b.id);
+  const owned=allBoros.filter(b=>gs.cornersOwned?.includes(b)&&world?.corners?.[b]===gs.name);
+  if(owned.length<5)return null;
+  return {
+    owned:owned.length,
+    streak:gs.fiveBoroStreak||0,
+    daysLeft:Math.max(0,FIVE_BORO_HOLD_DAYS-(gs.fiveBoroStreak||0)),
+    escalationLevel:Math.min(3,Math.floor((gs.fiveBoroStreak||0)/2)),
+  };
+};
+
 // ── ECONOMICS CONSTANTS ────────────────────────────────────────────────────
 const MAX_CARRY_CASH = 500;       // cash above this makes you a robbery target
 const PRODUCT_WEIGHT = {weed:1,pills:1.5,powder:2}; // weight units per item
@@ -572,8 +615,8 @@ const HUSTLE_DAILY_MAX = {
   fixer:        2,   // brokers deals instead
   rat:          2,   // handler pays them instead
   drifter:      3,
-  schizo:       99,  // no limit — chaos fires every time anyway
-  hooker:       6,   // client slots per day
+  schizo:       3,   // capped — chaos comes from outcomes, not volume
+  hooker:       4,   // client slots (regulars add passive income on top)
 };
 // Diminishing returns multiplier by hustle number today
 const HUSTLE_PAYOUT_MULT = [1.0, 0.7, 0.45, 0.25, 0.10];
@@ -1352,7 +1395,7 @@ const getWeather=day=>{
   const idx=day%pool.length;
   return WEATHER_TYPES[pool[idx]];
 };
-const defWorld=()=>({corners:{},cornerLevels:{},cornerLastVisit:{},cornerDefending:{},cornerContested:{},cornerContestedBy:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{},worldEvent:null,worldEventDay:0,tradeOffers:{},leaderboard:{},leaderboardWeek:0,offlineEvents:{},rivals:{}});
+const defWorld=()=>({corners:{},cornerLevels:{},cornerLastVisit:{},cornerDefending:{},cornerContested:{},cornerContestedBy:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{},worldEvent:null,worldEventDay:0,tradeOffers:{},leaderboard:{},leaderboardWeek:0,offlineEvents:{},rivals:{},kingRecord:[],fiveBoroActive:{}});;
 
 // ── PRESTIGE ──────────────────────────────────────────────────────────────────
 const PRESTIGE_LEVEL = 10; // level required to retire
@@ -2156,6 +2199,19 @@ const getDailyGoal=(gs,world,boro,boros,warehouseLocs)=>{
 
   // No corner yet
   if(lvl>=2&&cornersOwned.length===0)return{icon:"🚩",text:"CLAIM a corner ($50) — earns passive income while you sleep."};
+
+  // Five Boroughs endgame goal
+  const fiveStatG=getFiveBoroStatus(gs,world);
+  if(fiveStatG&&fiveStatG.streak>0){
+    if(fiveStatG.daysLeft===0)return{icon:"👑",text:"KING OF NEW YORK. Type RETIRE to claim the title.",urgent:true};
+    return{icon:"👑",text:`Five boroughs: Day ${fiveStatG.streak}/${FIVE_BORO_HOLD_DAYS}. ${fiveStatG.daysLeft} days left. SLEEP advances the clock.`,urgent:true};
+  }
+  const allB5=BOROUGHS.map(b=>b.id);
+  const owned5g=allB5.filter(b=>gs.cornersOwned?.includes(b)&&world?.corners?.[b]===gs.name);
+  if(owned5g.length===4){
+    const missing=BOROUGHS.find(b=>!owned5g.includes(b.id));
+    return{icon:"👑",text:`One corner away from Five Boroughs Run. MOVE ${missing?.id?.toUpperCase()||"?"} and CLAIM it.`,urgent:false};
+  }
 
   // Army
   if(lvl>=3&&(!gs.army||gs.army.length===0))return{icon:"💪",text:"HIRE units to protect your corners. Lookouts start at $80."};
@@ -3611,6 +3667,10 @@ export default function NYC(){
           // Passive addiction creep from handling product
           if(hasSub2&&Math.random()<0.06)g.addiction=Math.min(100,(g.addiction||0)+1);
         }
+        // Five-boro heat floor
+        if(checkFiveBoroWin(g,world)&&g.heat<FIVE_BORO_HEAT_FLOOR){
+          g.heat=FIVE_BORO_HEAT_FLOOR;
+        }
         const bCopPresence=getCopPresence(boro,world.copPresence,g.day);
         const patrolChance=(g.heat/10)*(bCopPresence/10)*0.3;
         if(Math.random()<patrolChance&&!g.patrolEncountered){
@@ -3781,7 +3841,7 @@ export default function NYC(){
       inventory:[...arch.gear],product:{weed:0,pills:0,powder:0},cooked:{},
       rep:{bronx:0,brooklyn:0,manhattan:5,queens:0,staten:0},
       heat:startHeat,day:1,cornersOwned:[],lastCollect:0,crew:null,crewRole:null,
-      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],
+      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],fiveBoroStreak:0,fiveBoroStartDay:null,
       armyDeployedBoro:{},
       wanted:false,ghostMode:false,habitPaid:false,
       shelterCheckins:{},lastSearch:0,letterWritten:false,prestige:prestige||0,retireEligible:false,
@@ -3975,7 +4035,8 @@ export default function NYC(){
     if(!enemyBase){push(`⚔ Enemy not found: ${enemyType}. Report this bug.`);return;}
     const enemy={...enemyBase,...{hp:enemyBase.hp,maxHp:enemyBase.hpp}};
     const cs=getCombatStats(gs);
-    setCombat({enemy,cs,round:1,log:[`⚔ COMBAT — ${enemy.name}`,enemy.desc,``,`Your AC: ${cs.ac} · Attack: +${cs.attackBonus} · Lvl ${cs.level}`,`Enemy AC: ${enemy.ac} · HP: ${enemy.hp}`,``,`FIGHT · FLEE · USE [ability]`],
+    setInlineChoice(null);
+  setCombat({enemy,cs,round:1,log:[`⚔ COMBAT — ${enemy.name}`,enemy.desc,``,`Your AC: ${cs.ac} · Attack: +${cs.attackBonus} · Lvl ${cs.level}`,`Enemy AC: ${enemy.ac} · HP: ${enemy.hp}`,``,`FIGHT · FLEE · USE [ability]`],
       onWin,onLose,onFlee,playerHp:cs.hp,advantage:false,halfDmg:false,skipEnemyTurn:false,stunEnemy:0,abilitiesUsed:{}});
   };
 
@@ -4169,6 +4230,11 @@ export default function NYC(){
     if(chapter?.boss&&btnLvl>=(chapter.lvlReq||1))btns.push({label:"BOSS",icon:"💀",cmd:"FIGHT STORY BOSS",color:"#9d4edd"});
     if(heat>=7)btns.push({label:"LAY LOW",icon:"🥻",cmd:"LAY LOW",color:"#e67a3a"});
     if(onlineNow.length>0)btns.push({label:`WHO (${onlineNow.length})`,icon:"👥",cmd:"WHO",color:"#2a9d8f"});
+    // Five boroughs endgame button
+    const fiveStatBtn=getFiveBoroStatus(gs,world);
+    const owned5Btn=BOROUGHS.filter(b=>gs.cornersOwned?.includes(b.id)&&world?.corners?.[b.id]===gs.name);
+    if(fiveStatBtn)btns.push({label:`KING ${fiveStatBtn.streak}/${FIVE_BORO_HOLD_DAYS}d`,icon:"👑",cmd:"ENDGAME",color:"#e9c46a"});
+    else if(owned5Btn.length>=3)btns.push({label:`${owned5Btn.length}/5 BOROS`,icon:"👑",cmd:"ENDGAME",color:"#e9c46a"});
     btns.push({label:"STATUS",icon:"📊",cmd:"STATUS",color:"#555"});
     btns.push({label:"SLEEP", icon:"🌙",cmd:"SLEEP", color:"#444"});
     return btns.slice(0,8);
@@ -4783,6 +4849,7 @@ export default function NYC(){
         `COPS:     HEAT LAY LOW HIDE RUN BRIBE TALK WANTED CHANGE UP SKIP TOWN`,
         `DUNGEON:  WAREHOUSES ENTER WAREHOUSE ADVANCE SNEAK SEARCH PAY EXTRACT`,
         `META:     TITLE RETIRE LEGENDS WALL OF DEAD`,
+        `ENDGAME:  ENDGAME · FIVE BOROUGHS · KINGS · HALL OF FAME`,
         gs.isVampire?`VAMPIRE: FEED MESMERIZE MIST DOMINATE THRALL NIGHT MARKET THIRST`:"",
         gs.isJunkie?`JUNKIE: SCORE`:gs.isUndoc?`UNDOC: CONNECT VANISH`:
         gs.isHustler?`HUSTLER: FLIP`:gs.isFixer?`FIXER: WIRE BROKER CLEAN CONNECTIONS`:
@@ -5201,7 +5268,18 @@ export default function NYC(){
           const t=getCornerTier(b,gs,world);const rn=(world.cornerContestedBy||{})[b]||"rivals";
           return `  ⚠ ${getBoro(b)?.name}: ${t.name} — ${rn}. ${t===CORNER_TIERS.LOST?"RECLAIM":"VISIT or DEPLOY army NOW."}`;
         }),
-      );return;
+      );
+      // Five Boroughs endgame status
+      const fiveStatSt=getFiveBoroStatus(gs,world);
+      const allBoros5=BOROUGHS.map(b=>b.id);
+      const owned5=allBoros5.filter(b=>gs.cornersOwned?.includes(b)&&world?.corners?.[b]===gs.name);
+      if(owned5.length>=3||fiveStatSt){
+        push(``,`👑 FIVE BOROUGHS: ${owned5.length}/5`+
+          (fiveStatSt?` — Day ${fiveStatSt.streak}/${FIVE_BORO_HOLD_DAYS} — ${fiveStatSt.daysLeft}d left`:
+          ` — need ${BOROUGHS.filter(b=>!owned5.includes(b.id)).map(b=>b.short).join(" ")} to start the run`),
+          fiveStatSt?`Heat floor ${FIVE_BORO_HEAT_FLOOR} active. ENDGAME difficulty.`:`ENDGAME for full status.`);
+      }
+      return;
     }
     const inspM=C.match(/^INSPECT (.+)$/);
     if(inspM){
@@ -6482,6 +6560,9 @@ export default function NYC(){
           sleepBoro:boro,
           // storyHeldCorner: increment if owned corners in this boro and not cold
           storyHeldCorner:(g.cornersOwned||[]).includes(boro)&&!coldCorners.includes(getBoro(boro)?.short||boro)?(g.storyHeldCorner||0)+1:g.storyHeldCorner||0,
+          // Five Boroughs streak — track consecutive days holding all 5
+          fiveBoroStreak:checkFiveBoroWin(g,world)?(g.fiveBoroStreak||0)+1:0,
+          fiveBoroStartDay:checkFiveBoroWin(g,world)&&!(g.fiveBoroStreak>0)?nextDay:g.fiveBoroStartDay,
           informsToday:0,patrolEncountered:false,feedUsed:false};
       });
       // reset shelter checkins for new day
@@ -6545,6 +6626,55 @@ export default function NYC(){
       }
       if(coldCorners.length>0){
         push("","⚠ COLD CORNERS: "+coldCorners.join(", "),"You haven't visited in "+CORNER_PRESENCE_DAYS+"+ days. No income until you show up.","");
+      }
+      // ── FIVE BOROUGHS WIN CHECK ──────────────────────────────────────────────
+      const fiveStat=getFiveBoroStatus({...gs,fiveBoroStreak:checkFiveBoroWin(gs,world)?(gs.fiveBoroStreak||0)+1:0},world);
+      if(fiveStat&&fiveStat.streak>0){
+        const escLvl=fiveStat.escalationLevel;
+        // Escalation messages by day
+        if(fiveStat.streak===1){
+          push(``,`👑 ALL FIVE BOROUGHS`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `You hold every corner in the city. That has never happened before.`,
+            `Hold them for ${FIVE_BORO_HOLD_DAYS} days. Everyone is coming for you.`,
+            `Heat floor: ${FIVE_BORO_HEAT_FLOOR}. Army upkeep doubled. The city noticed.`,``);
+        } else if(fiveStat.streak<FIVE_BORO_HOLD_DAYS){
+          const escalationMsgs=[
+            `Day ${fiveStat.streak}/${FIVE_BORO_HOLD_DAYS}. The crews are regrouping.`,
+            `Day ${fiveStat.streak}/${FIVE_BORO_HOLD_DAYS}. ENDGAME RIVALS are mobilizing. Check CORNERS.`,
+            `Day ${fiveStat.streak}/${FIVE_BORO_HOLD_DAYS}. The Captain has been seen in every borough. He knows it's you.`,
+            `Day ${fiveStat.streak}/${FIVE_BORO_HOLD_DAYS}. Last stretch. Every rival in the city has your name.`,
+          ];
+          push(``,`👑 FIVE BOROUGH HOLD — Day ${fiveStat.streak}/${FIVE_BORO_HOLD_DAYS}`,
+            escalationMsgs[Math.min(escLvl,escalationMsgs.length-1)],
+            `Heat floor: ${FIVE_BORO_HEAT_FLOOR}. RECLAIM any lost corner immediately.`,``);
+        } else if(fiveStat.streak>=FIVE_BORO_HOLD_DAYS){
+          // WIN
+          push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `👑 KING OF NEW YORK 👑`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+            `${gs.name}. Seven days. All five boroughs. Nobody took it from you.`,``,
+            `The city has had kings before. They all fell eventually.`,
+            `You can retire now with the title — or keep holding and see how long it lasts.`,
+            ``,`RETIRE to claim ${KING_TITLE} permanently. Or keep going.`,``);
+          // Record in world
+          const kingEntry={name:gs.name,level:gs.level,day:gs.day,arch:gs.archetype?.id,time:Date.now()};
+          const kingWs={...world,kingRecord:[...(world.kingRecord||[]).slice(-9),kingEntry]};
+          setWorld(kingWs);saveWorld(kingWs);
+          updGs(g=>({...g,isKing:true,title:KING_TITLE,kingAchievedDay:g.day}));
+        }
+        // Escalation: rivals contest corners more aggressively during five-boro run
+        if(fiveStat.streak>0&&fiveStat.streak<FIVE_BORO_HOLD_DAYS){
+          const escRival=ENDGAME_RIVALS[Math.floor(Math.random()*ENDGAME_RIVALS.length)];
+          const targetBoro=BOROUGHS.find(b=>gs.cornersOwned?.includes(b.id)&&b.id!==boro);
+          if(targetBoro&&Math.random()<0.4+escLvl*0.15){
+            const newCont={...(world.cornerContested||{}),[targetBoro.id]:gs.day};
+            const newContBy={...(world.cornerContestedBy||{}),[targetBoro.id]:escRival.name};
+            const escWs={...world,cornerContested:newCont,cornerContestedBy:newContBy};
+            setWorld(escWs);saveWorld(escWs);
+            setTimeout(()=>push(``,`⚔ ${escRival.name.toUpperCase()} is moving on your ${getBoro(targetBoro.id)?.name} corner.`,`${escRival.desc}`,`RECLAIM or lose it. You have 1 day.`,``),400);
+          }
+          // Heat floor enforcement
+          updGs(g=>({...g,heat:Math.max(FIVE_BORO_HEAT_FLOOR,g.heat)}));
+        }
       }
       // ── DAILY GOAL — one clear thing to do tomorrow ─────────────────────────
       const goal=getDailyGoal({...gs,day:nextDay},world,boro,BOROUGHS,Object.values(WAREHOUSE_LOCATIONS));
@@ -7071,7 +7201,88 @@ export default function NYC(){
       }).catch(()=>push("Deletion failed. Try again."));
       return;
     }
+
+    if(C==="CONFIRM RETIRE"){
+      if(!gs.isKing&&gs.level<PRESTIGE_LEVEL){push(`Not ready to retire. Need Level ${PRESTIGE_LEVEL} or KING title.`);return;}
+      const isKingRetire=gs.isKing;
+      // Award prestige buff
+      const buffIdx=Math.min((gs.prestige||0),PRESTIGE_BUFFS.length-1);
+      const buff=PRESTIGE_BUFFS[buffIdx];
+      // Record retirement
+      const retireEntry={name:gs.name,level:gs.level,day:gs.day,arch:gs.archetype?.id,
+        isKing:isKingRetire,title:gs.title||"",time:Date.now(),
+        legacy:`${gs.name} walked away on Day ${gs.day}. Level ${gs.level}. ${isKingRetire?"They held all five boroughs.":""}`};
+      const retireWs={...world,
+        wallOfDead:[...(world.wallOfDead||[]).slice(-19),retireEntry],
+        players:{...world.players,[gs.name]:{...world.players[gs.name],retired:true}},
+      };
+      setWorld(retireWs);saveWorld(retireWs);
+      if(isKingRetire){
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `👑 ${KING_TITLE} — ${gs.name}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+          `Day ${gs.day}. All five boroughs. Seven days.`,
+          `Nobody took it from you.`,``,
+          `You walk away on your own terms. That matters.`,
+          `Your legacy stays in the city. The next character inherits a little of what you built.`,
+          ``,`The city keeps going. It always does.`,``);
+      } else {
+        push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `${gs.name} — Retired`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+          `Day ${gs.day}. Level ${gs.level}. You walked away.`,
+          buff?`Prestige buff unlocked: ${buff.desc}`:"",
+          ``,`The city keeps going.`,``);
+      }
+      updGs(g=>({...g,prestige:(g.prestige||0)+1,retired:true,
+        lifetime:{...g.lifetime,retirements:(g.lifetime?.retirements||0)+1},
+      }));
+      setTimeout(()=>{setGs(null);setPhase("character");},3000);
+      return;
+    }
+    // KINGS — see hall of fame
+    if(C==="KINGS"||C==="HALL OF FAME"){
+      const kr=world.kingRecord||[];
+      push(``,`👑 KINGS OF NEW YORK`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `Hold all 5 boroughs for ${FIVE_BORO_HOLD_DAYS} days to earn the title.`,``);
+      if(kr.length===0){push(`No kings yet. Be the first.`);}
+      else{push(...kr.slice().reverse().map((k,i)=>`  ${i===0?"👑":"  "} ${k.name} · Lvl ${k.level} · Day ${k.day} · ${k.arch||"?"}`.padEnd(40)));
+        push(``,`Reset every ${KING_RESET_DAYS} days.`);}
+      return;
+    }
+
+    // ENDGAME — show five-boro status
+    if(C==="ENDGAME"||C==="FIVE BOROUGHS"){
+      const allBoros=BOROUGHS.map(b=>b.id);
+      const owned=allBoros.filter(b=>gs.cornersOwned?.includes(b)&&world?.corners?.[b]===gs.name);
+      const fiveStatNow=getFiveBoroStatus(gs,world);
+      push(``,`👑 FIVE BOROUGHS RUN`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `Win condition: own all 5 borough corners for ${FIVE_BORO_HOLD_DAYS} days.`,``);
+      BOROUGHS.forEach(b=>{
+        const have=gs.cornersOwned?.includes(b.id)&&world?.corners?.[b.id]===gs.name;
+        const contested=(world?.cornerContested||{})[b.id];
+        const tier=have?getCornerTier(b.id,gs,world):null;
+        push(`  ${have?"✅":"❌"} ${b.name} ${have?tier?.icon||"🔥":""}${contested?" ⚠ CONTESTED!":""}`);
+      });
+      push(``);
+      if(owned.length<5){
+        push(`Progress: ${owned.length}/5 boroughs`,`Still need: ${BOROUGHS.filter(b=>!owned.includes(b.id)).map(b=>b.name).join(", ")}`,``,`CLAIM corners then hold them. Army helps defend.`);}
+      else if(fiveStatNow){
+        push(`ALL 5 HELD — Day ${fiveStatNow.streak}/${FIVE_BORO_HOLD_DAYS}`,
+          fiveStatNow.daysLeft>0?`${fiveStatNow.daysLeft} days to go. Sleep to advance.`:`👑 Ready to claim the title — RETIRE`,
+          `Heat floor: ${FIVE_BORO_HEAT_FLOOR} · Upkeep: x${FIVE_BORO_UPKEEP_MULT} · Everyone is watching.`);}
+      else{push(`You have all 5! SLEEP to start the ${FIVE_BORO_HOLD_DAYS}-day clock.`);}
+      push(``,`KINGS to see the Hall of Fame.`);
+      return;
+    }
+
     if(C==="RETIRE"){
+      if(gs.isKing){
+        push(``,`👑 ${KING_TITLE}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+          `${gs.name}. You held every corner. For seven days.`,
+          `The city threw everything at you. You didn't fall.`,``,
+          `Your name goes on the wall. Your next character inherits something.`,
+          ``,`Type CONFIRM RETIRE to claim the title and end this run. Or keep holding.`);
+        return;
+      }
       if(gs.level<PRESTIGE_LEVEL){push(`Need Level ${PRESTIGE_LEVEL} to retire. You're Level ${gs.level}.`);return;}
       const pLvl=Math.min((gs.prestige||0)+1,PRESTIGE_BADGES.length-1);
       const buff=PRESTIGE_BUFFS[(gs.prestige||0)%PRESTIGE_BUFFS.length];
