@@ -765,12 +765,12 @@ const ARCHETYPES = [
     startCash:80, special:"Sees buy/sell spread before committing. Market prices favorable. Terrible in a fight." },
   { id:"junkie",       name:"THE JUNKIE",       icon:"💉", color:"#8b5cf6", desc:"Everyone underestimates you. That's your weapon.", stats:{hustle:5,streetiq:9,charm:9,toughness:3,heat:3}, gear:["Works","Notebook","Crumpled map"], xp:{talk:2,scout:2},
     habit:20, special:"HARD MODE. $20/day habit or health drops. Unique missions. Highest charm in the game." },
-  { id:"undocumented", name:"THE UNDOCUMENTED", icon:"🌐", color:"#f4a261", desc:"Off the grid. No name, no record, no mercy.", stats:{hustle:7,streetiq:8,toughness:5,charm:6,heat:0}, gear:["Fake transit pass","Community directory","Burner"], xp:{move:2,deal:1},
+  { id:"undocumented", name:"THE UNDOCUMENTED", icon:"🫥", color:"#f4a261", desc:"Off the grid. No name, no record, no mercy.", stats:{hustle:7,streetiq:8,toughness:5,charm:6,heat:0}, gear:["Fake transit pass","Community directory","Burner"], xp:{move:2,deal:1},
     special:"Can't use shelters or hospitals. Wanted system replaced by Ghost Mode. Tight community network." },
   { id:"vampire", name:"THE VAMPIRE", icon:"🧛", color:"#9d4edd", desc:"Ancient. Predatory. Hiding in plain sight among the forgotten.", stats:{hustle:5,streetiq:8,toughness:7,charm:9,heat:0}, gear:["Black coat","Burner (blocked contact)","Sunglasses"], xp:{fight:2,talk:1},
     startCash:0, isVampire:true,
     special:"HARD MODE. No food needed (hunger irrelevant). Burns in sunlight (warmth drains during day). Feeds on NPCs and players for health. Unique night economy. Charm-based predator." },
-  { id:"fixer", name:"THE FIXER", icon:"🔧", color:"#06d6a0", desc:"Knows everyone. Fixes everything. Takes a cut of all of it.", stats:{hustle:7,streetiq:9,toughness:3,charm:7,heat:1}, gear:["Contact book","Wire cutters","Encrypted phone"], xp:{talk:2,deal:1},
+  { id:"fixer", name:"THE FIXER", icon:"🤝", color:"#06d6a0", desc:"Knows everyone. Fixes everything. Takes a cut of all of it.", stats:{hustle:7,streetiq:9,toughness:3,charm:7,heat:1}, gear:["Contact book","Wire cutters","Encrypted phone"], xp:{talk:2,deal:1},
     startCash:60, isFixer:true,
     special:"Brokers deals between players for 10%. Repairs gear. Wires cash. Never needs to fight. At max level takes a cut of every world transaction automatically." },
   { id:"rat", name:"THE RAT", icon:"🐀", color:"#ff6b6b", desc:"Plays both sides. The most dangerous thing on the street.", stats:{hustle:6,streetiq:10,toughness:2,charm:7,heat:5}, gear:["Handler's number","Burner","Small recorder"], xp:{scout:2,talk:1},
@@ -779,7 +779,7 @@ const ARCHETYPES = [
   { id:"hooker", name:"THE HOOKER", icon:"💄", color:"#ff4d8d", desc:"You learned early that the city runs on transaction. You just cut out the middleman.", stats:{hustle:6,streetiq:8,toughness:4,charm:10,heat:4}, gear:["Good heels","Burner phone","Pepper spray"], xp:{talk:3,hustle:2},
     startCash:50, isHooker:true,
     special:"Highest charm stat in the game. CLIENT command replaces HUSTLE — higher yield, more risk. Regulars system builds over time. Cops are the real danger. The Stroll is a separate economy that operates in Manhattan and Queens at night." },
-  { id:"schizo", name:"THE SCHIZO", icon:"🌀", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
+  { id:"schizo", name:"THE SCHIZO", icon:"📡", color:"#c77dff", desc:"The city speaks to you. Nobody else can hear it.", stats:{hustle:7,streetiq:4,toughness:5,charm:6,heat:3}, gear:["Manifesto pages","Hospital bracelet","Lucky bottle cap"], xp:{hustle:1,fight:1,look:2}, startCash:25, isSchizo:true, special:"CHAOS CLASS. Every action has a 20% chance to go sideways — good or bad, you never know. Visions replace LOOK. Mental health works in reverse at Shattered — breakdown becomes breakthrough." },
   { id:"drifter", name:"GUY WITH DOG", icon:"🐕", color:"#c9a96e", desc:"You and your dog. The city can't take what you don't have.", stats:{hustle:5,streetiq:6,toughness:6,charm:9,heat:0}, gear:["Leash & collar","Cardboard sign","Sleeping bag"], xp:{panhandle:3,talk:2},
     startCash:15, isDrifter:true,
     special:"Your dog changes everything. Highest panhandle yield in the game — people give to the dog. Dog can SCOUT ahead, GUARD your stash, and DISTRACT during encounters. Hard mode: no shelters (dog not allowed), low cash, but the dog boosts mental health passively and NPCs trust you more." },
@@ -805,6 +805,18 @@ const NPCS = [
     "Rico is leaning against the wall with the specific stillness of someone who doesn't need to move to be dangerous.",
     "'You affiliated?' Not aggressive. Just a question. The most important question on this block.",
     "'Queens doesn't do freelancers. Not anymore. You work with us, you're protected. You work alone, you're a problem. Those are the options.'",
+  ]},
+  {id:"carmen", name:"Dona Carmen", role:"Community elder", b:"bronx", icon:"👴", lines:[
+    "Carmen has been on this block since 1987. She knows everyone, owes nothing, and remembers everything.",
+    "'Tienes hambre?' She doesn't wait for the answer. There's always food.",
+    "She speaks to you in Spanish without asking if you speak it. You appreciate that more than you can say.",
+    "She slides you some bills. 'Para el bus.' You know it's more than bus fare.",
+  ]},
+  {id:"rosa",   name:"Rosa",       role:"Churro cart",     b:"queens",  icon:"🧁", lines:[
+    "Rosa's cart is on Roosevelt Ave. Has been for eleven years. She knows every face that passes.",
+    "'Uno?' She's already wrapping it before you answer. Two dollars. Sometimes she forgets to charge.",
+    "She tells you who's been asking around. Doesn't say why she knows. You don't ask.",
+    "'Cuídate.' She says it every time. Every time it lands the same way.",
   ]},
   {id:"marta", name:"Marta", role:"Street medic", b:"staten", icon:"💊", lines:[
     "Marta carries a bag that looks like it's been through a war because it has been, in a way.",
@@ -1019,6 +1031,28 @@ const NPC_QUESTS = {
 };
 
 // Quest progress tracking helpers
+const NPC_QUESTS_EXTRA = {
+  carmen:[
+    {id:"carmen_q1",npc:"carmen",tier:1,repRequired:2,
+     title:"The Building",briefing:"Carmen needs someone trustworthy to deal with a landlord situation. No ID involved.",
+     task:"Talk to the super at 890 Prospect. Don't give your name. Report back.",
+     reward:{cash:60,xp:150},xpType:"talk",days:1,condType:"talk",targetNpc:"carmen"},
+    {id:"carmen_q2",npc:"carmen",tier:2,repRequired:5,
+     title:"The Family",briefing:"A family three floors up needs help moving before the marshal comes.",
+     task:"MOVE their things to queens before end of day. You know how to be quiet about it.",
+     reward:{cash:100,xp:300},xpType:"hustle",days:1,condType:"move",targetBoro:"queens"},
+  ],
+  rosa:[
+    {id:"rosa_q1",npc:"rosa",tier:1,repRequired:2,
+     title:"The Supply",briefing:"Rosa's dough supplier raised prices. She needs someone to find a cheaper source in the Bronx.",
+     task:"Find cheaper flour supply. SCOUT in the Bronx twice.",
+     reward:{cash:50,xp:150},xpType:"scout",days:1,condType:"scout",count:2},
+    {id:"rosa_q2",npc:"rosa",tier:2,repRequired:5,
+     title:"La Familia",briefing:"Rosa's nephew got picked up. She needs someone to quietly post bail and not ask questions.",
+     task:"Deliver $150 to the contact in Brooklyn. You'll know them by the red umbrella.",
+     reward:{cash:80,rep:{carmen:2},xp:300},xpType:"hustle",days:1},
+  ],
+};
 const getAvailableQuests=(gs,npcs)=>{
   const active=gs.activeQuests||{};
   const done=gs.completedQuests||[];
@@ -1206,7 +1240,7 @@ const DAY_LABOR_JOBS = [
     flavor:["The foreman hands you a number. You don't give your name. Nobody asks.",
             "Eight hours of boxes. Your back disagrees. Your wallet doesn't.",
             "The guys on the dock know you're not a regular. They don't care. You work, you get paid."],
-    classBonus:{veteran:15, undocumented:-10}, failChance:0.05 },
+    classBonus:{veteran:15, undocumented:20}, failChance:0.05 },
   { id:"dishes",   name:"Washing Dishes",        location:"manhattan", pay:[35,50],  energy:45, heat:0,  desc:"Restaurant back kitchen. Cash at the end of the shift. No questions.",
     flavor:["You're invisible back here. That's fine. You prefer it.",
             "The chef doesn't speak much English. You don't either, in the ways that matter. You work well together.",
@@ -1238,7 +1272,7 @@ const DAY_LABOR_JOBS = [
     flavor:["You wear the vest and suddenly nobody bothers you. It's like a costume.",
             "The foreman is a good guy. Tells you to come back tomorrow.",
             "Hard not to think about what the city throws away."],
-    classBonus:{undocumented:15}, failChance:0.05 },
+    classBonus:{undocumented:25}, failChance:0.02 },
 ];
 
 // ── BODEGA ITEMS ──────────────────────────────────────────────────────────────
@@ -2076,53 +2110,88 @@ const COMBAT_ABILITIES = {
 // ── ONBOARDING SYSTEM ────────────────────────────────────────────────────────
 // Guided first session — walks new players through core loop in 8 steps
 const TUTORIAL_STEPS = [
-  { id:"look",
+  // ── DAY 1 — Learning to survive ─────────────────────────────────────────────
+  { id:"look", day:1, phase:"survival",
     trigger:"LOOK",
-    msg:"First thing you do when you hit a new block: LOOK around. Type LOOK.",
-    hint:"→ LOOK",
-    narrative:null,
+    msg:"First: LOOK around. Always know what block you're on.",
+    prompt:"You hit the street. No map, no plan. First thing anyone does: look around.",
+    hint:"→ type LOOK",
     reward:null },
-  { id:"status",
+  { id:"status", day:1, phase:"survival",
     trigger:"STATUS",
-    msg:"Good. You're alive. Check your stats — type STATUS.",
-    hint:"→ STATUS",
-    narrative:"You take stock. Health, hunger, warmth, energy. Mental. The things that keep you upright.",
+    msg:"Check your STATUS. Know what's keeping you alive.",
+    prompt:"Four bars matter: Health, Hunger, Warmth, Energy. Any of them hit zero, the others start dropping.",
+    hint:"→ type STATUS",
     reward:null },
-  { id:"hustle",
+  { id:"hustle", day:1, phase:"money",
     trigger:"HUSTLE",
-    msg:"You need money. This block runs on hustle. Type HUSTLE to work it.",
-    hint:"→ HUSTLE",
-    narrative:"Everyone has an angle. Yours is whatever you can manage before someone notices.",
+    msg:"You need money. Type HUSTLE to work the block.",
+    prompt:"Cash is everything. No cash, no food, no shelter, no options. HUSTLE is how you start.",
+    hint:"→ type HUSTLE",
     reward:null },
-  { id:"scout",
-    trigger:"SCOUT",
-    msg:"Smart move before buying anything — check the market. Type SCOUT.",
-    hint:"→ SCOUT",
-    narrative:"Prices move. A bag that's worth $110 in Manhattan goes for $70 here. Knowing the spread is the whole job.",
+  { id:"bodega", day:1, phase:"survival",
+    trigger:"BODEGA",
+    msg:"Stay fed. Type BODEGA to see what's available.",
+    prompt:"Hunger drains health. The bodega's got food, medical supplies, anything you need to stay functional.",
+    hint:"→ type BODEGA",
     reward:{cash:10} },
-  { id:"buy",
-    trigger:"BUY",
-    msg:"Now buy something to flip. Try BUY WEED 1.",
-    hint:"→ BUY WEED 1",
-    narrative:"One bag. Small enough not to draw attention. The goal is to move it somewhere the price is better.",
-    reward:null },
-  { id:"sell",
-    trigger:"SELL",
-    msg:"Move it. Type SELL WEED 1 — same block to start, just to learn the flow.",
-    hint:"→ SELL WEED 1",
-    narrative:"You're not making money yet. You're learning the rhythm. Buy low somewhere, sell high somewhere else. That's the whole game.",
-    reward:{cash:15} },
-  { id:"sleep",
+  { id:"sleep1", day:1, phase:"survival",
     trigger:"SLEEP",
-    msg:"End your first day. Type SLEEP — health recovers, hunger resets, day advances.",
-    hint:"→ SLEEP",
-    narrative:"Day one. You made it. Tomorrow the contracts board resets, the market shifts, and something will happen that you didn't expect. That's the city.",
-    reward:{xp:30,cash:20} },
-  { id:"done",
+    msg:"End Day 1. Type SLEEP — you recover, the day advances.",
+    prompt:"You made it through day one. SLEEP resets your energy, heals a little, and starts tomorrow.",
+    hint:"→ type SLEEP",
+    reward:{cash:20, xp:30} },
+
+  // ── DAY 2 — Learning the city ───────────────────────────────────────────────
+  { id:"talk", day:2, phase:"social",
+    trigger:"TALK",
+    msg:"Day 2. Find your contact. Type TALK RAY (or TALK SMOKE, CARLOS, DEE, MARIA).",
+    prompt:"NPCs run this city. Build rep with them — talk to them, do their jobs, earn trust. Quests unlock at rep 2.",
+    hint:"→ type TALK RAY",
+    reward:null },
+  { id:"scout", day:2, phase:"money",
+    trigger:"SCOUT",
+    msg:"Before buying anything: SCOUT the market. Prices move.",
+    prompt:"A bag worth $90 here might go for $140 in Manhattan. The whole game is knowing the spread.",
+    hint:"→ type SCOUT",
+    reward:{cash:15} },
+  { id:"move", day:2, phase:"explore",
+    trigger:"MOVE",
+    msg:"Try moving to a different borough. Type MOVE [borough name].",
+    prompt:"Five boroughs. Each has different prices, different NPCs, different heat. Moving costs energy. Moving is strategy.",
+    hint:"→ try MOVE MANHATTAN or MOVE BRONX",
+    reward:null },
+  { id:"sleep2", day:2, phase:"survival",
+    trigger:"SLEEP",
+    msg:"End Day 2. Type SLEEP.",
+    prompt:"Two days in. Tomorrow you can CLAIM a corner and start earning passive income.",
+    hint:"→ type SLEEP",
+    reward:{cash:15, xp:20} },
+
+  // ── DAY 3 — Putting it together ─────────────────────────────────────────────
+  { id:"claim", day:3, phase:"corners",
+    trigger:"CLAIM",
+    msg:"Day 3. CLAIM a corner — $50, earns income while you sleep.",
+    prompt:"Corners are passive income. Claim one, visit it regularly, collect the money. Neglect it and rivals take it.",
+    hint:"→ type CLAIM ($50)",
+    reward:null },
+  { id:"story", day:3, phase:"class",
+    trigger:"STORY",
+    msg:"Your class has a personal story. Type STORY to see your first chapter.",
+    prompt:"Every class has a 5-chapter arc with unique enemies and rewards. This is your reason for being here.",
+    hint:"→ type STORY",
+    reward:{xp:50} },
+  { id:"help", day:3, phase:"graduate",
+    trigger:"HELP",
+    msg:"You know enough. Type HELP anytime — it shows commands for your current level.",
+    prompt:"HELP grows with you. Level 2 unlocks corners, NPCs, skills. Level 3 unlocks army, quests, warehouses.",
+    hint:"→ type HELP",
+    reward:null },
+  { id:"done", day:3, phase:"graduate",
     trigger:null,
-    msg:"You know enough to survive. CONTRACTS for daily jobs. SCOUT before buying. Watch your heat. Good luck.",
+    msg:"You've got this. The city's yours to figure out.",
+    prompt:null,
     hint:null,
-    narrative:null,
     reward:null },
 ];
 // ── NOTORIETY TITLES ─────────────────────────────────────────────────────────
@@ -2798,10 +2867,13 @@ const ARCH_IDENTITY = {
   ghost:        {icon:"🌫", pattern:"╌", eyes:"·  ·", mouth:"─", tag:"STEALTH"},
   hustler:      {icon:"💵", pattern:"═", eyes:"●  ●", mouth:"═", tag:"MONEY"},
   junkie:       {icon:"💉", pattern:"·", eyes:"×  ×", mouth:"___",tag:"HUSTLE"},
-  undocumented: {icon:"🌐", pattern:"░", eyes:"○  ○", mouth:"─", tag:"GHOST"},
+  undocumented: {icon:"🫥", pattern:"░", eyes:"○  ○", mouth:"─", tag:"INVISIBLE"},
   vampire:      {icon:"🧛", pattern:"█", eyes:"◆  ◆", mouth:"▼", tag:"PREDATOR"},
-  fixer:        {icon:"🔧", pattern:"─", eyes:"◎  ◎", mouth:"─", tag:"BROKER"},
+  fixer:        {icon:"🤝", pattern:"─", eyes:"◎  ◎", mouth:"─", tag:"BROKER"},
   rat:          {icon:"🐀", pattern:"·", eyes:">  <", mouth:"^", tag:"SNITCH"},
+  drifter:      {icon:"🧳", pattern:"╌", eyes:"─  ─", mouth:"_", tag:"DRIFTER"},
+  schizo:       {icon:"📡", pattern:"░", eyes:"◎  ◎", mouth:"~", tag:"SIGNAL"},
+  hooker:       {icon:"💄", pattern:"─", eyes:"◑  ◑", mouth:"◡", tag:"STROLL"},
 };
 
 function CharPortrait({gs}){
@@ -3667,6 +3739,8 @@ export default function NYC(){
           // Passive addiction creep from handling product
           if(hasSub2&&Math.random()<0.06)g.addiction=Math.min(100,(g.addiction||0)+1);
         }
+        // Ghost passive heat decay
+        if(g.archetype?.id==="ghost"&&g.heat>0&&Math.random()<0.15){g.heat=clamp(g.heat-1,0,10);}
         // Five-boro heat floor
         if(checkFiveBoroWin(g,world)&&g.heat<FIVE_BORO_HEAT_FLOOR){
           g.heat=FIVE_BORO_HEAT_FLOOR;
@@ -3841,7 +3915,7 @@ export default function NYC(){
       inventory:[...arch.gear],product:{weed:0,pills:0,powder:0},cooked:{},
       rep:{bronx:0,brooklyn:0,manhattan:5,queens:0,staten:0},
       heat:startHeat,day:1,cornersOwned:[],lastCollect:0,crew:null,crewRole:null,
-      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],fiveBoroStreak:0,fiveBoroStartDay:null,
+      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],fiveBoroStreak:0,fiveBoroStartDay:null,surveyedPlayers:{},
       armyDeployedBoro:{},
       wanted:false,ghostMode:false,habitPaid:false,
       shelterCheckins:{},lastSearch:0,letterWritten:false,prestige:prestige||0,retireEligible:false,
@@ -3950,9 +4024,15 @@ export default function NYC(){
       `  5. Reach Level 3 → WAREHOUSES for big loot`,
       `  6. STORY → your personal class quest chain`,
       ``,
-      `Type HELP anytime for a full guide.`,
+      `Tutorial guides you for 3 days. Skip anytime.`,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``
     ),300);
+    setTimeout(()=>push(``,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `DAY 1 — STEP 1`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+      TUTORIAL_STEPS[0].prompt,``,
+      `📖 ${TUTORIAL_STEPS[0].msg}`,
+      `  ${TUTORIAL_STEPS[0].hint}`,``),650);
     setTutStep(0);setTutDone(false);
     saveChar(state,pinIn);
     setPhase("game");
@@ -4008,24 +4088,66 @@ export default function NYC(){
     if(tutDone)return;
     const step=TUTORIAL_STEPS[tutStep];
     if(!step||!step.trigger)return;
-    if(triggeredCmd.toUpperCase().startsWith(step.trigger)){
-      const next=TUTORIAL_STEPS[tutStep+1];
-      if(step.reward){
-        updGs(g=>({...g,
-          cash:g.cash+(step.reward.cash||0),
-          skillPoints:(g.skillPoints||0)+(step.reward.skillPoints||0),
-          xp:g.xp+(step.reward.xp||0),
-        }));
-      }
-      if(next){
-        setTutStep(tutStep+1);
-        setTimeout(()=>push(``,`📖 ${next.msg}`,``),400);
-        if(next.reward)setTimeout(()=>push(`  Tutorial bonus: ${Object.entries(next.reward).map(([k,v])=>`+${v} ${k}`).join(", ")}`),450);
-      } else {
-        setTutDone(true);
-        const final=TUTORIAL_STEPS[TUTORIAL_STEPS.length-1];
-        setTimeout(()=>{push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,final.msg,`  Bonus: +$20 · Type HELP anytime.`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);updGs(g=>({...g,cash:g.cash+20}));},400);
-      }
+    if(!triggeredCmd.toUpperCase().startsWith(step.trigger))return;
+
+    // Award reward
+    if(step.reward){
+      updGs(g=>({...g,
+        cash:g.cash+(step.reward.cash||0),
+        xp:g.xp+(step.reward.xp||0),
+        skillPoints:(g.skillPoints||0)+(step.reward.skillPoints||0),
+      }));
+    }
+
+    const nextIdx=tutStep+1;
+    const next=TUTORIAL_STEPS[nextIdx];
+
+    if(!next||next.trigger===null){
+      // Tutorial complete
+      setTutDone(true);
+      setTutStep(TUTORIAL_STEPS.length-1);
+      setTimeout(()=>push(``,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `✓ You know what you're doing now.`,
+        `The city doesn't get easier. You just get better.`,
+        ``,
+        `+$30 · +50 XP · +1 Skill Point — tutorial complete.`,
+        `Type HELP anytime. Type STORY to continue your arc.`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``),400);
+      updGs(g=>({...g,cash:g.cash+30,xp:g.xp+50,skillPoints:(g.skillPoints||0)+1}));
+    } else {
+      // Advance — show next step prompt with positive reinforcement
+      setTutStep(nextIdx);
+
+      // Positive acknowledgment of what they just did
+      const acks={
+        look:"Good. You can see the block now. That's the first skill — awareness.",
+        status:"Now you know what you're working with.",
+        hustle:"Money in hand. That's how it starts.",
+        bodega:"The bodega's always open. Remember that when things get bad.",
+        sleep1:"Day one done. You survived. That's not nothing.",
+        talk:"You made contact. Rep builds slow. Keep going back.",
+        scout:"Now you know the prices. That knowledge is worth real money.",
+        move:"Different borough, different game. You're learning the city.",
+        sleep2:"Two days. You're figuring it out.",
+        claim:"You own something now. Protect it.",
+        story:"That's your arc. Everything you do feeds into it.",
+        help:"",
+      };
+
+      const ack=acks[step.id]||"";
+      const rewardMsg=step.reward?`  +${Object.entries(step.reward).map(([k,v])=>`$${v} ${k}`).join(" · ")}`:null;
+
+      setTimeout(()=>{
+        if(ack)push(``,`✓ ${ack}`+(rewardMsg?`\n${rewardMsg}`:""),``);
+        // Day transition announcement
+        if(next.day&&step.day&&next.day!==step.day){
+          push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `DAY ${next.day}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        }
+        if(next.prompt)push(next.prompt);
+        push(`📖 ${next.msg}`,next.hint?`  ${next.hint}`:"");
+      },400);
     }
   };
 
@@ -4323,6 +4445,10 @@ export default function NYC(){
       "WAREHOUSES":  {level:3, hint:"Reach Level 3 to run warehouses."},
       "ENTER WAREHOUSE":{level:3, hint:"Reach Level 3 to run warehouses."},
       "ATTACK":      {level:4, hint:"Reach Level 4 to challenge other players."},
+      "SURVEIL":     {level:3, hint:"Reach Level 3 to surveil players."},
+      "BLACKMAIL":   {level:3, hint:"Reach Level 3 to blackmail."},
+      "BURN":        {level:4, hint:"Reach Level 4 to burn a target."},
+      "FRAME":       {level:3, hint:"Reach Level 3 to frame players."},
       "BOUNTY":      {level:4, hint:"Reach Level 4 to place bounties."},
       "BOUNTIES":    {level:4, hint:"Reach Level 4 to see bounties."},
       "FORM CREW":   {level:4, hint:"Reach Level 4 to form a crew."},
@@ -4607,7 +4733,8 @@ export default function NYC(){
     }
     const b=getBoro(boro);
     const weEffect=world.worldEvent?.effect||{};
-    const regularIncome=(gs.regulars||0)*20;
+    const regularCap=hasSkill(gs,"the_book")?5:2;
+    const regularIncome=Math.min(gs.regulars||0,regularCap)*12;
     const weather=getWeather(gs.day);
 
     // ABILITIES — show archetype combat abilities
@@ -4666,6 +4793,7 @@ export default function NYC(){
         `  CLAIM           — take the corner here ($50)`,
         `  CORNERS         — see who owns what, income rates`,
         `  COLLECT         — pocket accrued income (caps at 12h)`,
+        `  RECLAIM         — take back a corner lost to rivals`,
         `  SLEEP           — auto-drips 25% of daily rate`,
         `  UPGRADE CORNER  — increase income at your corner`,
         ``,
@@ -4740,6 +4868,7 @@ export default function NYC(){
         `CONTRACT PROGRESS   — check active quest status`,
         ``,
         `NPC names:  RAY · SMOKE · CARLOS · DEE · MARIA`,
+        `            DONA CARMEN (Bronx) · ROSA (Queens) — Undocumented-focused quests`,
         `Each NPC specializes: Ray(deals) Smoke(muscle)`,
         `Carlos(intel) Dee(goods) Maria(community)`,
         ``,
@@ -4800,6 +4929,7 @@ export default function NYC(){
     if(C==="HELP WORLD"){
       push(``,`🌐 MULTIPLAYER & WORLD`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `MSG [text]      — broadcast to world chat`,
+        `WHO             — see who's online right now and where`,
         `WRITE [name] [msg] — send a private letter`,
         `LETTERS         — read your mail`,
         ``,
@@ -4831,7 +4961,7 @@ export default function NYC(){
       if(gs.isUndoc)push(`CONNECT         — tap community network`,`VANISH          — emergency heat dump`);
       if(gs.isHustler)push(`FLIP            — arbitrage analysis`);
       if(gs.isFixer)push(`WIRE [player] [amt] — send cash`,`BROKER [p1] [p2] — arrange deals`,`CLEAN [player]  — wash heat`,`CONNECTIONS     — your network`);
-      if(gs.isRat)push(`INFORM [player] — tip off cops`,`MISINFORM [player] — plant false intel`,`PLANT [player]  — frame someone`,`EXPOSE [player] — burn a target`,`INTEL           — your collected info`);
+      if(gs.isRat)push(`INFORM [player]    — tip off cops for cash`,`SURVEIL [player]   — learn their borough, heat, movement`,`BLACKMAIL [player] — leverage intel for cash (need fresh SURVEIL)`,`BURN [player]      — full exposure, max heat on target ($120, 3 uses)`,`FRAME [player]     — plant evidence near their corner ($80)`,`MISINFORM [player] — plant false intel in their feed`,`INTEL              — your dossiers`);
       push(``,`SKILLS          — see unlockable abilities`,`SKILL [name]    — unlock a skill`);
       return;
     }
@@ -4848,7 +4978,7 @@ export default function NYC(){
         `          LEADERBOARD RIVALS OFFER TRADES CREW CREWS FORM JOIN DEPOSIT`,
         `COPS:     HEAT LAY LOW HIDE RUN BRIBE TALK WANTED CHANGE UP SKIP TOWN`,
         `DUNGEON:  WAREHOUSES ENTER WAREHOUSE ADVANCE SNEAK SEARCH PAY EXTRACT`,
-        `META:     TITLE RETIRE LEGENDS WALL OF DEAD`,
+        `META:     TITLE RETIRE CONFIRM RETIRE LEGENDS WALL OF DEAD`,
         `ENDGAME:  ENDGAME · FIVE BOROUGHS · KINGS · HALL OF FAME`,
         gs.isVampire?`VAMPIRE: FEED MESMERIZE MIST DOMINATE THRALL NIGHT MARKET THIRST`:"",
         gs.isJunkie?`JUNKIE: SCORE`:gs.isUndoc?`UNDOC: CONNECT VANISH`:
@@ -5197,6 +5327,19 @@ export default function NYC(){
       if(lookHere.length>0){
         push(``,...lookHere.map(p=>`${p.io?"🟢":"🟡"} ${p.name} (Lvl ${p.level||"?"})${(p.heat||0)>=7?" 🔥 hot":""}${world.corners?.[boro]===p.name?" — owns this corner":""}`),``);
       }
+      // Drifter: random stranger stops for the dog while looking around
+      if(gs.isDrifter&&Math.random()<0.25){
+        const dogLookEvts=[
+          {msg:"A woman stops, kneels, lets the dog lick her hand. Doesn't say anything to you. Leaves $10.",cash:10},
+          {msg:"Guy on a bike slows down. 'Nice dog.' Flips you $5 without stopping.",cash:5},
+          {msg:"Two tourists want a photo with the dog. They hand you $15 after.",cash:15},
+          {msg:"Someone from a third floor window yells down and throws a $20 rolled up. The dog catches it.",cash:20},
+          {msg:"The dog finds a $10 bill half under a trash can. Sets it at your feet.",cash:10},
+        ];
+        const evt=dogLookEvts[Math.floor(Math.random()*dogLookEvts.length)];
+        updGs(g=>applyXP({...g,cash:g.cash+evt.cash},2,"hustle"));
+        push(`🐕 ${evt.msg}`,`+$${evt.cash}.`);
+      }
       updGs(g=>applyXP({...g,lookCount:(g.lookCount||0)+1},1,"look"));
       // Update corner presence — track last visit to each owned corner
       if(gs.cornersOwned?.includes(boro)){
@@ -5522,15 +5665,17 @@ export default function NYC(){
       if(!gs.isHooker){push(`That's not how you operate. Try HUSTLE.`);return;}
       if(gs.survival.energy<15){push(`Too tired. You need to rest first.`);return;}
       const clientsToday=gs.hustleCount||0;
-      const maxClients=6;
+      const maxClients=HUSTLE_DAILY_MAX[gs.archetype?.id||"hooker"]||4; // use the proper cap
       if(clientsToday>=maxClients){push(`You've hit your limit for today. Come back tomorrow.`);return;}
-      const isNight=(gs.day%2===0); // alternate day/night cycle
-      const nightBonus=isNight?1.4:1.0;
-      const charmMod=Math.floor((gs.stats?.charm||10)/2);
-      const basePay=rnd(30,70);
-      const total=Math.round(basePay*nightBonus+charmMod);
+      const isNight=(gs.day%2===0);
+      const nightBonus=isNight?1.2:1.0; // reduced from 1.4 — night rate was too strong
+      const charmMod=Math.floor((gs.stats?.charm||10)/3); // reduced charm scaling
+      const basePay=rnd(18,40); // reduced from rnd(30,70) — was wildly high
+      // Diminishing returns like hustle — each client pays less
+      const clientMult=[1.0,0.8,0.6,0.4][Math.min(clientsToday,3)];
+      const total=Math.round(basePay*nightBonus*clientMult+charmMod);
       const heatGain=rnd(1,2);
-      // Cop chance — higher heat = higher risk
+      // Cop chance
       const copChance=gs.heat>6?0.25:gs.heat>4?0.15:0.08;
       if(Math.random()<copChance){
         const hasCopSense=(gs.skills||[]).includes("read_the_room");
@@ -5543,6 +5688,7 @@ export default function NYC(){
         }
         return;
       }
+      const attemptsLeft=maxClients-clientsToday-1;
       const clientMsgs=[
         "Business transaction. Clean. $"+total+" in hand.",
         "Regular energy. The kind of client who doesn't make eye contact. $"+total+".",
@@ -5557,7 +5703,9 @@ export default function NYC(){
         clientCount:(g.clientCount||0)+1,
         survival:{...g.survival,energy:clamp(g.survival.energy-20,0,100),mental:clamp((g.survival.mental||70)-5,0,100)},
       },12,"hustle"));
-      push(`💄 ${clientMsgs[rnd(0,clientMsgs.length-1)]}`,`+$${total}. Heat +${heatGain}. Energy -20.`);
+      push(`💄 ${clientMsgs[rnd(0,clientMsgs.length-1)]}`,
+        `+$${total}. Heat +${heatGain}. Energy -20.`+(clientMult<1?` (${Math.round(clientMult*100)}% — returns dropping)`:""),
+        attemptsLeft>0?`${attemptsLeft} slot${attemptsLeft>1?"s":""} left today.`:`Last client today.`);
       return;
     }
     if(C==="HUSTLE"){
@@ -5640,13 +5788,14 @@ export default function NYC(){
       const hasStreetMedic=hasSkill(gs,"street_medic");
       const restHealthBonus=hasStreetMedic?25:10; // meaningful heal on rest
       const restBonus=gs.isUndoc?restHealthBonus-5:restHealthBonus;
+      const ghostRestHeat=gs.archetype?.id==="ghost"?2:1;
       updGs(g=>applyXP({...g,survival:{
         hunger:clamp(g.survival.hunger-8,0,100),
         warmth:clamp(g.survival.warmth+15,0,100),
         health:clamp(g.survival.health+restBonus,0,100),
         energy:clamp(g.survival.energy+40,0,100),
         mental:clamp((g.survival.mental||70)+5,0,100),
-      },heat:clamp(g.heat-1,0,10)},3,"rest"));
+      },heat:clamp(g.heat-ghostRestHeat,0,10)},3,"rest"));
       push(gs.isUndoc?`Found a community spot. Laid low.`:`Found cover. Laid low.`,
         `Health +${restBonus} · Energy up · Heat cooling.`,
         gs.survival.health<40?`Still hurting. BUY BANDAGE at the bodega, or CLINIC for serious wounds.`:"");
@@ -6539,7 +6688,31 @@ export default function NYC(){
         else{habitMsg=`Couldn't cover habit. Health dropping.`;}
       }
       // undocumented community network passive income
-      const commBonus=gs.isUndoc?rnd(5,20):0;
+      // Undocumented community income + informal economy
+      const churroChance=gs.isUndoc&&Math.random()<0.3;
+      const churroEvents=[
+        {msg:"Dona Carmen on the corner gave you $12 for helping move crates this morning. No words needed.",cash:12},
+        {msg:"The community WhatsApp had a job. Two hours carrying boxes. $18 cash.",cash:18},
+        {msg:"A neighbor needed someone who speaks the language. Interpreted for a contractor. $15.",cash:15},
+        {msg:"Rosa sold you a churro and then gave you back the $2 and more. You figure she saw something in your face.",cash:15},
+        {msg:"The building super needs someone quiet who doesn\'t ask questions. $20 for a morning\'s work.",cash:20},
+        {msg:"The bodega owner\'s cousin needed a favor. Doesn\'t matter what. $10.",cash:10},
+      ];
+      const churroEvent=churroChance?churroEvents[Math.floor(Math.random()*churroEvents.length)]:null;
+      const churroBonus=churroEvent?.cash||0;
+      const commBonus=(gs.isUndoc?rnd(10,30):0)+churroBonus;
+      // Drifter dog income — strangers, sympathetic passersby, random kindness
+      const dogEvents=gs.isDrifter?[
+        {msg:"Someone saw the dog last night. Left $20 and a note under a rock near where you sleep.",cash:20},
+        {msg:"A kid pushed a folded bill through a fence at the dog. $15.",cash:15},
+        {msg:"The dog did something in front of a deli. The owner came out and gave you $12 and a sandwich.",cash:12},
+        {msg:"An old woman called the dog by a different name. She gave you $25, crying a little. You didn't ask.",cash:25},
+        {msg:"Three people in a row stopped for the dog today. By the end you had $30.",cash:30},
+        {msg:"Nothing today. The dog was sleeping too.",cash:0},
+        {msg:"The dog found something. $8 in coins scattered near a bus stop. She dropped them at your feet.",cash:8},
+      ]:null;
+      const dogEvent=dogEvents?dogEvents[Math.floor(Math.random()*dogEvents.length)]:null;
+      const dogCash=dogEvent?.cash||0;
       updGs(g=>{
         const habHealth=g.isJunkie&&g.cash<habitCost?clamp(g.survival.health-15,0,100):g.survival.health+5;
         const newAddiction=Math.max(0,(g.addiction||0)-1);
@@ -6549,9 +6722,9 @@ export default function NYC(){
           setTimeout(()=>push(`${CLASS_SUBSTANCE[g.archetype?.id||'veteran']?.icon} Addiction easing: ${_oldLvl.name} → ${_newLvl.name} (${newAddiction}/100)`),300);
         }
         return{...g,day:nextDay,addiction:newAddiction,
-          cash:g.cash-habitCost+income+crewBonus+safePassive+commBonus,
+          cash:g.cash-habitCost+income+crewBonus+safePassive+commBonus+dogCash,
           survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
-          heat:clamp(g.heat-2,0,10),habitPaid:g.cash>=habitCost,
+          heat:clamp(g.heat-(g.archetype?.id==="ghost"?3:2),0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
           dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
           contractsCompleted:[],contractProgress:{},
@@ -6601,7 +6774,7 @@ export default function NYC(){
         `${regularIncome>0?"Regulars: +$"+regularIncome+". ":""}${income>0?"Corners (passive drip): +$"+income+(coldCorners.length?" ("+coldCorners.join(",")+": COLD)":"")+". 💡 COLLECT for accrued. ":""}${contestedCorners.length?" ⚠ "+contestedCorners.length+" corner(s) contested!":""}`+
         (crewBonus>0?"Crew added $"+crewBonus+". ":"")+
         (safePassive>0?"Safe houses: +$"+safePassive+". ":"")+
-        (commBonus>0?"Community network: +$"+commBonus+". ":"")+
+        (commBonus>0?"Community: +$"+commBonus+(churroEvent?" ("+churroEvent.msg.slice(0,40)+"...)":"")+" ":"")+(dogCash>0?" "+dogEvent.msg+" +$"+dogCash+"":"")+
         (thrallIncome>0?"Thralls: +$"+thrallIncome+". ":"")+
         (nightIncome>0?"Night economy: +$"+nightIncome+". ":"")+
         (networkIncome>0?"Network cut: +$"+networkIncome:""),
@@ -7729,22 +7902,52 @@ export default function NYC(){
     if(mesM){
       if(!gs.isVampire){push(`You don't have that power.`);return;}
       if(!hasSkill(gs,"mesmerize")){push(`Unlock Mesmerize first. Type SKILLS.`);return;}
-      const npcName=mesM[1].toLowerCase();
-      const npc=npcs.find(n=>n.name.toLowerCase()===npcName||n.id===npcName);
-      if(!npc){push(`Don't know ${mesM[1]}.`);return;}
-      if(npc.b!==boro){push(`${npc.name} isn't here.`);return;}
+      const mesTarget=mesM[1].trim();
+      const mesTargetLow=mesTarget.toLowerCase();
+      // Check if target is a player first
+      const playerTarget=world.players?.[mesTarget]||Object.entries(world.players||{}).find(([n])=>n.toLowerCase()===mesTargetLow)?.[1];
+      const playerName=Object.keys(world.players||{}).find(n=>n===mesTarget||n.toLowerCase()===mesTargetLow);
+      if(playerTarget&&playerName){
+        // Player mesmerize — requires them to be in same borough
+        if(playerTarget.borough!==boro){push(`${playerName} isn’t here. You need to be in the same borough.`);return;}
+        if(gs.mesmerizeUsed===gs.day){push(`You’ve already mesmerized someone today. The power needs to recover.`);return;}
+        const charm=gs.stats?.charm||5;
+        const resistance=Math.random()*10;
+        const success=charm>=7||Math.random()<(charm/12);
+        if(success){
+          const tribute=rnd(20,60);
+          const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[playerName]:[
+            ...((world.playerAlerts||{})[playerName]||[]),
+            {msg:`🧛 ${gs.name} caught your eyes. You felt compelled to hand over $${tribute}. You couldn’t explain why.`,time:Date.now()}
+          ]}};
+          setWorld(ws);saveWorld(ws);
+          updGs(g=>applyXP({...g,mesmerizeCount:(g.mesmerizeCount||0)+1,mesmerizeUsed:g.day,cash:g.cash+tribute},20,"fight"));
+          push(``,`🧛 MESMERIZE — ${playerName}`,`You hold their gaze a half-second too long.`,`Something behind their eyes goes quiet.`,`They reach into their pocket. Hand you $${tribute}.`,`They’ll remember this as a bad decision they can’t explain.`,``);
+        } else {
+          updGs(g=>({...g,mesmerizeCount:(g.mesmerizeCount||0)+1,mesmerizeUsed:g.day}));
+          push(``,`🧛 MESMERIZE FAILED — ${playerName}`,`Something in them resisted. They blink. Look at you sideways.`,`You back off before they figure out what just happened.`,``);
+        }
+        return;
+      }
+      // NPC mesmerize
+      const npc=npcs.find(n=>n.name.toLowerCase()===mesTargetLow||n.id===mesTargetLow);
+      if(!npc){push(`No one named ${mesM[1]} here. Try a player name or NPC.`);return;}
+      if(npc.b!==boro){push(`${npc.name} isn’t here.`);return;}
       const outcomes=[
-        {msg:`${npc.icon} ${npc.name}'s eyes go glassy. They hand you everything in their pocket.`, cash:rnd(20,50)},
-        {msg:`${npc.icon} ${npc.name} whispers where the product stash is.`, intel:true},
-        {msg:`${npc.icon} ${npc.name} tells you something they shouldn't. Heat -1.`, heatDown:true},
-        {msg:`${npc.icon} ${npc.name} fights the pull. Charm too low. They shake it off.`, fail:true},
-      ];
-      const outcome=outcomes[gs.stats.charm>=8?rnd(0,2):rnd(0,3)];
+        {msg:`${npc.icon} ${npc.name}’s eyes go glassy. They hand you everything in their pocket.`, cash:rnd(20,50)},
+        {msg:`${npc.icon} ${npc.name} whispers where the stash is. Good intel.`, intel:true, cash:rnd(10,25)},
+        {msg:`${npc.icon} ${npc.name} tells you something they shouldn’t. Heat -1.`, heatDown:true},
+        {msg:`${npc.icon} ${npc.name} gives you a look that makes you feel seen. Rep +1. No cash.`},
+        gs.stats?.charm>=8?null:{msg:`${npc.icon} ${npc.name} fights the pull. Charm too low.`, fail:true},
+      ].filter(Boolean);
+      const outcome=outcomes[rnd(0,outcomes.length-1)];
       push(`👁 You fix your gaze on ${npc.name}.`,outcome.msg);
-      if(outcome.cash)updGs(g=>applyXP({...g,mesmerizeCount:(g.mesmerizeCount||0)+1,cash:g.cash+outcome.cash},10,"talk"));
-      else if(outcome.heatDown)updGs(g=>applyXP({...g,mesmerizeCount:(g.mesmerizeCount||0)+1,heat:clamp(g.heat-1,0,10)},10,"scout"));
-      else updGs(g=>applyXP({...g,mesmerizeCount:(g.mesmerizeCount||0)+1},5,"talk"));
-      setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+1,10)}:n));
+      updGs(g=>applyXP({...g,
+        mesmerizeCount:(g.mesmerizeCount||0)+1,
+        cash:g.cash+(outcome.cash||0),
+        heat:outcome.heatDown?clamp(g.heat-1,0,10):g.heat,
+      },outcome.fail?3:10,"talk"));
+      setNpcs(prev=>prev.map(n=>n.id===npc.id?{...n,rep:Math.min(n.rep+2,10)}:n));
       return;
     }
 
@@ -8088,6 +8291,110 @@ export default function NYC(){
     // ── RAT COMMANDS ─────────────────────────────────────────────────────────
 
     // INFORM [player] — file a tip on another player
+
+    // SURVEIL [player] — rat watches a player, learns their borough and heat
+    const surveM=C.match(/^SURVEIL (.+)$/);
+    if(surveM){
+      if(!gs.isRat){push(`You don\'t do that.`);return;}
+      const tName=surveM[1].trim();
+      const tData=world.players?.[tName];
+      if(!tData){push(`No player named ${tName}.`);return;}
+      const minsAgo=Math.floor((Date.now()-(tData.lastSeen||0))/60000);
+      const surveyed={...(gs.surveyedPlayers||{}),[tName]:{
+        borough:tData.borough,heat:tData.heat,level:tData.level,
+        cash:tData.cash,day:tData.day,lastSeen:Date.now()
+      }};
+      updGs(g=>applyXP({...g,surveyedPlayers:surveyed},8,"scout"));
+      push(``,`🔍 SURVEIL — ${tName}`,
+        `Borough: ${getBoro(tData.borough)?.name||tData.borough||"unknown"}`,
+        `Heat: ${tData.heat||"?"}/10 · Level: ${tData.level||"?"}`,
+        minsAgo<5?`Active now.`:minsAgo<60?`Last seen ${minsAgo} minutes ago.`:`Offline for ${Math.floor(minsAgo/60)}h.`,
+        (tData.heat||0)>=7?`They\'re hot. Good time to INFORM.`:"",
+        ``,`INTEL to see everything you\'ve collected. BLACKMAIL ${tName} if you have leverage.`);
+      return;
+    }
+
+    // BLACKMAIL [player] — rat leverages intel for cash
+    const blkM=C.match(/^BLACKMAIL (.+)$/);
+    if(blkM){
+      if(!gs.isRat){push(`Not your style.`);return;}
+      const tName=blkM[1].trim();
+      const surveyed=gs.surveyedPlayers?.[tName];
+      if(!surveyed){push(`You don\'t have intel on ${tName}. SURVEIL them first.`);return;}
+      const hoursOld=Math.floor((Date.now()-(surveyed.lastSeen||0))/3600000);
+      if(hoursOld>12){push(`Your intel on ${tName} is ${hoursOld}h old. SURVEIL them again for fresh leverage.`);return;}
+      if(gs.blackmailedToday===gs.day){push(`One blackmail per day. Let them sweat overnight.`);return;}
+      const demand=rnd(40,80);
+      const tData=world.players?.[tName];
+      const success=tData&&(tData.heat||0)>=5||Math.random()<0.6;
+      if(success){
+        const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[tName]:[
+          ...((world.playerAlerts||{})[tName]||[]),
+          {msg:`🐀 Someone knows what you\'ve been doing. They want $${demand}. It\'s already gone from your next COLLECT.`,time:Date.now()}
+        ]}};
+        setWorld(ws);saveWorld(ws);
+        updGs(g=>applyXP({...g,cash:g.cash+demand,blackmailedToday:g.day,informCount:(g.informCount||0)+1},15,"hustle"));
+        push(``,`📜 BLACKMAIL — ${tName}`,
+          `You send the message through back channels.`,
+          `They know you know. $${demand} hits your account quietly.`,
+          `They\'re scared. Scared people make mistakes.`,``);
+      } else {
+        updGs(g=>({...g,blackmailedToday:g.day,heat:clamp(g.heat+2,0,10)}));
+        push(``,`📜 BLACKMAIL FAILED — ${tName}`,
+          `They called your bluff. Or they\'re too dangerous to care.`,
+          `Your heat went up. They might talk.`,``);
+      }
+      return;
+    }
+
+    // BURN [player] — rat fully exposes a player to cops, max heat spike
+    const burnM=C.match(/^BURN (.+)$/);
+    if(burnM){
+      if(!gs.isRat){push(`Not your thing.`);return;}
+      const tName=burnM[1].trim();
+      const surveyed=gs.surveyedPlayers?.[tName];
+      if(!surveyed){push(`Need SURVEIL intel on ${tName} first.`);return;}
+      if(gs.burnUsed===gs.day){push(`Already burned someone today.`);return;}
+      // Burn costs handler relationship — limited use
+      const burnsLeft=Math.max(0,3-(gs.burnCount||0));
+      if(burnsLeft===0){push(`Your handler doesn\'t trust your burns anymore. You\'ve used up your credibility.`);return;}
+      const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[tName]:[
+        ...((world.playerAlerts||{})[tName]||[]),
+        {msg:`🔥 Someone gave your name to the cops. Your heat is maxed. Cops have your description. LAY LOW immediately.`,time:Date.now()}
+      ]}};
+      setWorld(ws);saveWorld(ws);
+      updGs(g=>applyXP({...g,cash:g.cash+120,burnUsed:g.day,burnCount:(g.burnCount||0)+1,informCount:(g.informCount||0)+1},20,"fight"));
+      push(``,`🔥 BURN — ${tName}`,
+        `You give your handler everything. Full file.`,
+        `${tName}\'s heat spikes to max. Every cop in the city has their description.`,
+        `+$120. Handler is satisfied.`,
+        burnsLeft-1===0?`That\'s your last burn. Handler won\'t take another on you.`:`${burnsLeft-1} burns remaining before you\'re cut off.`,``);
+      return;
+    }
+
+    // FRAME [player] — plant evidence, not a direct tip — subtler
+    const frameM=C.match(/^FRAME (.+)$/);
+    if(frameM){
+      if(!gs.isRat){push(`Not in your toolkit.`);return;}
+      const tName=frameM[1].trim();
+      if(gs.frameUsed===gs.day){push(`Already framed someone today. Handler won\'t run two setups in one day.`);return;}
+      const tData=world.players?.[tName];
+      if(!tData){push(`No player named ${tName}.`);return;}
+      if(tData.borough!==boro){push(`${tName} needs to be in your borough to frame them.`);return;}
+      // Frame plants a contraband item in their territory — next cop encounter triggers bust
+      const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[tName]:[
+        ...((world.playerAlerts||{})[tName]||[]),
+        {msg:`🕵 Something was planted near your corner. Next cop encounter triggers a search. LAY LOW or VANISH immediately.`,time:Date.now()}
+      ]}};
+      setWorld(ws);saveWorld(ws);
+      updGs(g=>applyXP({...g,cash:g.cash+80,frameUsed:g.day,informCount:(g.informCount||0)+1},12,"scout"));
+      push(``,`🕵 FRAME — ${tName}`,
+        `Subtle. Nobody sees it happen.`,
+        `You leave something near their corner. Cops will find it.`,
+        `+$80. ${tName} doesn\'t know yet.`,``);
+      return;
+    }
+
     const informM=C.match(/^INFORM (.+)$/);
     if(informM){
       if(!gs.isRat){push(`That's not your game.`);return;}
@@ -8330,9 +8637,16 @@ export default function NYC(){
     // LAY LOW — spend time lying low, costs a day's energy, reduces heat
     if(C==="LAY LOW"){
       if(gs.survival.energy<30){push(`Too tired. REST first.`);return;}
-      const heatDrop=rnd(1,3);
-      const energyCost=40;
-      const msgs=[
+      const isGhost=gs.archetype?.id==="ghost";
+      const heatDrop=isGhost?rnd(2,5):rnd(1,3);
+      const energyCost=isGhost?25:40;
+      const msgs=isGhost?[
+        "You don't hide — you stop existing for a few hours. The block forgets your face by noon.",
+        "Three boroughs, two subway switches, one clothing swap. By evening you're a different person.",
+        "You know every camera blind spot, every alley that doesn't echo. This is what you do.",
+        "You were never here. The paperwork will confirm it.",
+        "You vanish. Not metaphorically.",
+      ]:[
         "You pull your hood up and stay off the main blocks all day. Nobody sees you.",
         "You find a spot — library, church basement, laundromat — and you wait. By evening the block feels different.",
         "You move borough to borough, never staying long enough to matter. Heat drops.",
@@ -8343,7 +8657,7 @@ export default function NYC(){
         heat:clamp(g.heat-heatDrop,0,10),
         survival:{...g.survival,energy:clamp(g.survival.energy-energyCost,0,100)},
       }));
-      push(`🫥 ${msgs[rnd(0,msgs.length-1)]}`,`Heat -${heatDrop}. Energy -${energyCost}.`);
+      push(`🫥 ${msgs[rnd(0,msgs.length-1)]}`,`Heat -${heatDrop}. Energy -${energyCost}.`+(isGhost?" Ghost bonus.":""));
       return;
     }
 
@@ -8351,7 +8665,8 @@ export default function NYC(){
     if(C==="CHANGE UP"){
       const cost=40;
       if(gs.cash<cost){push(`Need $${cost} for new clothes, haircut, different look.`);return;}
-      const heatDrop=rnd(2,4);
+      const isGhost3=gs.archetype?.id==="ghost";
+      const heatDrop=isGhost3?rnd(4,7):rnd(2,4);
       const msgs=[
         "New jacket from the thrift store on Flatbush. Different shoes. You don't look like yourself anymore. That's the point.",
         "You get a cut at the barbershop on 149th. Pay cash. The barber doesn't ask questions. Regulars don't ask questions either.",
@@ -8362,7 +8677,7 @@ export default function NYC(){
         cash:g.cash-cost,
         heat:clamp(g.heat-heatDrop,0,10),
       }));
-      push(`👔 ${msgs[rnd(0,msgs.length-1)]}`,`-$${cost}. Heat -${heatDrop}.`);
+      push(`👔 ${msgs[rnd(0,msgs.length-1)]}`,`-$${cost}. Heat -${heatDrop}.`+(isGhost3?" Ghost: complete identity wipe.":""));
       return;
     }
 
@@ -9137,9 +9452,31 @@ export default function NYC(){
         {/* CENTER */}
         <div style={{display:"flex",flexDirection:"column",borderRight:"1px solid #0f0f0f",flex:1,minWidth:0,overflow:"hidden"}}>
           {!tutDone&&gs&&(
-            <div style={{padding:"5px 12px",background:"#e9c46a08",borderBottom:"1px solid #e9c46a22",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:8,color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace"}}>📖 {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)]?.msg?.slice(0,60)}...</div>
-              <div onClick={()=>{setTutDone(true);setTutStep(TUTORIAL_STEPS.length-1);}} style={{fontSize:8,color:"#888",cursor:"pointer",marginLeft:8,padding:"2px 6px",border:"1px solid #333"}}>skip ×</div>
+            <div style={{padding:"8px 12px",background:"#e9c46a10",borderBottom:"1px solid #e9c46a33",flexShrink:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                    <span style={{fontSize:9,color:"#e9c46a",fontFamily:"'Bebas Neue',sans-serif",letterSpacing:1}}>
+                      DAY {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)]?.day||1} · STEP {Math.min(tutStep+1, TUTORIAL_STEPS.filter(s=>s.trigger).length)}/{TUTORIAL_STEPS.filter(s=>s.trigger).length}
+                    </span>
+                    <div style={{flex:1,height:2,background:"#1a1a1a",borderRadius:1}}>
+                      <div style={{height:"100%",width:`${Math.round((tutStep/Math.max(TUTORIAL_STEPS.filter(s=>s.trigger).length-1,1))*100)}%`,background:"#e9c46a",borderRadius:1,transition:"width 0.4s"}}/>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:"#e9c46a",fontFamily:"'Share Tech Mono',monospace",lineHeight:1.4}}>
+                    {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)]?.msg}
+                  </div>
+                  {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)]?.hint&&(
+                    <div style={{fontSize:8,color:"#e9c46a66",fontFamily:"'Share Tech Mono',monospace",marginTop:2}}>
+                      {TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)].hint}
+                    </div>
+                  )}
+                </div>
+                <div onClick={()=>{setTutDone(true);setTutStep(TUTORIAL_STEPS.length-1);}}
+                  style={{fontSize:8,color:"#444",cursor:"pointer",padding:"2px 6px",border:"1px solid #222",borderRadius:2,flexShrink:0,whiteSpace:"nowrap"}}>
+                  skip ×
+                </div>
+              </div>
             </div>
           )}
           <div ref={feedRef} style={{flex:1,padding:"10px 14px",overflowY:"auto",display:"flex",flexDirection:"column",gap:2,minHeight:0,scrollBehavior:"smooth"}}>
@@ -9711,13 +10048,18 @@ export default function NYC(){
           <span style={{color:"#f4d03f",fontSize:13,flexShrink:0}}>▶</span>
           <input ref={inputRef} value={cmd} onChange={e=>setCmd(e.target.value)} onKeyDown={handleCmdWithChoice} placeholder={(()=>{
               if(!gs)return "command  ·  /message to chat";
-              if(gs.survival.health<30)return "⚠ Health critical — REST or EAT";
-              if(gs.heat>7)return "🚔 Heat critical — LAY LOW · SKIP TOWN · HIDE";
+              if(gs.survival.health<30)return "⚠ Health critical — REST or EAT or CLINIC";
+              if(gs.heat>7)return "🚔 Heat critical — LAY LOW or HIDE";
               if(gs.survival.hunger<20)return "🍽 Starving — EAT or BODEGA";
               if(gs.survival.energy<15)return "😴 Exhausted — REST or SLEEP";
-              if(gs.survival.mental<20)return "🧠 Mental breaking — MENTAL · CONFESS";
-              if((gs.addiction||0)>=80)return "💊 "+getAddictionLevel(gs.addiction).name+" — RECOVERY to find Carmen";
-              if(gs.day===1&&(gs.tutStep||0)<7)return "Day 1 — follow tutorial steps";
+              if(gs.survival.mental<20)return "🧠 Mental breaking — REST";
+              if((gs.addiction||0)>=80)return "💊 "+getAddictionLevel(gs.addiction).name+" — USE or RECOVERY";
+              // Tutorial: show the current hint in the input placeholder
+              if(!tutDone&&gs.day<=3){
+                const step=TUTORIAL_STEPS[Math.min(tutStep,TUTORIAL_STEPS.length-2)];
+                if(step?.hint)return step.hint.replace("→ type ","").replace("→ try ","→ ");
+                return "type a command...";
+              }
               const contracts=world.contracts||[];const myC=gs.contractsCompleted||[];const pending=contracts.filter(c=>!myC.includes(c.id));
               if(pending.length>0)return "📋 "+pending.length+" contracts active — CONTRACTS";
               return "command  ·  /message to chat  ·  //crew";
