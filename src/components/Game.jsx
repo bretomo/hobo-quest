@@ -3581,35 +3581,52 @@ export default function NYC(){
         if(!p)return p;
         const w=getWeather(p.day);
         const inSafehouse=!!(world.safehouses?.[boro]&&(world.safehouses[boro].owner===p.name||(p.crew&&world.safehouses[boro].crewOwner===p.crew)));
-        const warmDrain=inSafehouse?0.5:w.warmthDrain;  // safehouse protects from cold
+        const warmDrain=inSafehouse?0.5:w.warmthDrain;
         const safeHeatDrain=inSafehouse?(world.safehouses[boro].level||1)*0.5:0;
         const mentalDrain=p.survival.hunger<20?2:p.survival.health<30?2:p.survival.warmth<20?1:0;
-        const mentalBoost=p.crew?0.5:0; // crew contact helps
-        const dogMentalBoost=p.isDrifter?3:0; // dog keeps you grounded
+        const mentalBoost=p.crew?0.5:0;
+        const dogMentalBoost=p.isDrifter?3:0;
+
+        // Drain rates — faster than before so bars actually matter
+        // Hunger: 8/tick = ~9 min from 75 to 0 (was 4/tick = ~19 min)
+        // Warmth: weather-based but minimum 2/tick = faster pressure
+        // Energy: 3/tick (was 2/tick)
+        const hungerDrain=8;
+        const energyDrain=3;
+        const warmthDrainActual=Math.max(warmDrain,inSafehouse?0.5:2);
+
         const g={...p,survival:{
-          hunger:clamp(p.survival.hunger-4,0,100),
-          warmth:clamp(p.survival.warmth-warmDrain,0,100),
-          health:p.survival.hunger<15?clamp(p.survival.health-5,0,100):p.survival.health,
-          energy:clamp(p.survival.energy-2,0,100),
+          hunger:clamp(p.survival.hunger-hungerDrain,0,100),
+          warmth:clamp(p.survival.warmth-warmthDrainActual,0,100),
+          health:p.survival.health, // damage handled by zero/warning blocks below
+          energy:clamp(p.survival.energy-energyDrain,0,100),
           mental:clamp((p.survival.mental||70)-mentalDrain+mentalBoost+dogMentalBoost,0,100),
         },heat:clamp(p.heat-0.1-safeHeatDrain,0,10)};
+
+        // Zero-bar consequences — scaled to actually kill in reasonable time
         if(g.survival.warmth===0){
-          g.survival.health=clamp(g.survival.health-3,0,100);
-          setTimeout(()=>setFeed(f=>[...f,`❄️ Freezing. Health dropping. SHELTER NOW.`]),10);
+          g.survival.health=clamp(g.survival.health-8,0,100); // was -3
+          setTimeout(()=>setFeed(f=>[...f,`❄️ Freezing. Health -8. SHELTER or you will die.`]),10);
+        } else if(g.survival.warmth<20){
+          g.survival.health=clamp(g.survival.health-2,0,100); // warning drain before zero
         }
         if(g.survival.hunger===0){
-          g.survival.health=clamp(g.survival.health-2,0,100);
-          g.survival.energy=clamp(g.survival.energy-5,0,100);
-          setTimeout(()=>setFeed(f=>[...f,`🍞 Starving. Body failing. EAT something.`]),10);
+          g.survival.health=clamp(g.survival.health-6,0,100); // was -2
+          g.survival.energy=clamp(g.survival.energy-8,0,100);
+          setTimeout(()=>setFeed(f=>[...f,`🍞 Starving. Health -6. EAT or BODEGA NOW.`]),10);
+        } else if(g.survival.hunger<20){
+          g.survival.health=clamp(g.survival.health-2,0,100); // was only at hunger<15
+          setTimeout(()=>setFeed(f=>[...f,`🍞 Very hungry. Health dropping. EAT something.`]),10);
         }
         if(g.survival.energy===0){
-          g.survival.health=clamp(g.survival.health-1,0,100);
-          setTimeout(()=>setFeed(f=>[...f,`😴 Collapsed from exhaustion. REST immediately.`]),10);
+          g.survival.health=clamp(g.survival.health-3,0,100); // was -1
+          setTimeout(()=>setFeed(f=>[...f,`😴 Collapsed. Health -3. REST or SLEEP now.`]),10);
         }
         if((g.survival.mental||70)===0){
-          g.survival.health=clamp(g.survival.health-2,0,100);
-          setTimeout(()=>setFeed(f=>[...f,`🧠 Mind gone. Body following. Get help.`]),10);
+          g.survival.health=clamp(g.survival.health-4,0,100); // was -2
+          setTimeout(()=>setFeed(f=>[...f,`🧠 Mind gone. Health -4.`]),10);
         }
+
         if(g.isUndoc){
           // undocumented: high heat = ghost mode (disappear), not wanted
           if(Math.round(g.heat)>=9&&!g.ghostMode){
@@ -3810,17 +3827,20 @@ export default function NYC(){
         }
         if(g.survival.warmth<15&&w.id==="blizzard")setTimeout(()=>setFeed(f=>[...f,`❄️ Blizzard. Find shelter or you'll freeze.`]),10);
         if(g.survival.health<=0){
+          const cause=g.survival.hunger<=0?"Starved.":g.survival.warmth<=0?"Froze.":g.survival.energy<=0?"Exhaustion.":"Health depleted.";
           setTimeout(()=>{
             const _deathMsgs=[
-              `☠ ${g.name} went down on Day ${g.day}. Level ${g.level}. The city doesn't stop for anyone.`,
-              `☠ ${g.name} is gone. Day ${g.day}. They made it to Level ${g.level}. That's something.`,
-              `☠ Day ${g.day}. Level ${g.level}. ${g.name} ran out of road. Moment of silence.`,
-              `☠ ${g.name} didn't make it. Day ${g.day}. Level ${g.level}. It happens to the best of them.`,
+              `☠ ${g.name} went down on Day ${g.day}. Level ${g.level}. ${cause}`,
+              `☠ ${g.name} is gone. Day ${g.day}. Level ${g.level}. ${cause} The city doesn't stop.`,
+              `☠ Day ${g.day}. Level ${g.level}. ${g.name} ran out of road. ${cause}`,
             ];
             const dWs=broadcastActivity(world,_deathMsgs[rnd(0,_deathMsgs.length-1)],"☠");setWorld(dWs);saveWorld(dWs);
-            setFeed(f=>[...f,``,`☠ YOU DIED. Day ${g.day}. Level ${g.level}.`]);
-            setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,time:Date.now()}]};saveWorld(ws);return ws;});
-            setTimeout(()=>setPhase("dead"),2000);
+            setFeed(f=>[...f,``,`☠ YOU DIED`,cause,`Day ${g.day} · Level ${g.level}`,``,
+              g.survival.hunger<=0?`EAT regularly — BODEGA has food. Hunger drains every minute.`:
+              g.survival.warmth<=0?`SHELTER when cold — warmth drains fast in bad weather.`:
+              `Keep your health bar up — REST, HEAL, or CLINIC.`,``]);
+            setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,cause,time:Date.now()}]};saveWorld(ws);return ws;});
+            setTimeout(()=>setPhase("dead"),3000);
           },10);
         }
         return g;
@@ -4364,8 +4384,12 @@ export default function NYC(){
   const tapCmd=(c)=>{setInlineChoice(null);handleCmd({key:"Enter",target:{value:c}});};
   const handleCmdWithChoice=(e)=>{if(e.key==="Enter"&&e.target?.value?.trim())setInlineChoice(null);handleCmd(e);};
   const handleCmd=(e)=>{
-    if(e.key!=="Enter"||!cmd.trim())return;
-    const raw=cmd.trim();const C=raw.toUpperCase();
+    if(e.key!=="Enter")return;
+    // Buttons pass value via e.target.value; keyboard reads from cmd state
+    const raw=(e.target?.value||cmd).trim();
+    if(!raw)return;
+    const C=raw.toUpperCase();
+    setCmd(""); // clear input after any command
     // / prefix sends directly to chat
     if(raw.startsWith("/")){
       const msgText=raw.slice(1).trim();
@@ -6723,7 +6747,16 @@ export default function NYC(){
         }
         return{...g,day:nextDay,addiction:newAddiction,
           cash:g.cash-habitCost+income+crewBonus+safePassive+commBonus+dogCash,
-          survival:{hunger:clamp(g.survival.hunger-20,0,100),warmth:clamp(g.survival.warmth-10,0,100),health:clamp(habHealth,0,100),energy:95},
+          survival:{
+            // Hunger drains hard overnight — you have to eat
+            hunger:clamp(g.survival.hunger-25,0,100),
+            // Warmth recovers partially from sleep (body heat) but cold weather fights back
+            warmth:clamp(g.survival.warmth-10+15,0,100), // net +5 from body heat if no weather penalty
+            health:clamp(habHealth,0,100),
+            energy:95,
+            // Low hunger overnight means weak morning
+            mental:clamp((g.survival.mental||70)+(g.survival.hunger>50?5:-3),0,100),
+          },
           heat:clamp(g.heat-(g.archetype?.id==="ghost"?3:2),0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
           dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
@@ -6737,6 +6770,19 @@ export default function NYC(){
           fiveBoroStreak:checkFiveBoroWin(g,world)?(g.fiveBoroStreak||0)+1:0,
           fiveBoroStartDay:checkFiveBoroWin(g,world)&&!(g.fiveBoroStreak>0)?nextDay:g.fiveBoroStartDay,
           informsToday:0,patrolEncountered:false,feedUsed:false};
+        // Auto-eat: if hungry and have food, consume one item overnight
+        if(ng.survival.hunger<40){
+          const foodNames=["sandwich","soup","hotdog","chips","water"];
+          const foodIdx=ng.inventory?.findIndex(i=>typeof i==="string"&&foodNames.includes(i.toLowerCase()));
+          if(foodIdx>=0){
+            const food=ng.inventory[foodIdx];
+            const restore=food==="sandwich"?40:food==="soup"?25:food==="hotdog"?20:15;
+            ng.survival={...ng.survival,hunger:Math.min(100,ng.survival.hunger+restore)};
+            ng.inventory=[...ng.inventory.slice(0,foodIdx),...ng.inventory.slice(foodIdx+1)];
+            setTimeout(()=>push(`🍞 Ate ${food} overnight. Hunger +${restore}.`),200);
+          }
+        }
+        return ng;
       });
       // reset shelter checkins for new day
       const ws2={...world,shelterCheckins:{}};setWorld(ws2);saveWorld(ws2);
@@ -9362,6 +9408,26 @@ export default function NYC(){
           <div style={{fontSize:9,color:wColors[weather.id]||"#888"}}>{weather.icon} {weather.name}</div>
           <div style={{fontSize:8,color:"#777"}}>DAY {gs.day}</div>
           <div style={{flex:1}}/>
+          {/* Survival bar indicators — always visible */}
+          <div style={{display:"flex",alignItems:"center",gap:3,marginRight:4}}>
+            {[
+              {key:"health", val:gs.survival.health,     icon:"❤", okColor:"#2a9d8f", warnColor:"#f4a261", critColor:"#e63946", warn:40, crit:20},
+              {key:"hunger", val:gs.survival.hunger,     icon:"🍞", okColor:"#555",    warnColor:"#f4a261", critColor:"#e63946", warn:30, crit:15},
+              {key:"warmth", val:gs.survival.warmth,     icon:"🌡", okColor:"#555",    warnColor:"#a8dadc", critColor:"#90e0ef", warn:30, crit:15},
+              {key:"energy", val:gs.survival.energy,     icon:"⚡", okColor:"#555",    warnColor:"#e9c46a", critColor:"#e63946", warn:25, crit:10},
+            ].map(({key,val,icon,okColor,warnColor,critColor,warn,crit})=>{
+              const color=val<=crit?critColor:val<=warn?warnColor:okColor;
+              const urgent=val<=crit;
+              return(
+                <div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,cursor:"pointer"}} onClick={()=>tapCmd("STATUS")} title={key+": "+val+"%"}>
+                  <div style={{fontSize:6,color:urgent?critColor:"#333",animation:urgent?"blink 1s infinite":""}}>{icon}</div>
+                  <div style={{width:16,height:2,background:"#0f0f0f",border:"1px solid #1a1a1a"}}>
+                    <div style={{height:"100%",width:`${val}%`,background:color,transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {(gs.skillPoints||0)>0&&<div style={{fontSize:7,padding:"1px 5px",background:"#e9c46a22",border:"1px solid #e9c46a",color:"#e9c46a",cursor:"pointer"}} onClick={()=>setTab("skills")}>⚡{gs.skillPoints}pt</div>}
             {!gs.isFixer&&!gs.isRat&&<div style={{fontSize:7,padding:"1px 5px",border:`1px solid ${(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]-1)?"#e63946":"#2a2a2a"}`,color:(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"])?"#e63946":"#333"}}>H {gs.hustleCount||0}/{HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}</div>}
@@ -9998,8 +10064,8 @@ export default function NYC(){
         {gs&&!chatStrip&&<div onClick={()=>setChatStrip(true)} style={{borderTop:"1px solid #111",background:"#060606",padding:"3px 12px",fontSize:6,color:"#333",cursor:"pointer",flexShrink:0}}>📡 show chat strip</div>}
 
         {/* INLINE CHOICE — Option B */}
-        {inlineChoice&&(
-          <div style={{borderTop:"1px solid #1a1a2e",padding:"10px 14px",background:"#060610",flexShrink:0}}>
+        {inlineChoice&&phase==="game"&&(
+          <div style={{borderTop:"1px solid #1a1a2e",background:"#060610",flexShrink:0}}>
             <div style={{fontSize:9,color:"#555",fontFamily:"'Share Tech Mono',monospace",marginBottom:8}}>{inlineChoice.prompt?.slice(0,90)}</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {inlineChoice.choices.map((ch,i)=>(
