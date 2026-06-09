@@ -5,11 +5,11 @@ import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subs
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=VT323&display=swap');`;
 
 const BOROUGHS = [
-  { id:"bronx",     name:"THE BRONX",  short:"BRX", color:"#e63946", heat:8, opp:6, base:{weed:80, pills:12, powder:60}, adjacent:["manhattan","queens"],       copBase:7},
-  { id:"brooklyn",  name:"BROOKLYN",   short:"BKN", color:"#f4a261", heat:5, opp:8, base:{weed:90, pills:15, powder:70}, adjacent:["manhattan","queens","staten"],copBase:4},
-  { id:"manhattan", name:"MANHATTAN",  short:"MAN", color:"#e9c46a", heat:9, opp:9, base:{weed:110,pills:18, powder:90}, adjacent:["bronx","brooklyn","queens"],  copBase:9},
-  { id:"queens",    name:"QUEENS",     short:"QNS", color:"#2a9d8f", heat:4, opp:7, base:{weed:85, pills:13, powder:65}, adjacent:["bronx","brooklyn","manhattan"],copBase:5},
-  { id:"staten",    name:"STATEN IS.", short:"STN", color:"#457b9d", heat:3, opp:4, base:{weed:70, pills:10, powder:55}, adjacent:["brooklyn"],                   copBase:2},
+  { id:"bronx",     name:"THE BRONX",  short:"BRX", color:"#e63946", heat:8, opp:6, base:{weed:80, pills:12, powder:60, heroin:220}, adjacent:["manhattan","queens"],       copBase:7},
+  { id:"brooklyn",  name:"BROOKLYN",   short:"BKN", color:"#f4a261", heat:5, opp:8, base:{weed:90, pills:15, powder:70, heroin:280}, adjacent:["manhattan","queens","staten"],copBase:4},
+  { id:"manhattan", name:"MANHATTAN",  short:"MAN", color:"#e9c46a", heat:9, opp:9, base:{weed:110,pills:18, powder:90, heroin:400}, adjacent:["bronx","brooklyn","queens"],  copBase:9},
+  { id:"queens",    name:"QUEENS",     short:"QNS", color:"#2a9d8f", heat:4, opp:7, base:{weed:85, pills:13, powder:65, heroin:250}, adjacent:["bronx","brooklyn","manhattan"],copBase:5},
+  { id:"staten",    name:"STATEN IS.", short:"STN", color:"#457b9d", heat:3, opp:4, base:{weed:70, pills:10, powder:55, heroin:180}, adjacent:["brooklyn"],                   copBase:2},
 ];
 
 
@@ -57,7 +57,7 @@ const getFiveBoroStatus=(gs, world)=>{
 
 // ── ECONOMICS CONSTANTS ────────────────────────────────────────────────────
 const MAX_CARRY_CASH = 500;       // cash above this makes you a robbery target
-const PRODUCT_WEIGHT = {weed:1,pills:1.5,powder:2}; // weight units per item
+const PRODUCT_WEIGHT = {weed:1,pills:1.5,powder:2,heroin:2.5}; // weight units per item
 const MAX_CARRY_WEIGHT = 10;      // total weight units before penalty
 const MIN_SELL_PLAYERS = 1;       // even one seller starts dropping prices
 
@@ -67,7 +67,7 @@ const CLASS_SUBSTANCE = {
   schemer:      {name:"pills",   product:"pills",  icon:"💊", buyCost:0,  desc:"Keeps the edge. Functional. Mostly."},
   ghost:        {name:"weed",    product:"weed",   icon:"🌿", buyCost:0,  desc:"Stays level. Needs it to stay level."},
   hustler:      {name:"powder",  product:"powder", icon:"❄️", buyCost:0,  desc:"Fuels the grind. Can't stop now."},
-  junkie:       {name:"anything",product:null,     icon:"💉", buyCost:20, desc:"No preference. Just need something."},
+  junkie:       {name:"heroin",  product:"heroin", icon:"💉", buyCost:0,  desc:"The only thing that still works. Everything else is pretending."},
   undocumented: {name:"stress",  product:null,     icon:"😮", buyCost:0,  desc:"No substances. Just pure survival anxiety."},
   vampire:      {name:"blood",   product:null,     icon:"🩸", buyCost:0,  desc:"Already handled. Ancient hunger."},
   fixer:        {name:"pills",   product:"pills",  icon:"💊", buyCost:0,  desc:"Functional. Denies it completely."},
@@ -137,6 +137,15 @@ const HIGH_EVENTS = {
     {msg:"Using in an alley. Someone sees. Word gets back.",effect:{heat:3,mental:-5}},
     {msg:"The high hits different today. Not in a good way.",effect:{health:-30,mental:-25}},
     {msg:"You come down and the world is exactly as bad as you left it. But now you're worse.",effect:{health:-10,mental:-30,energy:-25}},
+  ],
+  heroin:[
+    {msg:"The rush hits and the city disappears. For twenty minutes nothing hurts. Then it comes back.",effect:{mental:30,health:-15,energy:-30}},
+    {msg:"You nod off in a doorway on Fordham. You don't know how long. Someone took your cash.",effect:{cash:-60,energy:-50,health:-10}},
+    {msg:"The high makes you generous. You front three bags to someone you've never met.",effect:{cash:-40,heat:2}},
+    {msg:"You wake up on the floor of a McDonald's bathroom. Clean shirt. No memory.",effect:{health:-25,mental:-20,energy:-40}},
+    {msg:"It's better than you remember. Worse than you remember. Both true at the same time.",effect:{mental:15,health:-20,addiction_bonus:10}},
+    {msg:"You miss a deal. Miss the morning entirely. Miss your own intentions.",effect:{cash:-30,energy:-60}},
+    {msg:"The nod comes fast. Someone sitting next to you on the steps notices. They don't say anything.",effect:{health:-10,mental:-15,heat:1}},
   ],
 };
 // ── ARCHETYPE STORYLINES ──────────────────────────────────────────────────────
@@ -234,7 +243,7 @@ const CLASS_STORIES = {
       { id:"j3", title:"The Dealer",              lvlReq:5,
         task:"Defeat SKINNY in Brooklyn. He's been watering down the product.",
         condition:(gs)=>(gs.storyFlags||[]).includes("defeated_skinny"),
-        boss:{id:"skinny", name:"Skinny", icon:"💉", hp:45, attackBonus:3, desc:"Small man. Big operation. He's been killing people slowly for two years."},
+        boss:{id:"skinny", name:"Skinny", icon:"💉", hp:45, attackBonus:3, desc:"He controls the Bronx-Queens heroin corridor. Started by cutting product. Now he's poisoning it. People have died."},
         reward:{cash:200,xp:500},
         story:`People have been getting sick. You know why. Skinny's been cutting with something that shouldn't be cut.`,
         complete:`Skinny won't be cutting anything again. Not the same way.`},
@@ -691,6 +700,47 @@ const NPC_RIVAL_CREWS = [
   {id:"flushing_red", name:"Flushing Red",  icon:"🔴", boroughs:["queens"],                  aggression:0.5, power:2},
 ];
 
+// ── INFAMY / STREET REPUTATION SYSTEM ────────────────────────────────────────
+// Attacking other players builds infamy. High infamy changes NPC prices,
+// cop targeting, and broadcasts a warning when you enter someone's borough.
+const INFAMY_LEVELS = [
+  {min:0,  max:9,  name:"Unknown",   icon:"○", color:"#555",    desc:"Nobody knows your name yet."},
+  {min:10, max:24, name:"Noticed",   icon:"◔", color:"#e9c46a", desc:"Word's getting around.", npcMult:1.0, copMult:1.0},
+  {min:25, max:49, name:"Feared",    icon:"◑", color:"#f4a261", desc:"People cross the street.", npcMult:1.1, copMult:1.1},
+  {min:50, max:74, name:"Notorious", icon:"◕", color:"#e67a3a", desc:"Your name comes up in conversations you're not having.", npcMult:1.2, copMult:1.25},
+  {min:75, max:89, name:"Dangerous", icon:"●", color:"#e63946", desc:"NPCs warn each other when you come around.", npcMult:1.35, copMult:1.5},
+  {min:90, max:100,name:"Predator",  icon:"☠", color:"#9d0208", desc:"Everyone knows. Everyone talks.", npcMult:1.5, copMult:2.0},
+];
+const getInfamyLevel=(score)=>INFAMY_LEVELS.find(l=>score>=l.min&&score<=l.max)||INFAMY_LEVELS[0];
+
+// Infamy decays slowly over time (7 points per real day, tracked via day counter)
+const INFAMY_DECAY_PER_SLEEP = 3;
+
+// ── CREW TERRITORY SYSTEM ────────────────────────────────────────────────────
+// A crew "controls" a borough when ≥3 members own corners there simultaneously
+// Control grants: +15% income to all members, protection warning on LOOK, crew flag
+const CREW_CONTROL_THRESHOLD = 2; // corners needed to control (2 = easier for small servers)
+const CREW_TERRITORY_BONUS   = 0.15; // 15% income bonus on controlled borough
+
+const getCrewControl=(boroId, world)=>{
+  if(!world?.crews)return null;
+  const crews={};
+  // Count how many players from each crew own a corner in this borough
+  // A player "owns" a corner in boroId if world.corners[boroId]===playerName
+  // AND the player has boroId in their cornersOwned (from world.players)
+  Object.entries(world.players||{}).forEach(([name,data])=>{
+    if(!data.crew)return;
+    // Check if this player owns the corner in this borough
+    const ownsCorner=(world.corners||{})[boroId]===name||
+      (data.cornersOwned||[]).includes(boroId);
+    if(ownsCorner){crews[data.crew]=(crews[data.crew]||0)+1;}
+  });
+  const entry=Object.entries(crews).find(([,count])=>count>=CREW_CONTROL_THRESHOLD);
+  if(!entry)return null;
+  const [crewName,count]=entry;
+  return{name:crewName,corners:count,crew:world.crews?.[crewName]};
+};
+
 // ── STREET ARMY SYSTEM ───────────────────────────────────────────────────────
 const ARMY_UNITS = [
   { id:"lookout",   name:"Lookout",       icon:"👁",  cost:80,  upkeep:15, power:1, slots:1,
@@ -817,6 +867,13 @@ const NPCS = [
     "'Uno?' She's already wrapping it before you answer. Two dollars. Sometimes she forgets to charge.",
     "She tells you who's been asking around. Doesn't say why she knows. You don't ask.",
     "'Cuídate.' She says it every time. Every time it lands the same way.",
+  ]},
+  {id:"deja", name:"Deja", role:"Former nurse", b:"bronx", icon:"💉", lines:[
+    "Deja ran the ER at Lincoln for eleven years. She's been here for three.",
+    "She doesn't ask why you need what you need. She's past asking.",
+    "'I can get you something cleaner than what's on the street. Meet me tomorrow.'",
+    "She looks at your arm. Not with judgment. With something that used to be clinical.",
+    "'I know what's coming next for you. I watched it happen to a hundred people. I'm still here.'",
   ]},
   {id:"marta", name:"Marta", role:"Street medic", b:"staten", icon:"💊", lines:[
     "Marta carries a bag that looks like it's been through a war because it has been, in a way.",
@@ -1076,11 +1133,19 @@ const PRODUCTS = {
   weed:  {name:"Weed",  unit:"bag",  icon:"🌿", bm:0.6, rm:1.0},
   pills: {name:"Pills", unit:"pack", icon:"💊", bm:0.6, rm:1.5},
   powder:{name:"Powder",unit:"gram", icon:"❄️", bm:0.6, rm:2.5},
+  heroin:{name:"Heroin",unit:"bag",  icon:"💉", bm:0.6, rm:4.0,
+    connectReq:5,        // requires NPC rep >= 5 to buy
+    sourceBoros:["bronx","queens"],  // only available in these boroughs
+    heatMult:2.0,        // double heat per transaction
+    addGainMult:3.0,     // 3x addiction gain on contact
+    minLevel:4,          // level gate — can't trade until level 4
+  },
 };
 const RECIPES = {
   "fire weed": {inputs:{weed:3},   sellX:2.2, icon:"🔥", base:"weed",   desc:"3 bags → 1 fire pack (2.2x)"},
   "pressed":   {inputs:{pills:4},  sellX:2.5, icon:"💎", base:"pills",  desc:"4 packs → 1 pressed brick (2.5x)"},
   "raw cut":   {inputs:{powder:2}, sellX:2.0, icon:"⚗️", base:"powder", desc:"2 grams → 1 pure cut (2x)"},
+  "pure":      {inputs:{heroin:2}, sellX:3.0, icon:"🩸", base:"heroin", desc:"2 bags → 1 pure (3x) · Extremely dangerous to carry"},
 };
 
 // ── WEATHER SYSTEM ────────────────────────────────────────────────────────────
@@ -1127,6 +1192,8 @@ const EVTS = {
   blizzard:["Snow up to your knees. Nobody's out here but you and the cold.","Bodega's closed. Everything's closed. You're alone with the wind.","Your fingers are going numb. Need shelter fast."],
   rain:    ["Rain hammers the pavement. You pull your hood tight.","Puddles everywhere. Your socks are soaked.","Lightning hits somewhere close. The whole block goes quiet."],
   heatwave:["Concrete radiating heat like an oven. Sweat stinging your eyes.","Cop on every corner trying to look busy. Stay sharp.","Guy passed out on the stoop. This city'll kill you slow."],
+  fog:     ["Can't see more than half a block. The city sounds different when you can't see it.","Someone's following you or you're imagining it. Fog makes it impossible to tell.","Street lights turn the fog amber. You could disappear in this. You almost do.","Police can't see you but you can't see them either. Cuts both ways."],
+  storm:   ["Lightning hits a transformer three blocks over. Lights go out. Everyone stops.","Rain coming sideways. Your jacket soaked through in thirty seconds.","Thunder so close the car alarms go off on the whole block.","Bodega awning floods. Owner bailing with a bucket. Eternal optimism.","You run between doorways. Everyone else has somewhere to be."],
 };
 const BOOT = [
   "> HOBO QUEST v1.0 — INITIALIZING",
@@ -1422,14 +1489,32 @@ const mktPrice=(bId,pKey,day,weather,worldSupply)=>{
   const copMult=1+(copPresence/50);
   return Math.round(base*wMult*demandMult*copMult);
 };
+// Buy-side price multiplier — floats based on local supply and day
+// Returns a value between 0.50 (supplier desperate) and 0.75 (premium connect)
+const getBuyMult=(boro,pKey,day,worldSupply)=>{
+  // Base spread per product — powder always tighter, weed more variable
+  const baseMin={weed:0.48,pills:0.52,powder:0.58,heroin:0.65};
+  const baseMax={weed:0.72,pills:0.68,powder:0.70,heroin:0.78};
+  const mn=baseMin[pKey]||0.55;
+  const mx=baseMax[pKey]||0.70;
+  // Day-based variation — same seed so all players see same prices
+  const seed=((day*17+boro.charCodeAt(0)*7+pKey.charCodeAt(0)*3)%100)/100;
+  // Supply pressure — heavy local supply (others selling a lot) = cheaper buy price
+  const todayKey=boro+"_"+pKey+"_d"+day;
+  const localSellers=(worldSupply||{})[todayKey]||0;
+  const supplyDiscount=Math.min(0.08,localSellers*0.01);
+  return Math.round((mn+(mx-mn)*seed-supplyDiscount)*100)/100;
+};
+
 const getWeather=day=>{
   const season=Math.floor((day%365)/91)%4;
   const pool=WEATHER_POOL[season];
-  // deterministic per day so all players see same weather
-  const idx=day%pool.length;
-  return WEATHER_TYPES[pool[idx]];
+  // Deterministic per day (all players see same weather) but non-repeating
+  // Use a hash-style seed so the pattern doesn't cycle every 6 days
+  const seed=(day*2654435761>>>0)%pool.length; // Knuth multiplicative hash
+  return WEATHER_TYPES[pool[seed]];
 };
-const defWorld=()=>({corners:{},cornerLevels:{},cornerLastVisit:{},cornerDefending:{},cornerContested:{},cornerContestedBy:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{},worldEvent:null,worldEventDay:0,tradeOffers:{},leaderboard:{},leaderboardWeek:0,offlineEvents:{},rivals:{},kingRecord:[],fiveBoroActive:{}});;
+const defWorld=()=>({corners:{},cornerLevels:{},cornerLastVisit:{},cornerDefending:{},cornerContested:{},cornerContestedBy:{},players:{},crews:{},messages:[],pvpLog:[],bounties:{},wallOfDead:[],playerAlerts:{},safehouses:{},weatherDay:0,weather:"clear",shelterCheckins:{},letters:[],worldHistory:[],notifications:[],copPresence:{},supply:{},captainBoro:null,captainDay:0,wantedTiers:{},contracts:[],contractsDay:0,wantedPosters:{},worldEvent:null,worldEventDay:0,tradeOffers:{},leaderboard:{},leaderboardWeek:0,offlineEvents:{},rivals:{},kingRecord:[],fiveBoroActive:{},crewTerritory:{}});
 
 // ── PRESTIGE ──────────────────────────────────────────────────────────────────
 const PRESTIGE_LEVEL = 10; // level required to retire
@@ -1919,51 +2004,120 @@ const ENEMIES = {
     fleeMsg:"He lets you go. Every cop has your description."},
   // ── STORY BOSSES ────────────────────────────────────────────────────────────
   price:      {name:"Price",                    ac:13,hp:55,attackBonus:6, damage:[8], xp:120,loot:[80,180],  boss:true,
-    desc:"Former unit member. Made choices you didn't. Now he's made one more."},
+    desc:"Former unit member. Made choices you didn't. Now he's made one more.",
+    intro:"He looks older. You both do. He steps out from a doorway on Atlantic Ave. You knew he'd find you eventually.",
+    winMsg:"He's breathing. You made sure of that. Whatever he chose, you're not him. Walk away.",
+    fleeMsg:"Price watches you go. 'Still running,' he says. It's not an insult. Not exactly."},
   colonel:    {name:"The Colonel",              ac:15,hp:100,attackBonus:9,damage:[12],xp:300,loot:[200,500], boss:true,
-    desc:"He destroyed your file. He thought that would be enough."},
+    desc:"He destroyed your file. He thought that would be enough.",
+    intro:"His security detail is two blocks back. He's alone because he still doesn't think you're a real threat. He's about to reconsider.",
+    winMsg:"He's on the pavement outside a midtown hotel. You have his phone. His files. Everything. It's over.",
+    fleeMsg:"You'll be back. He knows that now. His hand is shaking when he picks up his phone."},
   felix:      {name:"Felix",                    ac:12,hp:45,attackBonus:4, damage:[6], xp:100,loot:[100,250], boss:true,
-    desc:"Another hustler. Better connected. More ruthless. So far."},
+    desc:"Another hustler. Better connected. More ruthless. So far.",
+    intro:"Felix is waiting on the corner you claimed. 'You've been undercutting me for three weeks,' he says. 'We should talk.' He doesn't mean talk.",
+    winMsg:"Felix is sitting against a chain-link fence counting his teeth. The market's yours.",
+    fleeMsg:"Felix laughs. 'Smart. Come back when you've got backup.' He's already calling someone."},
   broker:     {name:"The Broker",               ac:14,hp:90,attackBonus:8, damage:[10],xp:250,loot:[300,700], boss:true,
-    desc:"He controls the city's informal economy. He's not pleased to see competition."},
+    desc:"He controls the city's informal economy. He's not pleased to see competition.",
+    intro:"He meets you in a parking garage in Long Island City. Three guys behind him. He sends them away. This is personal.",
+    winMsg:"The Broker extends his hand. Bleeding from his lip. 'We can do business,' he says. It means you won.",
+    fleeMsg:"'The offer expires today,' he calls after you. He means the threat."},
   skinny:     {name:"Skinny",                   ac:11,hp:40,attackBonus:3, damage:[5], xp:80, loot:[60,150],  boss:true,
-    desc:"Small man. Big operation. He's been killing people slowly for two years."},
+    desc:"Small man. Big operation. He's been killing people slowly for two years.",
+    intro:"Skinny's got a warehouse on Flatbush. Padlock on the door. When you knock it open he's inside counting money with two guys. The guys leave. Skinny doesn't.",
+    winMsg:"The product's clean. Whatever he was cutting it with is in a pile on the floor next to him.",
+    fleeMsg:"Skinny screams something after you. You don't look back. You'll come back when you're ready."},
   chemist:    {name:"The Chemist",              ac:14,hp:80,attackBonus:7, damage:[9], xp:220,loot:[150,400], boss:true,
-    desc:"The one at the top of it. PhD. Clean record. Responsible for thousands."},
+    desc:"The one at the top of it. PhD. Clean record. Responsible for thousands.",
+    intro:"He opens the door himself. Uptown apartment, Columbia faculty ID on the counter. 'I was wondering when someone would come,' he says. 'How did you find me?'",
+    winMsg:"His laptop is open. His files are open. Everything he built, everything that's been killing people — it ends here.",
+    fleeMsg:"He shuts the door quietly. 'Come back anytime,' he says. He means it as a threat. It sounds like a test."},
   echo:       {name:"Echo",                     ac:15,hp:55,attackBonus:5, damage:[7], xp:130,loot:[100,250], boss:true,
-    desc:"Another ghost. Works for the other side. Faster than you, maybe."},
+    desc:"Another ghost. Works for the other side. Faster than you, maybe.",
+    intro:"The witness said there were two people who came looking. One of them was you. The other one is standing behind you right now.",
+    winMsg:"Echo is down. No ID on them. No phone. Nothing. Whoever sent them will send someone else eventually.",
+    fleeMsg:"Echo doesn't chase. That's the tell. They don't need to."},
   handler:    {name:"The Handler",              ac:14,hp:95,attackBonus:9, damage:[11],xp:280,loot:[200,500], boss:true,
-    desc:"The one who made you disappear in the first place."},
+    desc:"The one who made you disappear in the first place.",
+    intro:"He's sitting on a bench in Clove Lakes Park reading a newspaper. When you sit next to him he folds it carefully. 'I wondered if you'd actually show up.'",
+    winMsg:"The newspaper is on the ground. The bench is empty. You have the file — your real file. All of it.",
+    fleeMsg:"He calls your name. Your real name. 'Next time,' he says, 'bring your file.' He already knows you don't have it."},
   thomas:     {name:"Brother Thomas",           ac:13,hp:70,attackBonus:8, damage:[9], xp:160,loot:[80,200],  boss:true,
-    desc:"He's been hunting for thirty years. Knows all the old tricks. Has some of his own."},
+    desc:"He's been hunting for thirty years. Knows all the old tricks. Has some of his own.",
+    intro:"He's been watching your building for a week. You've known since Tuesday. He's old — hunter old. He's got a bag with him that doesn't look like anything good.",
+    winMsg:"Brother Thomas is on his knees. The bag is yours. Silver, mostly. Old wood. Old things for old problems. 'You're not what I expected,' he says.",
+    fleeMsg:"Thomas marks something in a small book. 'I've hunted older,' he says. He's not finished."},
   ancient:    {name:"The Ancient",              ac:16,hp:130,attackBonus:11,damage:[14],xp:400,loot:[200,600], boss:true,
-    desc:"Before the city was a city. Before the borough was a borough. Territorial. Furious."},
+    desc:"Before the city was a city. Before the borough was a borough. Territorial. Furious.",
+    intro:"The basement of a building that shouldn't still be standing. Something down here before the subway. Before the Dutch. It opens its eyes.",
+    winMsg:"The city is still. Something that was here for three centuries isn't anymore. You feel different. Lighter. You don't know if that's good.",
+    fleeMsg:"It lets you go. It will be there when you come back. It has been waiting this long."},
   zero:       {name:"Zero",                     ac:13,hp:50,attackBonus:5, damage:[6], xp:110,loot:[80,200],  boss:true,
-    desc:"Playing the same game. But their handler is different. And their target might be you."},
+    desc:"Playing the same game. But their handler is different. And their target might be you.",
+    intro:"You got the same call from the same handler on the same day. Different instructions. Zero's been watching you from across the street all morning.",
+    winMsg:"Zero gives you their handler's number. That's the deal. You've got more leverage now than you've ever had.",
+    fleeMsg:"Zero pockets their phone. 'Smart,' they say. 'I would have done the same thing.'"},
   vale:       {name:"Director Vale",            ac:15,hp:90,attackBonus:9, damage:[10],xp:260,loot:[250,600], boss:true,
-    desc:"The man behind the handler. Comfortable. Insulated. Used to being untouchable."},
+    desc:"The man behind the handler. Comfortable. Insulated. Used to being untouchable.",
+    intro:"The address is a townhouse in the West Village. His wife and kids are at a beach house. He answers the door himself and when he sees you his face does something complicated.",
+    winMsg:"Vale's sitting in his own kitchen. You have his drives, his contacts, his whole operation. He knows it's over. 'What do you want?' he says.",
+    fleeMsg:"He closes the door. You hear him on the phone immediately. You have maybe an hour before everything changes."},
   kingmaker:  {name:"The Kingmaker",            ac:13,hp:60,attackBonus:5, damage:[7], xp:140,loot:[120,300], boss:true,
-    desc:"Doesn't like competition in the deal-making space. Will make that clear."},
+    desc:"Doesn't like competition in the deal-making space. Will make that clear.",
+    intro:"The Kingmaker calls you for a meeting at a diner on Queens Blvd. Two menus. One coffee. He gets to the point fast.",
+    winMsg:"He slides his rolodex across the table. That's how you know you've won — he gives you the contacts.",
+    fleeMsg:"'I'll be here,' he says. He means the diner. He means this arrangement is not resolved."},
   collector:  {name:"The Collector",            ac:14,hp:95,attackBonus:8, damage:[11],xp:270,loot:[200,500], boss:true,
-    desc:"Takes cuts from fixers. Has been for years. Considers it a tax."},
+    desc:"Takes cuts from fixers. Has been for years. Considers it a tax.",
+    intro:"He shows up at a deal you're running in Astoria. 'Thirty percent,' he says. 'Same as always.' He brought four people. You're alone.",
+    winMsg:"The Collector calls his people off. 'The rate changes,' he says. That means no rate. That means you won.",
+    fleeMsg:"He pockets the cut. 'Next time,' he says, 'bring that.' He means leverage. He means you came empty-handed."},
   marquise:   {name:"Marquise",                 ac:13,hp:65,attackBonus:6, damage:[8], xp:150,loot:[100,280], boss:true,
-    desc:"Runs the stroll. Takes 40%. Has for six years. Not interested in negotiation."},
+    desc:"Runs the stroll. Takes 40%. Has for six years. Not interested in negotiation.",
+    intro:"Marquise finds you on the stroll at 11pm. He's alone, which means he thinks he doesn't need anyone. He's been wrong before.",
+    winMsg:"Marquise is leaning against a parked car holding his ribs. 'The arrangement is over,' he says. That's all it takes.",
+    fleeMsg:"He calls after you. The words are ugly. The important thing is you're walking away from them."},
   pimp:       {name:"Sweet Reggie",             ac:13,hp:80,attackBonus:8, damage:[9], xp:220,loot:[150,400], boss:true,
-    desc:"Thinks he owns you. Has for years. Is about to find out otherwise."},
+    desc:"Thinks he owns you. Has for years. Is about to find out otherwise.",
+    intro:"Sweet Reggie has been waiting outside your building. He's dressed like a Sunday and his voice is soft and that's the most dangerous thing about him.",
+    winMsg:"Reggie's on the sidewalk. People are watching from across the street. This was public. That was the point.",
+    fleeMsg:"He straightens his jacket. 'You'll be back,' he says. He's said it to everyone. He's not always right."},
   morrow:     {name:"Dr. Morrow",               ac:12,hp:55,attackBonus:4, damage:[6], xp:120,loot:[80,200],  boss:true,
-    desc:"Psychiatrist. Running a study. The study is about you specifically."},
+    desc:"Psychiatrist. Running a study. The study is about you specifically.",
+    intro:"His office is in a research building on 168th. He buzzes you in himself. The study has been about you from the beginning. He doesn't look surprised to see you.",
+    winMsg:"His files are on the desk. Everything he recorded, everything he believed about you — it ends here. You feel clearer than you have in months.",
+    fleeMsg:"Dr. Morrow makes a note. 'Session terminated,' he says, and closes the folder."},
   signal:     {name:"The Signal",               ac:13,hp:75,attackBonus:6, damage:[8], xp:180,loot:[100,300], boss:true,
-    desc:"Not what you expected. Nothing like what you expected."},
+    desc:"Not what you expected. Nothing like what you expected.",
+    intro:"The signal led here. A building in the Bronx, roof access, antenna array that shouldn't exist. Something is waiting. It knew you were coming.",
+    winMsg:"The signal stops. The city is quieter than you've ever heard it. Your head is quiet too. You don't know if that's relief or loss.",
+    fleeMsg:"The signal resumes. It always resumes. But now it sounds different — like it's calling you back."},
   dogcatcher: {name:"Officer Reyes (Animal Control)",ac:12,hp:50,attackBonus:4,damage:[5],xp:100,loot:[50,150],boss:true,
-    desc:"Following orders. Has taken three dogs this week. Won't take yours."},
+    desc:"Following orders. Has taken three dogs this week. Won't take yours.",
+    intro:"Officer Reyes is loading a cage into his van on 161st. The dog in the cage sees you before he does. You hear her bark from half a block away.",
+    winMsg:"The cage door is open. She runs to you and doesn't stop running until she hits your shins. Reyes is sitting on the curb looking at his hands.",
+    fleeMsg:"The van pulls away. You'll catch up to it. You have to."},
   mills:      {name:"Agent Mills",              ac:14,hp:60,attackBonus:6, damage:[7], xp:140,loot:[80,200],  boss:true,
-    desc:"Patient. Methodical. Has been building a case for eight months."},
+    desc:"Patient. Methodical. Has been building a case for eight months.",
+    intro:"Agent Mills has a car parked across from your building that's been there for two days. When you approach she gets out. 'I was going to give you until tomorrow,' she says.",
+    winMsg:"Her laptop is open on her car hood. The case file, the informants, eight months of work. She watches you delete it. 'You know this doesn't end here,' she says.",
+    fleeMsg:"She doesn't chase. She writes something down. She has more time than you do."},
   forger:     {name:"The Forger",               ac:13,hp:85,attackBonus:7, damage:[9], xp:230,loot:[150,400], boss:true,
-    desc:"Has what you need. Has had it for three years. Has been leveraging that."},
+    desc:"Has what you need. Has had it for three years. Has been leveraging that.",
+    intro:"He operates from a print shop in Flushing. When you walk in he looks at you for a long time. 'I knew someone would come for these eventually,' he says.",
+    winMsg:"He opens a filing cabinet. Your documents — three years of paperwork — are in a yellow envelope. He slides it across the counter without a word.",
+    fleeMsg:"He puts the envelope back. 'The price goes up every time you leave,' he says."},
   mark:       {name:"The Mark",                 ac:12,hp:55,attackBonus:5, damage:[6], xp:120,loot:[80,220],  boss:true,
-    desc:"Angry. Embarrassed. Has resources. Has decided to make this personal."},
+    desc:"Angry. Embarrassed. Has resources. Has decided to make this personal.",
+    intro:"He found out where you work. Came there with two friends. The friends left when things got serious. He didn't.",
+    winMsg:"He's sitting in the street in front of the restaurant. The chef is watching from the kitchen window. It's over. He knows it.",
+    fleeMsg:"He shouts your name. Your real name, the one you gave when you got hired. That's the problem."},
   kingspin:   {name:"The Kingpin's Accountant", ac:13,hp:80,attackBonus:7, damage:[9], xp:210,loot:[150,400], boss:true,
-    desc:"Knows numbers better than anyone. Doesn't know you."},
+    desc:"Knows numbers better than anyone. Doesn't know you.",
+    intro:"The Kingpin's accountant works from a glass office in a building you're not supposed to be in. The receptionist is gone. You walked past her anyway. He looks up from his spreadsheet.",
+    winMsg:"He closes the laptop. Puts both hands on the desk. 'What do you want?' he says. You tell him. He nods. That's the whole negotiation.",
+    fleeMsg:"He makes a call before you're out of the building. You have a head start. Use it."},
 };
 const getBossChance=(lv,heat)=>Math.min(0.25,(lv/10)*0.15+(heat/10)*0.1);
 const BOSS_POOL=["boss_iceman","boss_duchess","boss_prophet","boss_ghost","boss_mama","boss_cole"];
@@ -2171,7 +2325,7 @@ const TUTORIAL_STEPS = [
   // ── DAY 3 — Putting it together ─────────────────────────────────────────────
   { id:"claim", day:3, phase:"corners",
     trigger:"CLAIM",
-    msg:"Day 3. CLAIM a corner — $50, earns income while you sleep.",
+    msg:"Day 3. CLAIM a corner ($50) — earns passive income while you sleep.",
     prompt:"Corners are passive income. Claim one, visit it regularly, collect the money. Neglect it and rivals take it.",
     hint:"→ type CLAIM ($50)",
     reward:null },
@@ -3545,15 +3699,47 @@ export default function NYC(){
         level:g.level,borough:curBoro,
         lastSeen:Date.now(),heat:Math.round(g.heat),
         archId:g.archetype?.id||"veteran",name:g.name,
-        cash:g.cash,day:g.day,
+        cash:g.cash,day:g.day,infamy:g.infamy||0,crew:g.crew||null,
+        cornersOwned:g.cornersOwned||[],
       }}};
       if(prevBoro&&prevBoro!==curBoro){
+        const hbNow=Date.now();
         const hbHere=Object.entries(ws.players||{}).filter(([n,d])=>
-          n!==g.name&&d.borough===curBoro&&Date.now()-(d.lastSeen||0)<ACTIVE_WINDOW
+          n!==g.name&&d.borough===curBoro&&hbNow-(d.lastSeen||0)<ACTIVE_WINDOW
         );
         if(hbHere.length>0){
-          const nm=hbHere.map(([n])=>n).join(", ");
-          setTimeout(()=>setFeed(f=>[...f,``,`📍 ${nm} ${hbHere.length===1?"is":"are"} in ${getBoro(curBoro)?.name||curBoro}.`,``]),100);
+          const boroName=getBoro(curBoro)?.name||curBoro;
+          const myCornerHere=( g.cornersOwned||[]).includes(curBoro);
+          const crewCtrl=g.crew?getCrewControl(curBoro,ws):null;
+          const controlsThis=crewCtrl&&crewCtrl.name===g.crew;
+          const rivals=Object.keys(ws.rivals||{}).filter(k=>k.startsWith(g.name+":")||k.endsWith(":"+g.name));
+          const alerts=[];
+          hbHere.forEach(([n,d])=>{
+            const bAmt=(()=>{const bv=(ws.bounties||{})[n];return bv&&typeof bv==="object"?bv.amount:bv||0;})();
+            const isCrew=g.crew&&d.crew===g.crew;
+            const isEnemyCrew=g.crew&&d.crew&&d.crew!==g.crew;
+            const isRival=rivals.some(k=>k.includes(n));
+            const isHighHeat=(d.heat||0)>=8;
+            // Only alert when it's actionable to the player receiving it
+            if(bAmt>0)
+              alerts.push(`💰 ${n} (BOUNTY $${bAmt}) is in ${boroName}.`);
+            else if(isCrew&&myCornerHere)
+              alerts.push(`👥 ${n} [${g.crew}] is in ${boroName} — you have a corner here.`);
+            else if(controlsThis&&isEnemyCrew)
+              alerts.push(`⚠ ${n} [${d.crew}] entered your crew's ${boroName}.`);
+            else if(isHighHeat&&myCornerHere)
+              alerts.push(`🔥 ${n} (heat ${d.heat}/10) is in ${boroName} — watch your corner.`);
+            else if(isRival)
+              alerts.push(`⚔ Your rival ${n} moved into ${boroName}.`);
+            // Generic player presence — no alert, just noise
+          });
+          if(alerts.length>0)setTimeout(()=>setFeed(f=>[...f,``,...alerts,``]),100);
+        }
+        // Alert if your corner was taken while you moved
+        const prevMyCorner=gs?.cornersOwned?.includes(prevBoro);
+        const prevCornerOwner=ws.corners?.[prevBoro];
+        if(prevMyCorner&&prevCornerOwner&&prevCornerOwner!==g.name){
+          setTimeout(()=>setFeed(f=>[...f,``,`⚠ Your ${getBoro(prevBoro)?.name||prevBoro} corner was taken while you moved.`,`MOVE ${prevBoro.toUpperCase()} and RECLAIM it.`,``]),200);
         }
       }
       saveWorld(ws);
@@ -3593,7 +3779,9 @@ export default function NYC(){
         // Energy: 3/tick (was 2/tick)
         const hungerDrain=8;
         const energyDrain=3;
-        const warmthDrainActual=Math.max(warmDrain,inSafehouse?0.5:2);
+        // Heatwave has 0 warmth drain by design — don't apply the floor to it
+        const isHeatwave=w.id==="heatwave";
+        const warmthDrainActual=isHeatwave?0:Math.max(warmDrain,inSafehouse?0.5:2);
 
         const g={...p,survival:{
           hunger:clamp(p.survival.hunger-hungerDrain,0,100),
@@ -3932,10 +4120,10 @@ export default function NYC(){
       })(),
       survival:{hunger:75,warmth:60,health:85,energy:90,
         mental: arch.id==="junkie"?Math.min(startMental,45):arch.id==="undocumented"?Math.min(startMental,65):startMental},
-      inventory:[...arch.gear],product:{weed:0,pills:0,powder:0},cooked:{},
+      inventory:[...arch.gear],product:{weed:0,pills:0,powder:0,heroin:0},cooked:{},
       rep:{bronx:0,brooklyn:0,manhattan:5,queens:0,staten:0},
       heat:startHeat,day:1,cornersOwned:[],lastCollect:0,crew:null,crewRole:null,
-      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],fiveBoroStreak:0,fiveBoroStartDay:null,surveyedPlayers:{},
+      storyProgress:{},storyFlags:[],storyKills:0,storyScouts:0,borosVisited:[arch.startBoro||"staten"],fiveBoroStreak:0,fiveBoroStartDay:null,surveyedPlayers:{},prophecyUsed:null,
       armyDeployedBoro:{},
       wanted:false,ghostMode:false,habitPaid:false,
       shelterCheckins:{},lastSearch:0,letterWritten:false,prestige:prestige||0,retireEligible:false,
@@ -3948,6 +4136,7 @@ export default function NYC(){
       contractsCompleted:[],
       contractProgress:{},
       lifetime:{deals:0,pvpWins:0,panhandles:0,talkCount:0,corners:0,bossKills:0,daysAlive:0,cashEarned:0},
+      infamy:0,
       wantedStars:0,patrolEncountered:false,
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
@@ -4108,7 +4297,10 @@ export default function NYC(){
     if(tutDone)return;
     const step=TUTORIAL_STEPS[tutStep];
     if(!step||!step.trigger)return;
-    if(!triggeredCmd.toUpperCase().startsWith(step.trigger))return;
+    // For Hooker: CLIENT counts as HUSTLE in tutorial
+    const cmdMatches=triggeredCmd.toUpperCase().startsWith(step.trigger)||
+      (step.trigger==="HUSTLE"&&gs?.isHooker&&triggeredCmd.toUpperCase().startsWith("CLIENT"));
+    if(!cmdMatches)return;
 
     // Award reward
     if(step.reward){
@@ -4177,8 +4369,23 @@ export default function NYC(){
     if(!enemyBase){push(`⚔ Enemy not found: ${enemyType}. Report this bug.`);return;}
     const enemy={...enemyBase,...{hp:enemyBase.hp,maxHp:enemyBase.hpp}};
     const cs=getCombatStats(gs);
+    // Build a gear summary line — only mention slots that are equipped
+    const eqStats=getItemStats(gs.equipment||{});
+    const weaponItem=gs.equipment?.weapon?(typeof gs.equipment.weapon==="object"&&gs.equipment.weapon._rolled?gs.equipment.weapon:getItemById(gs.equipment.weapon)):null;
+    const weaponName=weaponItem?.name||"Bare hands";
+    const fightB=eqStats.fightBonus||0;
+    const gearParts=[];
+    if(weaponName!=="Bare hands"||fightB>0)gearParts.push(`${weaponName}${fightB>0?` (+${fightB} fight)`:""}`);
+    if(eqStats.toughness)gearParts.push(`${eqStats.toughness} armor`);
+    if(eqStats.heat<0)gearParts.push(`stealth gear`);
+    const gearLine=gearParts.length>0?`Carrying: ${gearParts.join(" · ")}`:`No weapon equipped — fighting with bare hands`;
     setInlineChoice(null);
-  setCombat({enemy,cs,round:1,log:[`⚔ COMBAT — ${enemy.name}`,enemy.desc,``,`Your AC: ${cs.ac} · Attack: +${cs.attackBonus} · Lvl ${cs.level}`,`Enemy AC: ${enemy.ac} · HP: ${enemy.hp}`,``,`FIGHT · FLEE · USE [ability]`],
+    setCombat({enemy,cs,round:1,log:[
+      `⚔ COMBAT — ${enemy.name}`,enemy.desc,``,
+      `You: AC ${cs.ac} · Attack +${cs.attackBonus} · HP ${cs.hp}`,
+      gearLine,
+      `Enemy: AC ${enemy.ac} · HP ${enemy.hp}`,``,
+      `FIGHT · FLEE · USE [ability]`],
       onWin,onLose,onFlee,playerHp:cs.hp,advantage:false,halfDmg:false,skipEnemyTurn:false,stunEnemy:0,abilitiesUsed:{}});
   };
 
@@ -4283,6 +4490,7 @@ export default function NYC(){
       setCombat(null);
       setAbilityCooldowns(prev=>{const n={};Object.entries(prev).forEach(([k,v])=>{if(v>1)n[k]=v-1;});return n;});
       if(onWin)onWin(loot,droppedItem);
+      if(droppedItem&&droppedItem.slot&&droppedItem.slot!=="consumable")setTimeout(()=>offerEquip(droppedItem),500);
       return;
     }
 
@@ -4325,8 +4533,31 @@ export default function NYC(){
   };
 
   // ── CONTEXT BUTTON ENGINE ────────────────────────────────────────────────
+  // ── EQUIP OFFER HELPER ────────────────────────────────────────────────────
+  // Call after any item lands in inventory. If it's equippable and better than
+  // or different from what's currently equipped in that slot, show inline choice.
+  const offerEquip=(item)=>{
+    if(!item||!item.slot||item.slot==="consumable")return;
+    const itemObj=typeof item==="string"?BASE_ITEMS.find(i=>i.name===item||i.id===item):item;
+    if(!itemObj||!itemObj.slot||itemObj.slot==="consumable")return;
+    const currentEq=gsRef.current?.equipment?.[itemObj.slot];
+    const currentItem=currentEq?(typeof currentEq==="object"&&currentEq._rolled?currentEq:getItemById(currentEq)):null;
+    // Build stat comparison
+    const newStats=Object.entries(itemObj.stats||{}).filter(([,v])=>v).map(([k,v])=>`${v>0?"+":""}${v} ${k}`).join(", ")||"no bonuses";
+    const curStats=currentItem?Object.entries(currentItem.stats||{}).filter(([,v])=>v).map(([k,v])=>`${v>0?"+":""}${v} ${k}`).join(", "):"nothing equipped";
+    const label=`${ITEM_RARITY[itemObj.rarity]?.prefix||""}${itemObj.name}`;
+    setInlineChoice({
+      prompt:`${label} [${itemObj.slot}] · ${newStats} · Currently: ${curStats}`,
+      choices:[
+        {label:"EQUIP IT", icon:"⚡", cmd:`EQUIP ${itemObj.name}`, color:"#2a9d8f"},
+        {label:"KEEP BAG", icon:"📦", cmd:"INVENTORY",             color:"#555"},
+      ]
+    });
+  };
+
   const getContextButtons=()=>{
     if(!gs)return [];
+    const w=getWeather(gs.day);
     const btnLvl=gs.level||1;
     const h=gs.survival?.health||100;
     const hunger=gs.survival?.hunger||100;
@@ -4362,8 +4593,17 @@ export default function NYC(){
     if(h<30)       btns.push({label:"HEAL",   icon:"🩹",cmd:"HEAL",   color:"#e63946"});
     else if(hunger<25)btns.push({label:"EAT",    icon:"🍞",cmd:"EAT",    color:"#f4a261"});
     else if(energy<20)btns.push({label:"REST",   icon:"😴",cmd:"REST",   color:"#888"});
+    // Warmth emergency or blizzard — surface SHELTER prominently
+    if(warmth<25||w?.id==="blizzard")
+      btns.push({label:"SHELTER",icon:"🏠",cmd:"SHELTER",color:warmth<15?"#e63946":"#a8dadc"});
     btns.push({label:"LOOK",  icon:"👁",cmd:"LOOK"});
-    btns.push({label:"HUSTLE",icon:"💵",cmd:"HUSTLE"});
+    // Hooker uses CLIENT; everyone else uses HUSTLE
+    if(gs.isHooker){
+      const slotsLeft=Math.max(0,(HUSTLE_DAILY_MAX["hooker"]||4)-(hustleCount||0));
+      btns.push({label:`CLIENT${slotsLeft>0?` (${slotsLeft})`:""}`,icon:"💄",cmd:"CLIENT",color:"#ff4d8d",disabled:slotsLeft===0});
+    } else {
+      btns.push({label:"HUSTLE",icon:"💵",cmd:"HUSTLE"});
+    }
     if(cornerHere&&hoursA>=2)btns.push({label:`COLLECT ${Math.floor(hoursA)}h`,icon:"💰",cmd:"COLLECT",color:"#e9c46a"});
     else if(btnLvl>=2&&!cornerHere)btns.push({label:"CLAIM",icon:"🚩",cmd:"CLAIM",color:"#2a9d8f"});
     if(contestedC)btns.push({label:"RECLAIM",icon:"⚔",cmd:"RECLAIM",color:"#e63946"});
@@ -4372,6 +4612,15 @@ export default function NYC(){
     if(chapter?.boss&&btnLvl>=(chapter.lvlReq||1))btns.push({label:"BOSS",icon:"💀",cmd:"FIGHT STORY BOSS",color:"#9d4edd"});
     if(heat>=7)btns.push({label:"LAY LOW",icon:"🥻",cmd:"LAY LOW",color:"#e67a3a"});
     if(onlineNow.length>0)btns.push({label:`WHO (${onlineNow.length})`,icon:"👥",cmd:"WHO",color:"#2a9d8f"});
+    // Army deploy button — shows current deployment or prompts to deploy
+    if(btnLvl>=3&&hasArmy){
+      const deployed=Object.keys(gs.armyDeployedBoro||{})[0];
+      if(deployed){
+        btns.push({label:`ARMY:${getBoro(deployed)?.short||deployed}`,icon:"💪",cmd:"ARMY",color:"#2a9d8f55"});
+      } else {
+        btns.push({label:"DEPLOY",icon:"💪",cmd:`DEPLOY ${boro}`,color:"#2a9d8f"});
+      }
+    }
     // Five boroughs endgame button
     const fiveStatBtn=getFiveBoroStatus(gs,world);
     const owned5Btn=BOROUGHS.filter(b=>gs.cornersOwned?.includes(b.id)&&world?.corners?.[b.id]===gs.name);
@@ -4954,6 +5203,7 @@ export default function NYC(){
       push(``,`🌐 MULTIPLAYER & WORLD`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `MSG [text]      — broadcast to world chat`,
         `WHO             — see who's online right now and where`,
+        `REP [name]      — check infamy and street reputation`,
         `WRITE [name] [msg] — send a private letter`,
         `LETTERS         — read your mail`,
         ``,
@@ -4981,10 +5231,16 @@ export default function NYC(){
       push(``,`⭐ YOUR CLASS: ${arch?.name||"Unknown"}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         arch?.desc||"",``);
       if(gs.isVampire)push(`FEED [target]   — drain blood for health`,`MESMERIZE [npc] — control an NPC`,`MIST [borough]  — scouting ability`,`DOMINATE [player] — attempt mind control`,`THRALL [npc]    — bind an NPC`,`NIGHT MARKET    — black market access`,`THIRST          — check hunger level`);
-      if(gs.isJunkie)push(`SCORE           — find cheap street product`);
+      if(gs.isJunkie)push(
+        `USE             — use heroin (your substance)`,
+        `USE STASH       — tap your product inventory when desperate`,
+        `SCORE           — find something when you're dry`,
+        `ADDICTION       — check your current level`,
+        `RECOVERY        — work with Carmen to get clean`,
+        `TALK DEJA       — your Bronx connect (Chapter 2)`);
       if(gs.isUndoc)push(`CONNECT         — tap community network`,`VANISH          — emergency heat dump`);
       if(gs.isHustler)push(`FLIP            — arbitrage analysis`);
-      if(gs.isFixer)push(`WIRE [player] [amt] — send cash`,`BROKER [p1] [p2] — arrange deals`,`CLEAN [player]  — wash heat`,`CONNECTIONS     — your network`);
+      if(gs.isFixer)push(`WIRE [player] [amt] — send cash (fee applies)`,`BROKER [p1] [p2]   — arrange deals between players`,`CLEAN [player]     — wash another player's heat for a fee`,`CONNECTIONS        — your network overview`);
       if(gs.isRat)push(`INFORM [player]    — tip off cops for cash`,`SURVEIL [player]   — learn their borough, heat, movement`,`BLACKMAIL [player] — leverage intel for cash (need fresh SURVEIL)`,`BURN [player]      — full exposure, max heat on target ($120, 3 uses)`,`FRAME [player]     — plant evidence near their corner ($80)`,`MISINFORM [player] — plant false intel in their feed`,`INTEL              — your dossiers`);
       push(``,`SKILLS          — see unlockable abilities`,`SKILL [name]    — unlock a skill`);
       return;
@@ -5072,7 +5328,19 @@ export default function NYC(){
     // Separate small passive drip also lands on SLEEP (can't be collected).
     if(C==="COLLECT"||C==="COLLECT INCOME"){
       const owned=gs.cornersOwned||[];
-      if(owned.length===0){push("You don't own any corners. CLAIM one first ($50).");return;}
+      if(owned.length===0){push(`No corners yet. Type CLAIM to take one ($50).`);return;}
+      // Show crew territory status
+      const ctrlBoros=BOROUGHS.filter(b=>getCrewControl(b.id,world));
+      if(ctrlBoros.length>0||gs.crew){
+        push(``,`🚩 TERRITORY:`);
+        ctrlBoros.forEach(b=>{
+          const ctrl=getCrewControl(b.id,world);
+          const mine=gs.crew&&ctrl.name===gs.crew;
+          push(`  ${mine?"✅":"❌"} ${b.name}: ${ctrl.name}${mine?` +${Math.round(CREW_TERRITORY_BONUS*100)}% income`:""}`);
+        });
+        if(ctrlBoros.length===0)push(`  No borough controlled yet. ${gs.crew?`Need ${CREW_CONTROL_THRESHOLD}+ ${gs.crew} corners in one borough.`:"Join a crew."}`);
+        push(``);
+      }
       const now=Date.now();
       const lastCollect=gs.lastCollect||gs.startTime||now;
       const MAX_ACCRUAL_HOURS=12;
@@ -5188,9 +5456,17 @@ export default function NYC(){
       const arch=gs.archetype?.id||"veteran";
       const story=CLASS_STORIES[arch];
       const chapter=getStoryChapter(gs);
-      if(!chapter?.boss){push("No boss encounter in your current chapter.");return;}
-      if(gs.level<chapter.lvlReq){push(`Need Level ${chapter.lvlReq} first.`);return;}
+      if(!chapter?.boss){push("No boss encounter in your current chapter. Check STORY.");return;}
+      if(gs.level<chapter.lvlReq){push(`Need Level ${chapter.lvlReq} to face ${chapter.boss.name}. You are Level ${gs.level}.`);return;}
+      // Health check — don't let player walk in at 20hp
+      if(gs.survival.health<40){
+        push(``,`⚠ Health at ${gs.survival.health}% — not ready for this fight.`,
+          `Heal to at least 40% before facing ${chapter.boss.name}.`,
+          `REST · BUY BANDAGE · CLINIC · SLEEP`);
+        return;
+      }
       const b=chapter.boss;
+      const bData=ENEMIES[b.id];
       // Scale boss to player level
       const lvDiff=Math.max(0,gs.level-chapter.lvlReq);
       const scaledEnemy={
@@ -5199,28 +5475,44 @@ export default function NYC(){
         attackBonus:b.attackBonus+Math.floor(lvDiff*0.5),
         desc:b.desc, loot:[],
       };
+      // Show intro if available, otherwise fall back to desc
+      const introText=bData?.intro||b.desc;
       push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `${b.icon||"⚔"} ${b.name.toUpperCase()}`,
-        b.desc,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``,
+        introText,``,
+        `HP: ${scaledEnemy.hp} · Attack: +${scaledEnemy.attackBonus}`,``,
+        `FIGHT · FLEE · USE [ability]`);
       resolveCombat({...gs},scaledEnemy.id,
         (loot,droppedItem)=>{
-          // Mark boss as defeated via story flag
           const flag=`defeated_${b.id}`;
           updGs(g=>{
             let ng={...g,storyFlags:[...(g.storyFlags||[]),flag]};
             if(droppedItem)ng={...ng,inventory:[...ng.inventory,droppedItem]};
             const chapter2=getStoryChapter(ng);
             if(chapter2&&isChapterComplete(ng,chapter2)){
-              push(``,`★ Chapter objective complete! Type STORY COMPLETE to claim your reward.`);
+              push(``,`★ Chapter complete. Type STORY COMPLETE to claim your reward.`);
             }
             return applyXP(ng,Math.floor(b.hp*2),"fight");
           });
-          push(``,`${b.icon||"⚔"} ${b.name} is down.`,
+          // Use winMsg if available
+          const winText=bData?.winMsg||`${b.name} is down.`;
+          push(``,`${b.icon||"⚔"} ${b.name.toUpperCase()} — DEFEATED`,
+            winText,``,
             droppedItem?`Dropped: ${itemDropMsg(droppedItem)}`:"",
             `Type STORY COMPLETE to claim your chapter reward.`);
         },
-        ()=>{push(``,`${b.name} beat you this time. Heal up and try again.`);},
-        ()=>{push(`You backed off. ${b.name} is still out there.`);}
+        ()=>{
+          const loseText=bData?.fleeMsg
+            ?`You didn't make it this time.\n${bData.fleeMsg}`
+            :`${b.name} beat you. Heal up and try again.`;
+          push(``,`${b.name} beat you this time.`,loseText,`Heal up. Come back.`);
+        },
+        ()=>{
+          // Flee — use fleeMsg
+          const fleeText=bData?.fleeMsg||`${b.name} lets you go.`;
+          push(``,`You got out.`,fleeText);
+        }
       );
       return;
     }
@@ -5263,6 +5555,22 @@ export default function NYC(){
       }
       return;
     }
+    // REPUTATION command
+    if(C==="REPUTATION"||C==="INFAMY"||C==="REP"||C.startsWith("REP ")||C.startsWith("REPUTATION ")){
+      const repTarget=C.replace(/^(REPUTATION|INFAMY|REP)\s*/,"").trim()||gs.name;
+      const isMe=repTarget===gs.name;
+      const tInf=isMe?(gs.infamy||0):(world.players?.[repTarget]?.infamy||0);
+      const tLvl=getInfamyLevel(tInf);
+      const tWins=isMe?(gs.lifetime?.pvpWins||0):(world.pvpLog||[]).filter(l=>l.attacker===repTarget&&l.won).length;
+      push(``,`${tLvl.icon} ${repTarget.toUpperCase()} — ${tLvl.name}`,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `Infamy: ${tInf}/100 · ${tLvl.desc}`,
+        tWins>0?`PvP wins on record: ${tWins}`:"No confirmed attacks.",``,
+        isMe&&tInf>=25?`Your penalties: NPC pay -${Math.round((tLvl.npcMult-1)*100)}% · Cop attention +${Math.round((tLvl.copMult-1)*100)}%`:"",
+        isMe?`Decays ${INFAMY_DECAY_PER_SLEEP}/day. Stay out of fights to cool down.`:``,``);
+      return;
+    }
+
     // WHO — see who is online right now
     if(C==="WHO"||C==="ONLINE"){
       const now2=Date.now();
@@ -5279,7 +5587,9 @@ export default function NYC(){
           nowOnline.forEach(p=>{
             const here2=p.borough===boro;
             const minsAgo=Math.floor((now2-(p.lastSeen||0))/60000);
-            push(`  ${here2?"📍":"  "} ${p.name} · Lvl ${p.level||"?"} · ${getBoro(p.borough)?.name||p.borough||"?"}${here2?" ← HERE":""}${(p.heat||0)>=7?" 🔥":""}${minsAgo>0?` · ${minsAgo}m ago`:""}`);
+            const pInfLvl=getInfamyLevel(p.infamy||0);
+            const infTag=(p.infamy||0)>=25?` ${pInfLvl.icon} ${pInfLvl.name}`:"";
+            push(`  ${here2?"📍":"  "} ${p.name} · Lvl ${p.level||"?"} · ${getBoro(p.borough)?.name||p.borough||"?"}${here2?" ← HERE":""}${(p.heat||0)>=7?" 🔥":""}${infTag}${minsAgo>0?` · ${minsAgo}m ago`:""}`);
           });
           push(``);
         }
@@ -5332,7 +5642,7 @@ export default function NYC(){
       updGs(g=>applyXP(g,2,"look"));return;
     }
     if(C==="LOOK"){
-      const wPool=weather.id==="blizzard"?EVTS.blizzard:weather.id==="rain"||weather.id==="storm"?EVTS.rain:weather.id==="heatwave"?EVTS.heatwave:gs.heat>6?EVTS.hot:gs.survival.hunger<30?EVTS.hungry:gs.cash<10?EVTS.broke:EVTS.normal;
+      const wPool=weather.id==="blizzard"?EVTS.blizzard:weather.id==="storm"?EVTS.storm:weather.id==="rain"?EVTS.rain:weather.id==="fog"?EVTS.fog:weather.id==="heatwave"?EVTS.heatwave:gs.heat>6?EVTS.hot:gs.survival.hunger<30?EVTS.hungry:gs.cash<10?EVTS.broke:EVTS.normal;
       const boroDesc={
         bronx:"The Grand Concourse stretching north, bodegas every half block, the D train rattling somewhere underground.",
         brooklyn:"Atlantic Ave or Flatbush, depending on which way you're walking. Either way it smells like food and someone's argument.",
@@ -5343,6 +5653,14 @@ export default function NYC(){
       const worldEvent=world.worldEvent||null;
       if(worldEvent){push(``,`${worldEvent.icon} WORLD EVENT: ${worldEvent.title}`,worldEvent.desc,``);}
       push(`${b.name} — Day ${gs.day} — ${weather.icon} ${weather.name}`,boroDesc[boro]||"",wPool[rnd(0,wPool.length-1)]);
+      // Crew territory banner in LOOK
+      const lookCtrl=getCrewControl(boro,world);
+      if(lookCtrl){
+        const isMyCrewCtrl=gs.crew&&lookCtrl.name===gs.crew;
+        push(``,isMyCrewCtrl
+          ?`🚩 ${lookCtrl.name.toUpperCase()} controls ${b.name} (+${Math.round(CREW_TERRITORY_BONUS*100)}% income)`
+          :`⚠ ${lookCtrl.name.toUpperCase()} runs ${b.name}. Their territory.`,``);
+      }
       // Show other active players in this borough
       const lookNow=Date.now();
       const lookHere=Object.entries(world.players||{})
@@ -5411,11 +5729,12 @@ export default function NYC(){
       push(`${gs.name} · Lvl ${gs.level} · Day ${gs.day}${gs.wanted?" · 🚨 WANTED":""}${gs.ghostMode?" · 👻 GHOST":""}`,
         "Cash: $"+gs.cash+(gs.cash>MAX_CARRY_CASH?" ⚠ TARGET":"")+(gs.cashStash>0?" · Stashed: $"+gs.cashStash:""),
         `Heat: ${Math.round(gs.heat)}/10 · ${wt.stars>0?"★".repeat(wt.stars):"☆"} ${wt.name}`,
+        `Infamy: ${(()=>{const il=getInfamyLevel(gs.infamy||0);return `${gs.infamy||0}/100 ${il.icon} ${il.name}${(gs.infamy||0)>=25?" — "+il.desc:""}`;})()}`,
         `Cops here: ${getCopPresence(boro,world.copPresence,gs.day)}/10`,
         `XP: ${gs.xp} · Next: ${xpNext(gs.xp)} · Next stat: +${nextStat.toUpperCase()}`,
         `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
-        gs.isHooker?"Clients today: "+(gs.hustleCount||0)+"/6 · Regulars: "+(gs.regulars||0):!gs.isFixer&&!gs.isRat?"Hustles today: "+(gs.hustleCount||0)+"/"+HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]+(gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""):"",
+        gs.isHooker?"Clients today: "+(gs.hustleCount||0)+"/"+(HUSTLE_DAILY_MAX["hooker"]||4)+" · Regulars: "+(gs.regulars||0):!gs.isFixer&&!gs.isRat?"Hustles today: "+(gs.hustleCount||0)+"/"+HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]+(gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""):"",
         `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
         `Crew: ${gs.crew||"solo"}`,
         gs.army?.length?`Army: ${gs.army.length} units · Power ${getArmyPower(gs.army)} · Upkeep $${getArmyUpkeep(gs.army)}/day · Heat +${getArmyHeatMult(gs.army).toFixed(1)}/day`+
@@ -5426,6 +5745,9 @@ export default function NYC(){
             const lvl=world.cornerLevels?.[bId]||0;
             const tier=getCornerTier(bId,gs,world);
             const inc=getCornerIncome(bId,lvl,gs,world,tier);
+          // Crew territory bonus — if crew controls this borough, +15% income
+          const crewCtrl=gs.crew?getCrewControl(bId,world):null;
+          const ctrlBonus=crewCtrl&&crewCtrl.name===gs.crew?CREW_TERRITORY_BONUS:0;
             const contested=(world.cornerContested||{})[bId];
             return `${getBoro(bId)?.short} L${lvl} ${tier.icon}$${inc}/day`+(contested?` ⚠CONTESTED`:"");
           }).join(" · "):
@@ -5540,14 +5862,34 @@ export default function NYC(){
     const buyM=_buyA||(_buyB?[_buyB[0],_buyB[2],_buyB[1]]:C.match(/^BUY (\w+)(?:\s+(\d+))?$/));
     if(buyM){
       const pKey=buyM[1].toLowerCase();const qty=parseInt(buyM[2])||1;
-      if(!PRODUCTS[pKey]){push(`Unknown product. Try: weed, pills, powder.`);return;}
+      if(!PRODUCTS[pKey]){push(`Unknown product. Try: weed, pills, powder, heroin.`);return;}
+      const prodDef=PRODUCTS[pKey];
+      // Heroin restrictions — level, borough, connect requirement
+      if(prodDef.minLevel&&(gs.level||1)<prodDef.minLevel){
+        push(`🚫 ${prodDef.name} is a different level of risk. Reach Level ${prodDef.minLevel} first.`);return;
+      }
+      if(prodDef.sourceBoros&&!prodDef.sourceBoros.includes(boro)){
+        const boroNames=prodDef.sourceBoros.map(b=>getBoro(b)?.name||b).join(" or ");
+        push(`${prodDef.icon} ${prodDef.name} only moves through ${boroNames}. Go there to buy.`);return;
+      }
+      if(prodDef.connectReq){
+        // Check if player has rep >= connectReq with any NPC in current borough
+        const localNpcs=NPCS.filter(n=>n.b===boro);
+        const hasConnect=localNpcs.some(n=>(npcs.find(x=>x.id===n.id)?.rep||0)>=prodDef.connectReq);
+        if(!hasConnect){
+          push(`${prodDef.icon} You need a connect for ${prodDef.name}.`,
+            `Build rep with an NPC in ${getBoro(boro)?.name} to at least ${prodDef.connectReq}/10.`,
+            `TALK to NPCs here and earn their trust first.`);return;
+        }
+      }
       const sellPrice=mktPrice(boro,pKey,gs.day,weather,world.supply);
-      const buyPrice=Math.round(sellPrice*PRODUCTS[pKey].bm);
+      const buyMult=getBuyMult(boro,pKey,gs.day,world.supply);
+      const buyPrice=Math.round(sellPrice*buyMult);
       const total=buyPrice*qty;
       // hustler sees spread before committing
       if(gs.isHustler){
         const profit=(sellPrice-buyPrice)*qty;
-        push(`💵 Spread: Buy $${buyPrice} · Sell $${sellPrice} · Profit if sold here: $${profit}`);
+        push(`💵 Spread: Buy $${buyPrice} (${Math.round(buyMult*100)}%) · Sell $${sellPrice} · Profit: +$${profit} (+${Math.round((sellPrice-buyPrice)/buyPrice*100)}%)`);
       }
       const maxBuy=gs.isHustler?10:8;
       if(qty>maxBuy){push(`Can't buy ${qty} at once — too conspicuous. Max ${maxBuy} per trip.`);return;}
@@ -5608,12 +5950,14 @@ export default function NYC(){
       const price=mktPrice(boro,pKey,gs.day,weather,world.supply);const total=price*qty;
       // Heat scales with quantity AND current borough heat level
       const boroHeatMult=b.heat/8;
-      const hg=Math.max(1,Math.round(qty*PRODUCTS[pKey].rm*boroHeatMult));
+      const prodHeatMult=PRODUCTS[pKey].heatMult||1.0; // heroin has 2x heat multiplier
+      const hg=Math.max(1,Math.round(qty*PRODUCTS[pKey].rm*boroHeatMult*prodHeatMult));
       // Bust scales with heat, quantity, and borough cop presence
       const copP=getCopPresence(boro,world.copPresence,gs.day)/10;
       const hasLookout=(gs.army||[]).some(u=>u.id==="lookout");
       const bustBase=(qty>=4?0.15:qty>=2?0.08:0.04)*(weEffect.bustMult||1)*(hasLookout?0.7:1);
-      const bustChance=(gs.heat>5||copP>0.7)?bustBase*weather.bustMult*(1+copP):0;
+      const infamySellMult=getInfamyLevel(gs.infamy||0).copMult||1.0;
+      const bustChance=(gs.heat>5||copP>0.7)?bustBase*weather.bustMult*(1+copP)*infamySellMult:0;
       const caught=bustChance>0&&Math.random()<bustChance;
       if(caught){
         const cashTaken=Math.min(gs.cash,rnd(50,150));
@@ -5700,7 +6044,8 @@ export default function NYC(){
       const total=Math.round(basePay*nightBonus*clientMult+charmMod);
       const heatGain=rnd(1,2);
       // Cop chance
-      const copChance=gs.heat>6?0.25:gs.heat>4?0.15:0.08;
+      const infamyLLC=getInfamyLevel(gs.infamy||0);
+      const copChance=Math.min(0.45,(gs.heat>6?0.25:gs.heat>4?0.15:0.08)*(infamyLLC.copMult||1.0));
       if(Math.random()<copChance){
         const hasCopSense=(gs.skills||[]).includes("read_the_room");
         if(hasCopSense){
@@ -5771,9 +6116,12 @@ export default function NYC(){
       const style=hustleStyle[archId]||hustleStyle.veteran;
       const failChance=style.failRate+(sameBoroPenalty?0.15:0);
       const ok=Math.random()>failChance;
+      // Infamy penalty — high infamy players earn less from NPCs (they're scared/suspicious)
+      const infamyL=getInfamyLevel(gs.infamy||0);
+      const infamyNpcPenalty=infamyL.npcMult||1.0;
 
       if(ok){
-        let base=rnd(style.basePay[0],style.basePay[1])+gs.stats.hustle;
+        let base=Math.round((rnd(style.basePay[0],style.basePay[1])+gs.stats.hustle)/infamyNpcPenalty);
         base=Math.round(base*payoutMult);
         // Schemer crit — 20% chance 2x on first hustle
         if(style.crit&&todayCount===0&&Math.random()<0.2){
@@ -5809,20 +6157,54 @@ export default function NYC(){
       return;
     }
     if(C==="REST"){
+      if(gs.survival.energy<10){push(`Too exhausted to even rest properly. You need to SLEEP.`);return;}
       const hasStreetMedic=hasSkill(gs,"street_medic");
-      const restHealthBonus=hasStreetMedic?25:10; // meaningful heal on rest
+      const restHealthBonus=hasStreetMedic?25:10;
       const restBonus=gs.isUndoc?restHealthBonus-5:restHealthBonus;
       const ghostRestHeat=gs.archetype?.id==="ghost"?2:1;
-      updGs(g=>applyXP({...g,survival:{
-        hunger:clamp(g.survival.hunger-8,0,100),
-        warmth:clamp(g.survival.warmth+15,0,100),
-        health:clamp(g.survival.health+restBonus,0,100),
-        energy:clamp(g.survival.energy+40,0,100),
-        mental:clamp((g.survival.mental||70)+5,0,100),
-      },heat:clamp(g.heat-ghostRestHeat,0,10)},3,"rest"));
+      const isGhostRest=gs.archetype?.id==="ghost";
+
+      // ── Random rest events — good and bad ────────────────────────────────
+      const restEvents=[
+        // Bad — probability weighted
+        {w:8,  type:"theft",    msg:"You dozed off. Somebody lifted $%d from your pocket while you slept.",       cash:-1},
+        {w:6,  type:"cop",      msg:"A patrol spotted you in the doorway. Moved you along. Heat +1.",              heat:1},
+        {w:5,  type:"weather",  msg:"Rain started while you were out. Warmth gains cancelled.",                   warmth:-15},
+        {w:4,  type:"confrontation", msg:"Someone wanted the spot. You held it but took a hit. Health -8.",       health:-8},
+        {w:3,  type:"deep_sleep",msg:"Slept harder than you meant to. Energy barely moved.",                     energyPenalty:true},
+        // Good
+        {w:12, type:"clean",    msg:"",                                                                           good:true},
+        {w:8,  type:"find",     msg:"Found $%d in the lining of a jacket you were using as a pillow.",           cash:1},
+        {w:6,  type:"kindness", msg:"Someone left food nearby while you slept. Hunger +15.",                     hunger:15},
+        {w:4,  type:"dream",    msg:"Deep sleep. Felt almost human for an hour. Mental +10.",                    mental:10},
+      ];
+      // Weight roll
+      const totalW=restEvents.reduce((s,e)=>s+e.w,0);
+      let roll=Math.random()*totalW;
+      const evt=restEvents.find(e=>{roll-=e.w;return roll<=0;})||restEvents[5];
+
+      // Apply base recovery
+      updGs(g=>{
+        const cashAmt=evt.cash?(evt.cash>0?rnd(8,20):-(rnd(Math.round(Math.min(g.cash*0.15,25)),Math.round(Math.min(g.cash*0.3,60))))):0;
+        const newCash=clamp(g.cash+cashAmt,0,9999);
+        const msg=evt.msg.includes('%d')?evt.msg.replace('%d',Math.abs(cashAmt)):evt.msg;
+        if(!evt.good||evt.msg)setTimeout(()=>push(msg),200);
+        return applyXP({...g,
+          cash:newCash,
+          survival:{
+            hunger:clamp(g.survival.hunger-8,0,100),
+            warmth:clamp(g.survival.warmth+(evt.type==="weather"?0:15),0,100),
+            health:clamp(g.survival.health+restBonus+(evt.health||0),0,100),
+            energy:clamp(g.survival.energy-(evt.energyPenalty?5:10),0,100),
+            mental:clamp((g.survival.mental||70)+5+(evt.mental||0),0,100),
+          },
+          heat:clamp(g.heat-ghostRestHeat+(evt.heat||0),0,10),
+        },3,"rest");
+      });
       push(gs.isUndoc?`Found a community spot. Laid low.`:`Found cover. Laid low.`,
-        `Health +${restBonus} · Energy up · Heat cooling.`,
-        gs.survival.health<40?`Still hurting. BUY BANDAGE at the bodega, or CLINIC for serious wounds.`:"");
+        `Health +${restBonus} · Warmth +15 · Energy -10`+
+        (isGhostRest?` · Heat -2 (Ghost bonus)`:`· Heat -1`),
+        gs.survival.warmth<25?`Still cold. SHELTER for full warmth restore.`:"");
       return;
     }
 
@@ -5949,9 +6331,20 @@ export default function NYC(){
       const powderP=mktPrice(boro,"powder",gs.day,weather,world.supply);
       const weedBase=getBoro(boro)?.base?.weed||80;
       const trend=(p,base)=>p>base*1.1?"📈":p<base*0.9?"📉":"→";
+      // Heroin intel — only shown when in source borough with connect
+      const heroInBoro=PRODUCTS.heroin.sourceBoros.includes(boro);
+      const heroConnect=NPCS.filter(n=>n.b===boro).some(n=>(npcs.find(x=>x.id===n.id)?.rep||0)>=PRODUCTS.heroin.connectReq);
+      const heroP=heroInBoro&&heroConnect?mktPrice(boro,"heroin",gs.day,weather,world.supply):0;
+      const heroBuy=heroP?Math.round(heroP*getBuyMult(boro,"heroin",gs.day,world.supply)):0;
+      const weedBuy=Math.round(weedP*getBuyMult(boro,"weed",gs.day,world.supply));
+      const pillsBuy=Math.round(pillsP*getBuyMult(boro,"pills",gs.day,world.supply));
+      const powderP=mktPrice(boro,"powder",gs.day,weather,world.supply);
+      const powderBuy=Math.round(powderP*getBuyMult(boro,"powder",gs.day,world.supply));
       push(`Intel — ${b.name} ${weather.icon}:`,
-        `  Weed $${weedP}/bag ${trend(weedP,weedBase)}`,`  Pills $${pillsP}/pack ${trend(pillsP,getBoro(boro)?.base?.pills||12)}`,
-        `  Powder $${mktPrice(boro,"powder",gs.day,weather)}/g`,
+        `  Weed   buy $${weedBuy} → sell $${weedP}/bag ${trend(weedP,weedBase)} (+$${weedP-weedBuy} spread)`,
+        `  Pills  buy $${pillsBuy} → sell $${pillsP}/pack ${trend(pillsP,getBoro(boro)?.base?.pills||12)} (+$${pillsP-pillsBuy} spread)`,
+        `  Powder buy $${powderBuy} → sell $${powderP}/g (+$${powderP-powderBuy} spread)`,
+        heroP>0?`  Heroin buy $${heroBuy} → sell $${heroP}/bag (+$${heroP-heroBuy} spread) 💡 CONNECT`:"  Heroin: no connect here",
         `  Corner: ${world.corners?.[boro]||"unclaimed"}`,"  Safe house: "+(world.safehouses?.[boro]?"owned by "+(world.safehouses[boro].owner||world.safehouses[boro].crewOwner):"none"));
       updGs(g=>applyXP({...g,storyScouts:(g.storyScouts||0)+1},8,"scout"));return;
     }
@@ -5965,7 +6358,7 @@ export default function NYC(){
       if(gs.survival.energy<penalty){push(`Too tired to travel. Need ${penalty} energy. REST first.`);return;}
       setBoro(t.id);
       updGs(g=>({...g,borosVisited:[...new Set([...(g.borosVisited||[]),t.id])]}));
-      const wPool=weather.id==="blizzard"?EVTS.blizzard:weather.id==="rain"||weather.id==="storm"?EVTS.rain:EVTS.normal;
+      const wPool=weather.id==="blizzard"?EVTS.blizzard:weather.id==="storm"?EVTS.storm:weather.id==="rain"?EVTS.rain:weather.id==="fog"?EVTS.fog:EVTS.normal;
       // Entry check for high wanted tier or restricted boroughs
       const tier2=getWantedTier(Math.round(gs.heat));
       if(tier2.cantEnter.includes(t.id)){
@@ -6021,10 +6414,18 @@ export default function NYC(){
       }
       // Claim requirement — hustle+level gate
       if(gs.stats.hustle+gs.level<8){push("Not repped up enough to claim a corner. Keep leveling.");return;}
-      // Heat check — can't claim if too hot
-      if(gs.heat>7){push("Too hot right now. Cool down before claiming corners. Cops are watching.");return;}
-      // Claim it
+      if(gs.heat>7){push("Too hot right now. Cool down before claiming corners.");return;}
+      if(gs.cash<50){push(`Need $50 to stake this corner. Hustle up first.`);return;}
       let ws=addWorldHistory(world,"corner",gs.name,gs.name+" claimed "+getBoro(boro)?.name+" corner",boro);
+      // Alert active players in this borough that a corner was claimed
+      Object.entries(world.players||{}).forEach(([n,d])=>{
+        if(n!==gs.name&&d.borough===boro&&Date.now()-(d.lastSeen||0)<ACTIVE_WINDOW){
+          ws={...ws,playerAlerts:{...(ws.playerAlerts||{}),[n]:[
+            ...((ws.playerAlerts||{})[n]||[]),
+            {msg:`🚩 ${gs.name} just claimed a corner in ${getBoro(boro)?.name}. Watch your territory.`,time:Date.now()}
+          ]}};
+        }
+      });
       ws=notifyPlayers(ws,gs.name,"🚩 "+gs.name+" just claimed "+getBoro(boro)?.name+" corner.");
       const _cMsgs=[
         gs.name+" just claimed the "+getBoro(boro)?.name+" corner. It's theirs now.",
@@ -6039,13 +6440,12 @@ export default function NYC(){
         cornerLastVisit:{...(ws.cornerLastVisit||{}),[gs.name+":"+boro]:gs.day},
       };
       setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
-      updGs(g=>applyXP({...g,cornersOwned:[...g.cornersOwned,boro],lifetime:{...g.lifetime,corners:(g.lifetime?.corners||0)+1}},30,"claim"));
+      updGs(g=>applyXP({...g,cash:g.cash-50,cornersOwned:[...g.cornersOwned,boro],lifetime:{...g.lifetime,corners:(g.lifetime?.corners||0)+1}},30,"claim"));
       const baseInc=getCornerIncome(boro,0,gs);
       push("","🚩 CORNER CLAIMED: "+b.name,
-        "Daily income: $"+baseInc+"/day (paid on SLEEP)",
-        "Keep showing up — you need to visit every "+CORNER_PRESENCE_DAYS+" days or it goes cold.",
-        "UPGRADE CORNER to increase income (costs $"+CORNER_UPGRADE_COST[1]+")",
-        "Others can take this by beating you in a fight here.","");
+        "-$50 · Daily income: $"+baseInc+"/day (paid on SLEEP)",
+        "Visit every "+CORNER_PRESENCE_DAYS+" days or it goes cold.",
+        "UPGRADE CORNER to increase income · Others can take this by fighting you here.","");
       journalEvent('firstCorner',boro);return;
     }
 
@@ -6147,6 +6547,8 @@ export default function NYC(){
       if(tData.borough!==boro){push(`${tName} isn't in ${b.name}.`);return;}
       if(tName===gs.name){push(`Can't attack yourself.`);return;}
       if(gs.survival.health<20){push(`Too hurt. Patch up first.`);return;}
+      const tInfamyLvl=getInfamyLevel(tData.infamy||0);
+      if((tData.infamy||0)>=50)push(``,`⚠ ${tName} is ${tInfamyLvl.name} (${tData.infamy}/100 infamy). They\'ve done this before.`,``);
       // D&D style PvP
       const myCS=getCombatStats(gs);
       const theirAC=10+(tData.level||1)+(tData.toughness||0);
@@ -6161,6 +6563,7 @@ export default function NYC(){
         log.push(`${crit?"💥 CRITICAL!":"HIT!"} ${dmg} damage. You take $${stolen}.`);
       } else {
         log.push(`MISS. They were ready. You take damage retreating.`);
+        updGs(g=>({...g,infamy:Math.min(100,(g.infamy||0)+rnd(3,6))})); // even failed attacks build infamy
       }
       const hg=rnd(2,4);const selfDmg=won?rnd(5,15):rnd(15,30);
       const cornerStolen=won&&world.corners?.[boro]===tName;
@@ -6211,6 +6614,7 @@ export default function NYC(){
             survival:{...g.survival,health:clamp(g.survival.health-selfDmg,0,100)},
             cornersOwned:cornerStolen?[...g.cornersOwned,boro]:g.cornersOwned,
             lifetime:{...(g.lifetime||{}),pvpWins:(g.lifetime?.pvpWins||0)+1},
+            infamy:Math.min(100,(g.infamy||0)+rnd(8,15)), // attacking builds infamy
           },25*_rMult,"fight"));
           if(_isRival)push("⚔ RIVAL BONUS: 2x XP and cash.");
         }
@@ -6338,7 +6742,16 @@ export default function NYC(){
       if(crew){const ws={...world,crews:{...world.crews,[gs.crew]:{...crew,members:crew.members.filter(m=>m!==gs.name)}}};setWorld(ws);saveWorld(ws);}
       updGs(g=>({...g,crew:null,crewRole:null}));push(`You walked.`);return;}
     if(C==="CREW"){if(!gs.crew){push(`Not in a crew.`);return;}const crew=world.crews?.[gs.crew];
-      push(`${gs.crew}`,`Founder: ${crew?.founder}`,`Members: ${crew?.members?.join(", ")}`,`Bank: $${crew?.bank||0}`);return;}
+      const crewCtrlBoros=BOROUGHS.map(b=>({b,ctrl:getCrewControl(b.id,world)})).filter(({ctrl})=>ctrl&&ctrl.name===gs.crew);
+      push(``,`👥 ${gs.crew.toUpperCase()}`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `Founder: ${crew?.founder} · Members: ${crew?.members?.length||1} · Bank: $${crew?.bank||0}`,``);
+      if(crew?.members)push(`${crew.members.join(", ")}`,``);
+      if(crewCtrlBoros.length>0){
+        push(`🚩 CONTROLLED (+${Math.round(CREW_TERRITORY_BONUS*100)}% income):`,...crewCtrlBoros.map(({b,ctrl})=>`  • ${b.name} — ${ctrl.corners} corners`),``);
+      } else {
+        push(`No territory yet. ${CREW_CONTROL_THRESHOLD}+ members with corners in same borough = control.`,``);
+      }
+      push(`DEPOSIT [amt] · LEAVE CREW · CREW JOB`);return;}
     const depM=C.match(/^DEPOSIT (\d+)$/);
     if(depM){if(!gs.crew){push(`Not in a crew.`);return;}const amt=parseInt(depM[1]);if(amt>gs.cash){push(`Don't have $${amt}.`);return;}
       const crew=world.crews?.[gs.crew];if(!crew){push(`Crew not found.`);return;}
@@ -6402,6 +6815,11 @@ export default function NYC(){
         return withHelpedDrifters;
       });
       push(`Mental +8. Rep with ${npc.name} up.`);
+      // Junkie story: talking to Deja sets the found_deja flag
+      if(npc.id==="deja"&&gs.isJunkie&&!(gs.storyFlags||[]).includes("found_deja")){
+        updGs(g=>({...g,storyFlags:[...(g.storyFlags||[]),"found_deja"]}));
+        setTimeout(()=>push(``,`💉 You found her. Chapter 2 objective complete.`,`Type STORY to see your progress.`,``),500);
+      }
       // Show quest unlock progress after rep update
       const newRep=(npcs.find(x=>x.id===npc.id)?.rep||0)+1; // +1 since setNpcs hasn't re-rendered yet
       const npcQuests=NPC_QUESTS[npc.id]||[];
@@ -6597,7 +7015,10 @@ export default function NYC(){
         const lvl=world.cornerLevels?.[bId]||0;
         const tier=getCornerTier(bId,gs,world);
         const dailyRate=getCornerIncome(bId,lvl,gs,world,tier);
-        const passiveDrip=Math.floor(dailyRate*0.25); // 25% lands on sleep
+        // Crew territory bonus — if player's crew controls this borough, +15%
+        const crewCtrl=gs.crew?getCrewControl(bId,world):null;
+        const ctrlBonus=crewCtrl&&crewCtrl.name===gs.crew?CREW_TERRITORY_BONUS:0;
+        const passiveDrip=Math.floor(dailyRate*(1+ctrlBonus)*0.25); // 25% on sleep
 
         if(tier===CORNER_TIERS.HOT||tier===CORNER_TIERS.WARM){
           income+=passiveDrip;
@@ -6648,7 +7069,37 @@ export default function NYC(){
         JSON.stringify(newContestedBy)!==JSON.stringify(world.cornerContestedBy||{})||
         contestedCorners.some(c=>c.lost);
       if(worldChanged){
-        const newWs={...world,corners:newWorldCorners,cornerContested:newContested,cornerContestedBy:newContestedBy};
+        let newWs={...world,corners:newWorldCorners,cornerContested:newContested,cornerContestedBy:newContestedBy};
+        // Crew territory change detection — notify crew members
+        if(gs.crew){
+          BOROUGHS.forEach(b=>{
+            const wasCtrl=world.crewTerritory?.[b.id];
+            const nowCtrl=getCrewControl(b.id,newWs);
+            if(nowCtrl&&nowCtrl.name===gs.crew&&wasCtrl!==gs.crew){
+              // Gained control of this borough!
+              const crewData=newWs.crews?.[gs.crew];
+              (crewData?.members||[]).forEach(m=>{
+                newWs={...newWs,playerAlerts:{...(newWs.playerAlerts||{}),[m]:[
+                  ...((newWs.playerAlerts||{})[m]||[]),
+                  {msg:`\U0001f6a9 ${gs.crew} now controls ${b.name}! +${Math.round(CREW_TERRITORY_BONUS*100)}% income on corners there.`,time:Date.now()}
+                ]}};
+              });
+            } else if(!nowCtrl&&wasCtrl===gs.crew){
+              // Lost control
+              const crewData=newWs.crews?.[gs.crew];
+              (crewData?.members||[]).forEach(m=>{
+                newWs={...newWs,playerAlerts:{...(newWs.playerAlerts||{}),[m]:[
+                  ...((newWs.playerAlerts||{})[m]||[]),
+                  {msg:`\u26a0 ${gs.crew} lost control of ${b.name}.`,time:Date.now()}
+                ]}};
+              });
+            }
+          });
+          // Update territory cache
+          const newTerr={};
+          BOROUGHS.forEach(b=>{const ctrl=getCrewControl(b.id,newWs);if(ctrl)newTerr[b.id]=ctrl.name;});
+          newWs={...newWs,crewTerritory:newTerr};
+        }
         setWorld(newWs);saveWorld(newWs);
       }
       // Single updGs for all corner-related gs changes (heat + lost corners)
@@ -6768,6 +7219,7 @@ export default function NYC(){
           storyHeldCorner:(g.cornersOwned||[]).includes(boro)&&!coldCorners.includes(getBoro(boro)?.short||boro)?(g.storyHeldCorner||0)+1:g.storyHeldCorner||0,
           // Five Boroughs streak — track consecutive days holding all 5
           fiveBoroStreak:checkFiveBoroWin(g,world)?(g.fiveBoroStreak||0)+1:0,
+          infamy:Math.max(0,(g.infamy||0)-INFAMY_DECAY_PER_SLEEP), // slow decay
           fiveBoroStartDay:checkFiveBoroWin(g,world)&&!(g.fiveBoroStreak>0)?nextDay:g.fiveBoroStartDay,
           informsToday:0,patrolEncountered:false,feedUsed:false};
         // Auto-eat: if hungry and have food, consume one item overnight
@@ -6922,7 +7374,8 @@ export default function NYC(){
         "","AVAILABLE TO HIRE:",
         ...ARMY_UNITS.filter(u=>getArmySlots(army)+u.slots<=MAX_ARMY_SIZE).map(u=>"  HIRE "+u.name.toUpperCase().replace(/ /g,"_")+" — $"+u.cost+" (upkeep $"+u.upkeep+"/day) · "+u.desc),
         slots>=MAX_ARMY_SIZE?"Army at max capacity ("+MAX_ARMY_SIZE+" slots).":"Slots used: "+slots+"/"+MAX_ARMY_SIZE,
-        "","FIRE [unit] to dismiss. DEPLOY [borough] to station army there. ARMY STATUS for battlefield info.");
+        "","FIRE [unit] to dismiss.",
+        "DEPLOY [borough] to station army (ONE borough only — redirecting undefends the previous).");
       return;
     }
     const hireMx=C.match(/^HIRE (.+)$/);
@@ -6988,8 +7441,9 @@ export default function NYC(){
         "Units stationed: "+army.map(u=>u.name).join(", "),
         gs.cornersOwned?.includes(target.id)?`Corner tier: ${tier.icon} ${tier.name} — ${tier.desc}`:"No corner here yet — CLAIM one.",
         "Defense bonus: +"+getArmyDefenseBonus(army)+" vs rival attacks.",
-        "Army earns income at 60% rate while deployed without you.",
-        "","DEPLOY [other boro] to redirect. Army can only hold one borough.");
+        "Army earns 60% income while deployed. You can still visit for HOT rate.",
+        "⚠ Army holds ONE borough only. DEPLOY elsewhere to redirect — this corner goes COLD.",
+        "HIRE LIEUTENANT for +5 defense. FIRE [unit] to dismiss.","");
       return;
     }
     // CORNERS — corner map with tier display
@@ -7174,11 +7628,41 @@ export default function NYC(){
     // SHELTER — check in or view
     if(C==="SHELTER"){
       const s=SHELTERS[boro];
-      if(!s){push(`No shelter in ${getBoro(boro)?.name}.`);return;}
-      if(gs.isUndoc){push(`You can't sign in. No ID, no bed. That's the rule.`,`Try CONNECT for community alternatives.`);return;}
+      if(!s){push(`No shelter listed in ${getBoro(boro)?.name}. Try SHELTERS to see other boroughs.`);return;}
+      if(gs.isUndoc){push(`Can't sign in — no ID.`,`Try CONNECT for community alternatives, or REST in a doorway.`);return;}
+      if(gs.isDrifter){
+        push(`${gs.dogName||"Your dog"} isn't allowed inside. No exceptions.`,
+          `The dog-friendly spots aren't official — they're people. LOOK around or TALK to someone.`);
+        setInlineChoice({prompt:"Dog can't come in. What do you do?",choices:[
+          {label:"FIND SPOT",icon:"🐕",cmd:"REST",    color:"#c9a96e"},
+          {label:"LOOK",     icon:"👁",cmd:"LOOK",    color:"#555"},
+          {label:"LEAVE",    icon:"🚶",cmd:"MOVE",    color:"#333"},
+        ]});
+        return;
+      }
       const beds=shelterBeds(boro,gs.day);
       const checkins=world.shelterCheckins?.[boro]||0;
-      push(`${s.name}`,`Beds: ${Math.max(0,beds-checkins)}/${beds} available`,`Curfew: ${s.curfew}:00`,`Rules: ${s.rules.join(" · ")}`,``,`Type CHECKIN to secure a bed.`);
+      const spotsLeft=Math.max(0,beds-checkins);
+      if(spotsLeft===0){
+        push(`${s.name} is full tonight.`,`${beds} beds, all taken.`,
+          weather.id==="blizzard"?`City opens overflow during blizzards — try SHELTERS to find another.`:`Try another borough — SHELTERS to see availability.`);
+        return;
+      }
+      push(`${s.name} · ${spotsLeft}/${beds} beds · Curfew ${s.curfew}:00`,`${s.rules.join(" · ")}`,``);
+      // Show inline choice so player doesn't need to know CHECKIN command
+      const hasProduct=Object.values(gs.product||{}).some(v=>v>0)||Object.values(gs.cooked||{}).some(v=>v>0);
+      if(hasProduct){
+        push(`⚠ You're holding product — can't check in.`);
+        setInlineChoice({prompt:"Carrying product. Shelter requires clean entry.",choices:[
+          {label:"STASH IT",icon:"📦",cmd:"STASH",   color:"#e9c46a"},
+          {label:"SKIP IT", icon:"🚶",cmd:"LOOK",    color:"#333"},
+        ]});
+      } else {
+        setInlineChoice({prompt:s.name+" — "+spotsLeft+" beds available",choices:[
+          {label:"CHECK IN",icon:"🏠",cmd:"CHECKIN", color:"#2a9d8f"},
+          {label:"NOT YET", icon:"🚶",cmd:"LOOK",    color:"#333"},
+        ]});
+      }
       return;
     }
 
@@ -7191,23 +7675,52 @@ export default function NYC(){
       const checkins=world.shelterCheckins?.[boro]||0;
       if(checkins>=beds){push(`${s.name} is full tonight. ${weather.id==="blizzard"?"City should open overflow — try another borough.":"Try another borough."}`);return;}
       // check if carrying product (no product rule)
-      const hasProduct=Object.values(gs.product).some(v=>v>0)||Object.values(gs.cooked||{}).some(v=>v>0);
+      const hasProduct=Object.values(gs.product||{}).some(v=>v>0)||Object.values(gs.cooked||{}).some(v=>v>0);
       if(hasProduct){push(`Can't check in holding product. STASH it first or skip the shelter.`);return;}
-      // register checkin in world
+      // ── Random shelter events — lighter than street but not zero-risk ──────
+      const shelterEvents=[
+        // Bad — lower probability than street
+        {w:5,  type:"theft",     msg:"Woke up and your cash was lighter. Someone on the bunk above. -$%d.",      cash:-1},
+        {w:4,  type:"bedbugs",   msg:"Woke up with bites everywhere. Health -5 and it'll itch for days.",        health:-5},
+        {w:3,  type:"fight",     msg:"Fight broke out in the dorm at 3am. You caught an elbow. Health -8.",      health:-8},
+        {w:3,  type:"spotted",   msg:"Someone from the block recognized you. Word gets around. Heat +1.",         heat:1},
+        {w:2,  type:"staff",     msg:"Staff searched the dorm. You were clean but heat's up anyway. Heat +1.",   heat:1},
+        // Good — more likely
+        {w:15, type:"clean",     msg:"",                                                                           good:true},
+        {w:8,  type:"met_someone",msg:"Guy on the next bunk knew someone useful. Rep +1 with a contact.",        rep:true},
+        {w:6,  type:"info",      msg:"Overheard staff talking about cop sweeps tomorrow. Useful.",               intel:true},
+        {w:4,  type:"extra_meal",msg:"Second meal tray unclaimed. You took it. Hunger +20.",                     hunger:20},
+      ];
+      const totalW2=shelterEvents.reduce((s,e)=>s+e.w,0);
+      let roll2=Math.random()*totalW2;
+      const sEvt=shelterEvents.find(e=>{roll2-=e.w;return roll2<=0;})||shelterEvents[5];
+
       const ws={...world,shelterCheckins:{...(world.shelterCheckins||{}),[boro]:(world.shelterCheckins?.[boro]||0)+1}};
       setWorld(ws);saveWorld(ws);
-      updGs(g=>({...g,
-        survival:{...g.survival,
-          hunger:clamp(g.survival.hunger+15,0,100),
-          warmth:100,health:clamp(g.survival.health+15,0,100),
-          energy:100,mental:clamp((g.survival.mental||70)+20,0,100)},
-        heat:clamp(g.heat-1,0,10),
-        shelterCheckins:{...(g.shelterCheckins||{}),[boro]:(g.shelterCheckins?.[boro]||0)+1},
-        // drifter story: dog-friendly shelter count (isDrifter only does this if they found a place that allows dogs)
-        storyDogShelters:g.isDrifter?(g.storyDogShelters||0)+1:g.storyDogShelters||0,
-      }));
+      updGs(g=>{
+        const cashLoss=sEvt.cash?rnd(Math.round(Math.min(g.cash*0.1,10)),Math.round(Math.min(g.cash*0.2,35))):0;
+        const evtMsg=sEvt.msg.includes('%d')?sEvt.msg.replace('%d',cashLoss):sEvt.msg;
+        if(!sEvt.good&&sEvt.msg)setTimeout(()=>push(``,evtMsg,``),400);
+        else if(sEvt.type==="met_someone")setTimeout(()=>push(``,evtMsg,``),400);
+        else if(sEvt.type==="info")setTimeout(()=>push(``,evtMsg,`LAY LOW tomorrow.`),400);
+        else if(sEvt.type==="extra_meal")setTimeout(()=>push(``,evtMsg,``),400);
+        return ({...g,
+          cash:clamp(g.cash-cashLoss,0,9999),
+          survival:{...g.survival,
+            hunger:clamp(g.survival.hunger+15+(sEvt.hunger||0),0,100),
+            warmth:100,
+            health:clamp(g.survival.health+15+(sEvt.health||0),0,100),
+            energy:100,
+            mental:clamp((g.survival.mental||70)+20,0,100)},
+          heat:clamp(g.heat-1+(sEvt.heat||0),0,10),
+          shelterCheckins:{...(g.shelterCheckins||{}),[boro]:(g.shelterCheckins?.[boro]||0)+1},
+          storyDogShelters:g.isDrifter?(g.storyDogShelters||0)+1:g.storyDogShelters||0,
+        });
+      });
       trackContract("shelter");
-      push(`You sign in at ${s.name}.`,`A real bed. Warm. Safe.`,`Hunger eased. Warmth restored. Mental health up.`,`You sleep better than you have in weeks.`);journalEvent("shelter",s.name);
+      push(`You sign in at ${s.name}.`,`A real bed. Warm. Safe for now.`,
+        `Hunger eased. Warmth restored. Mental up.`);
+      journalEvent("shelter",s.name);
       return;
     }
 
@@ -7271,7 +7784,11 @@ export default function NYC(){
         const scavItem=rollItemFromSlot(["weapon","hands","feet","accessory"][rnd(0,3)],luckBonus);
         updGs(g=>({...g,inventory:[...g.inventory,scavItem]}));
         result+=" Also found: "+itemDropMsg(scavItem)+".";
+        setTimeout(()=>offerEquip(scavItem),300);
       }
+      // If the main find was a named gear item, offer to equip it too
+      const namedFind=BASE_ITEMS.find(i=>result.includes(i.name));
+      if(namedFind&&namedFind.slot&&namedFind.slot!=="consumable")setTimeout(()=>offerEquip(namedFind),300);
       updGs(g=>({...g,lastScavenge:now2,survival:{...g.survival,energy:clamp(g.survival.energy-30,0,100)}}));
       push("","🔍 SCAVENGE — "+b.name,"",result,"","Energy -30. Cooldown 1 hour. SEARCH for quick finds anytime.");
       return;
@@ -7724,7 +8241,8 @@ export default function NYC(){
       const price=prices[rarity];
       if(gs.cash<price){push(`Need $${price}. Have $${gs.cash}.`);return;}
       updGs(g=>({...g,cash:g.cash-price,inventory:[...g.inventory,item]}));
-      push(`Bought: ${ITEM_RARITY[rarity].prefix}${name} ($${price})`,`Slot: ${t.slot} — EQUIP ${name} to wear it.`);
+      push(`Bought: ${ITEM_RARITY[rarity].prefix}${name} ($${price})`,`Slot: ${t.slot}`);
+      setTimeout(()=>offerEquip(item),300);
       return;
     }
 
@@ -7815,16 +8333,70 @@ export default function NYC(){
       }
       if(used)push("",msg,"");return;
     }
+    // USE STASH — junkie uses their own product (from sell inventory)
+    if(C==="USE STASH"||C==="USE BUY"){
+      if(!gs.isJunkie){push(`That's not how you operate.`);return;}
+      const sub2=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
+      if(C==="USE STASH"){
+        const stashQty=(gs.product[sub2.product]||0);
+        if(stashQty<=0){push(`Nothing in your stash. BUY ${sub2.name.toUpperCase()} to restock.`);return;}
+        // Use exactly the same USE logic but from product inventory
+        const hEvts2=HIGH_EVENTS[sub2.name]||HIGH_EVENTS.weed;
+        const hEvt2=hEvts2[rnd(0,hEvts2.length-1)];
+        const addGainMult2=PRODUCTS[sub2?.product]?.addGainMult||1.0;
+        const addGain2=Math.round((rnd(3,8)+Math.floor((gs.addiction||0)/20))*addGainMult2);
+        push(``,`${sub2.icon} You dip into your own supply.`,hEvt2.msg,
+          `Addiction: ${Math.min(100,(gs.addiction||0)+addGain2)}/100`,
+          `Stash: ${stashQty-1} left. That was supposed to be sold.`,``);
+        updGs(g=>{
+          const eff2=hEvt2.effect||{};
+          let ng={...g,lastUsed:g.day,withdrawalDay:0,highActive:true,
+            addiction:Math.min(100,(g.addiction||0)+addGain2),
+            product:{...g.product,[sub2.product]:Math.max(0,(g.product[sub2.product]||0)-1)},
+            storyHustleCash:(g.storyHustleCash||0)-20, // note the lost sale
+          };
+          if(eff2.health)ng={...ng,survival:{...ng.survival,health:clamp(ng.survival.health+eff2.health,0,100)}};
+          if(eff2.mental)ng={...ng,survival:{...ng.survival,mental:clamp((ng.survival.mental||70)+eff2.mental,0,100)}};
+          if(eff2.energy)ng={...ng,survival:{...ng.survival,energy:clamp(ng.survival.energy+(eff2.energy||0),0,100)}};
+          return ng;
+        });
+        return;
+      }
+      // USE BUY — fall through to normal USE handler
+    }
+
     if(C==="USE"){
       if(gs.isVampire){push(`FEED is your equivalent.`);return;}
       if(gs.isUndoc){push(`You don't use. You survive.`);return;}
       const sub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       const hasProd=sub?.product&&(gs.product[sub.product]||0)>0;
+      // Junkie temptation — if they have product and addiction is climbing, offer stash
+      if(gs.isJunkie&&hasProd&&(gs.addiction||0)>=50){
+        const stashQty=gs.product[sub.product]||0;
+        const withdrawal=(gs.addiction||0)>70;
+        push(``,
+          withdrawal
+            ?`💨 Withdrawal hitting. You have ${stashQty} unit${stashQty>1?"s":""} of ${sub.name} in your stash.`
+            :`You have ${stashQty} unit${stashQty>1?"s":""} of ${sub.name} sitting in your bag.`,
+          `Using your own product saves $${sub.buyCost||0} but cuts into what you were going to sell.`,``);
+        setInlineChoice({
+          prompt:withdrawal
+            ?`Withdrawal at ${gs.addiction}/100. Your own ${sub.name} is right there.`
+            :`Addiction at ${gs.addiction}/100. The ${sub.name} in your bag is for selling. Or is it?`,
+          choices:[
+            {label:`USE STASH`,  icon:sub.icon, cmd:"USE STASH",  color:"#e63946"},
+            {label:`BUY INSTEAD`,icon:"💵",cmd:"USE BUY",   color:"#e9c46a"},
+            {label:`HOLD OFF`,   icon:"💪",cmd:"ADDICTION", color:"#555"},
+          ]
+        });
+        return;
+      }
       const canBuy=sub?.buyCost>0&&gs.cash>=sub.buyCost;
       if(!hasProd&&!canBuy){push(`${sub?.icon} No ${sub?.name}. Running dry.`,`Addiction: ${getAddictionLevel(gs.addiction||0).name} (${gs.addiction||0}/100)`);return;}
       const hEvts=HIGH_EVENTS[sub.name]||HIGH_EVENTS.weed;
       const hEvt=hEvts[rnd(0,hEvts.length-1)];
-      const addGain=rnd(3,8)+Math.floor((gs.addiction||0)/20);
+      const addGainMult=PRODUCTS[sub?.product]?.addGainMult||1.0;
+      const addGain=Math.round((rnd(3,8)+Math.floor((gs.addiction||0)/20))*addGainMult);
       push("",`${sub.icon} You use.`,hEvt.msg,`Addiction now: ${Math.min(100,(gs.addiction||0)+addGain)}/100`,"");
       updGs(g=>{
         const eff=hEvt.effect||{};
@@ -7836,6 +8408,7 @@ export default function NYC(){
         if(eff.mental)ng={...ng,survival:{...ng.survival,mental:clamp((ng.survival.mental||70)+eff.mental,0,100)}};
         if(eff.energy)ng={...ng,survival:{...ng.survival,energy:clamp(ng.survival.energy+(eff.energy||0),0,100)}};
         if(eff.heat)ng={...ng,heat:clamp(ng.heat+eff.heat,0,10)};
+        if(eff.addiction_bonus)ng={...ng,addiction:Math.min(100,ng.addiction+(eff.addiction_bonus||0))};
         return ng;
       });
       return;
@@ -8651,7 +9224,7 @@ export default function NYC(){
       if(!gs.isFixer&&!hasSkill(gs,"front_credit")&&!hasSkill(gs,"silver_tongue")){push(`You don't have the credit for that.`);return;}
       const pKey=frontM[1].toLowerCase();const qty=parseInt(frontM[2]);
       if(!PRODUCTS[pKey]){push(`Unknown product.`);return;}
-      const price=Math.round(mktPrice(boro,pKey,gs.day,weather)*PRODUCTS[pKey].bm*qty);
+      const price=Math.round(mktPrice(boro,pKey,gs.day,weather)*getBuyMult(boro,pKey,gs.day,world.supply)*qty);
       if(gs.debtOwed>200){push(`Already owe $${gs.debtOwed}. Pay your debt first.`);return;}
       updGs(g=>applyXP({...g,product:{...g.product,[pKey]:g.product[pKey]+qty},debtOwed:(g.debtOwed||0)+price},5*qty,"deal"));
       push(`Product fronted. ${qty}× ${PRODUCTS[pKey].name}.`,`Owe $${price} by next day or rep drops.`);return;
@@ -8669,6 +9242,13 @@ export default function NYC(){
     if(C==="ARBITRAGE"){
       const lines=["💹 ARBITRAGE — Buy cheap, sell high:"];
       Object.entries(PRODUCTS).forEach(([pKey,prod])=>{
+        // Skip heroin in arbitrage unless player has connect somewhere
+        if(pKey==="heroin"){
+          const hasAnyConnect=prod.sourceBoros&&prod.sourceBoros.some(sb=>
+            NPCS.filter(n=>n.b===sb).some(n=>(npcs.find(x=>x.id===n.id)?.rep||0)>=prod.connectReq)
+          );
+          if(!hasAnyConnect)return;
+        }
         const prices=BOROUGHS.map(b=>({b,p:mktPrice(b.id,pKey,gs.day,weather,world.supply)}));
         const cheapest=prices.reduce((a,b)=>b.p<a.p?b:a);
         const priciest=prices.reduce((a,b)=>b.p>a.p?b:a);
@@ -8855,6 +9435,77 @@ export default function NYC(){
         }));
       return;
     }
+    // CLEAN [player] — fixer washes another player's heat for a fee
+    const cleanM=C.match(/^CLEAN (.+)$/);
+    if(cleanM){
+      if(!gs.isFixer){push(`That's not your operation. You're not a fixer.`);return;}
+      const tName=cleanM[1].trim();
+      if(tName.toLowerCase()===gs.name.toLowerCase()){push(`Can't clean yourself. Find someone else.`);return;}
+      const tData=world.players?.[tName];
+      if(!tData){push(`No player named ${tName}.`);return;}
+      const tHeat=tData.heat||0;
+      if(tHeat<3){push(`${tName} isn't hot enough to need cleaning. Heat ${tHeat}/10.`);return;}
+      const fee=Math.round(tHeat*15); // higher heat = higher fee
+      if(gs.cash<20){push(`Need at least $20 to run the operation.`);return;}
+      // Notify the target
+      const cleanDrop=rnd(2,4);
+      const ws={...world,playerAlerts:{...(world.playerAlerts||{}),[tName]:[
+        ...((world.playerAlerts||{})[tName]||[]),
+        {msg:`🔧 Someone cleaned your file. Heat -${cleanDrop}. Cost: $${fee}.`,time:Date.now()}
+      ]}};
+      setWorld(ws);saveWorld(ws);
+      updGs(g=>applyXP({...g,cash:g.cash+fee,storyCleanedCash:(g.storyCleanedCash||0)+fee},12,"hustle"));
+      push(``,`🤝 CLEAN — ${tName}`,
+        `You make a few calls. Pull a few strings.`,
+        `Their heat drops ${cleanDrop} points. Your fee: $${fee}.`,
+        `They don't know who did it. That's the point.`,``);
+      return;
+    }
+
+    // SIGNAL [topic] — schizo reads patterns others can't see
+    if(C==="SIGNAL"||C.match(/^SIGNAL\b/)){
+      if(!gs.isSchizo){push(`You don't hear the signal.`);return;}
+      if(!hasSkill(gs,"the_signal")){push(`Unlock The Signal skill first. Type SKILLS.`);return;}
+      const signals=[
+        {type:"market",  msg:`📡 The pattern is clear. Something's about to shift in the market. SCOUT ${BOROUGHS[rnd(0,BOROUGHS.length-1)].name} before anyone else does.`},
+        {type:"rival",   msg:`📡 You see it before it happens. A rival is moving on someone's corner in ${getBoro(boro)?.name}. It's 48 hours out.`},
+        {type:"product", msg:`📡 Three symbols on a wall you've been watching for weeks. Product shortage coming. Buy now, sell in 2 days.`},
+        {type:"cop",     msg:`📡 The cop rotation is off. Something changed. Heat decay will be faster tonight — good time to LAY LOW.`, heat:-1},
+        {type:"npc",     msg:`📡 Someone in this borough wants to talk. They won't ask. You have to find them. LOOK twice today.`},
+        {type:"static",  msg:`📡 Nothing. Static. The signal is quiet. Maybe tomorrow.`},
+      ];
+      const sig=signals[rnd(0,signals.length-1)];
+      if(sig.heat)updGs(g=>({...g,heat:clamp(g.heat+sig.heat,0,10)}));
+      updGs(g=>applyXP(g,8,"scout"));
+      push(``,sig.msg,``);
+      return;
+    }
+
+    // PROPHECY — schizo predicts market prices 2 days ahead
+    if(C==="PROPHECY"){
+      if(!gs.isSchizo){push(`That's not for you.`);return;}
+      if(!hasSkill(gs,"prophet")){push(`Unlock Prophet skill first. Type SKILLS.`);return;}
+      if(gs.prophecyUsed===gs.day){push(`You've already seen what you can see today. Wait until tomorrow.`);return;}
+      // Generate predictions for each borough — 70% accuracy means some are wrong
+      const predictions=BOROUGHS.map(b=>{
+        const product=["weed","pills","powder"][rnd(0,2)];
+        const current=mktPrice(b.id,product,gs.day,getWeather(gs.day),world.supply);
+        const accurate=Math.random()<0.7;
+        const futurePrice=accurate?
+          Math.round(current*(0.8+Math.random()*0.6)):  // real prediction
+          Math.round(current*(0.5+Math.random()*1.0));  // wrong prediction
+        const direction=futurePrice>current?"▲":"▼";
+        return `  ${b.short}: ${product} ${direction} $${futurePrice} in 2 days ${accurate?"":"(uncertain)"}`;
+      });
+      updGs(g=>({...g,prophecyUsed:g.day}));
+      updGs(g=>applyXP(g,15,"scout"));
+      push(``,`📡 PROPHECY — what the signal shows`,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `These are patterns, not facts. 70% accurate.`,``,
+        ...predictions,
+        ``,`The signal doesn't explain itself. You interpret what you can.`,``);
+      return;
+    }
+
     if(C==="VISION"){
       if(!gs.isSchizo){push("You don't see visions. Type LOOK.");return;}
       const hasVisionSkill=(gs.skills||[]).includes("the_knowing");
@@ -9429,6 +10080,27 @@ export default function NYC(){
             })}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
+            {/* Product mini-indicator — shows what you're carrying */}
+            {(()=>{
+              const prod=gs.product||{};
+              const parts=Object.entries(prod).filter(([,v])=>v>0).map(([k,v])=>
+                `${PRODUCTS[k]?.icon||""}${v}`
+              );
+              const weight=getCarryWeight(prod);
+              const over=weight>MAX_CARRY_WEIGHT;
+              if(parts.length===0)return null;
+              return(
+                <div style={{fontSize:7,padding:"1px 5px",
+                  background:over?"#e6394622":"#2a9d8f11",
+                  border:`1px solid ${over?"#e63946":"#2a9d8f33"}`,
+                  color:over?"#e63946":"#555",cursor:"pointer",
+                  fontFamily:"'Share Tech Mono',monospace"}}
+                  onClick={()=>tapCmd("STATUS")}
+                  title={`Carrying: ${weight.toFixed(1)}/${MAX_CARRY_WEIGHT} weight units${over?" — OVERLOADED":""}`}>
+                  {parts.join(" ")}{over?" ⚠":""}
+                </div>
+              );
+            })()}
             {(gs.skillPoints||0)>0&&<div style={{fontSize:7,padding:"1px 5px",background:"#e9c46a22",border:"1px solid #e9c46a",color:"#e9c46a",cursor:"pointer"}} onClick={()=>setTab("skills")}>⚡{gs.skillPoints}pt</div>}
             {!gs.isFixer&&!gs.isRat&&<div style={{fontSize:7,padding:"1px 5px",border:`1px solid ${(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]-1)?"#e63946":"#2a2a2a"}`,color:(gs.hustleCount||0)>=(HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"])?"#e63946":"#333"}}>H {gs.hustleCount||0}/{HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]}</div>}
             {Object.keys(gs.activeQuests||{}).length>0&&<div style={{fontSize:7,padding:"1px 5px",background:"#2a9d8f22",border:"1px solid #2a9d8f",color:"#2a9d8f",cursor:"pointer"}} onClick={()=>setTab("quests")}>📋{Object.keys(gs.activeQuests||{}).length}</div>}
