@@ -6299,15 +6299,19 @@ export default function NYC(){
     }
 
     // BUY [bodega item] — override to check bodega first
-    const bodbuyM=C.match(/^BUY (COFFEE|SANDWICH|CHIPS|WATER|BEER|CIGARETTES|ASPIRIN|SOUP|METROCARD|ENERGYDRINK|HOTDOG|LARGE COFFEE|ENERGY DRINK|HOT DOG|LARGE|BANDAGE|FIRST AID KIT|FIRST AID|NEOSPORIN|THUNDERBIRD|FORTYWINE)$/);
-    if(bodbuyM){
-      const itemKey=Object.keys(BODEGA_ITEMS).find(k=>
-        k===bodbuyM[1].toLowerCase()||
-        BODEGA_ITEMS[k].name.toLowerCase()===bodbuyM[1].toLowerCase()||
-        BODEGA_ITEMS[k].name.toLowerCase().includes(bodbuyM[1].toLowerCase())
-      );
-      const bItem=itemKey?BODEGA_ITEMS[itemKey]:null;
-      if(bItem){
+    // BUY [bodega item] — match against BODEGA_ITEMS directly, no hardcoded allowlist
+    const bodbuyM=C.match(/^BUY (.+)$/);
+    const bodbuyItem=bodbuyM?(()=>{
+      const query=bodbuyM[1].toLowerCase().trim();
+      // Priority: exact key → exact name → name includes query → query includes key
+      const key=Object.keys(BODEGA_ITEMS).find(k=>k===query)||
+        Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase()===query)||
+        Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase().includes(query))||
+        Object.keys(BODEGA_ITEMS).find(k=>query.includes(k)&&k.length>3); // min 4 chars to avoid false matches
+      return key?{key,item:BODEGA_ITEMS[key]}:null;
+    })():null;
+    if(bodbuyM&&bodbuyItem){
+      const {key:itemKey,item:bItem}=bodbuyItem;
         if(gs.cash<bItem.price){push(`Need $${bItem.price}. Have $${gs.cash}.`);return;}
         updGs(g=>{
           let ng={...g,cash:g.cash-bItem.price};
@@ -6337,7 +6341,6 @@ export default function NYC(){
         const bMsg=bMsgs[itemKey]?bMsgs[itemKey][rnd(0,bMsgs[itemKey].length-1)]:null;
         push(`🏪 ${bItem.name} — $${bItem.price}`,bMsg||bItem.desc,`${Object.entries(bItem.effect||{}).filter(([,v])=>v!==0).map(([k,v])=>`${k} ${v>0?"+":""}${v}`).join(" · ")}`);
         return;
-      }
     }
     // SCOUT DOG — drifter special
     if(C==="SCOUT DOG"||C==="DOG SCOUT"){
