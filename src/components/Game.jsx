@@ -3749,6 +3749,27 @@ export default function NYC(){
           setTimeout(()=>setFeed(f=>[...f,``,`⚠ Your ${getBoro(prevBoro)?.name||prevBoro} corner was taken while you moved.`,`MOVE ${prevBoro.toUpperCase()} and RECLAIM it.`,``]),200);
         }
       }
+      // ── Corner expiry for inactive players ──────────────────────────────
+      // ~10% per heartbeat ≈ runs every ~3 min. Active players clean the world.
+      const INACTIVE_CORNER_DAYS=7;
+      if(Math.random()<0.1){
+        const now3=Date.now();
+        let cwsChanged=false;
+        let cws={...ws};
+        Object.entries(cws.corners||{}).forEach(([boroId,ownerName])=>{
+          if(!ownerName||ownerName===g.name)return;
+          const ownerData=cws.players?.[ownerName];
+          const lastSeen=ownerData?.lastSeen||0;
+          const daysSinceOnline=Math.floor((now3-lastSeen)/(1000*60*60*24));
+          if(daysSinceOnline>=INACTIVE_CORNER_DAYS){
+            const nc={...cws.corners};delete nc[boroId];
+            const nlv={...cws.cornerLastVisit};delete nlv[ownerName+":"+boroId];
+            cws={...cws,corners:nc,cornerLastVisit:nlv};
+            cwsChanged=true;
+          }
+        });
+        if(cwsChanged){setWorld(cws);saveWorld(cws);return;}
+      }
       saveWorld(ws);
     },20000);
     // Fallback poll every 8 seconds (covers any missed real-time events)
@@ -4807,7 +4828,11 @@ export default function NYC(){
           `ROOM ${dungeon.currentRoom+1}/${dungeon.rooms.length} — ${nextRoom.id.replace(/_/g," ").toUpperCase()}`,
           nextRoom.desc,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
         const ev=nextRoom.event;
-        if(ev==="clear"){push("Clear. Nothing here. Move on — ADVANCE.");return;}
+        if(ev==="clear"){
+          setDungeon(d=>({...d,currentRoom:d.currentRoom+1}));
+          push("Clear. Nothing here.",isLastRoom?"EXTRACT to leave.":"ADVANCE to continue.");
+          return;
+        }
         if(ev==="loot_cache"||ev==="loot_cache_small"||ev==="loot_cache_large"||ev==="loot_jackpot"){
           const mult=ev==="loot_jackpot"?3:ev==="loot_cache_large"?2:ev==="loot_cache_small"?0.5:1;
           const cashMin=Math.floor(dungeon.cashRange[0]*mult*dungeon.lootMultiplier);
@@ -4862,7 +4887,7 @@ export default function NYC(){
           resolveCombat({...gs}, enemies[0],
             ()=>{
               push(`First one down. Second is coming — ADVANCE.`);
-              setDungeon(d=>({...d,currentRoom:d.currentRoom})); // stay, second fight pending
+              setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:{...nextRoom,enemies:[enemies[1]]},event:"fight"}));
             },
             ()=>{setDungeon(d=>({...d,status:"failed"}));push(`Overwhelmed. Run over.`);},
             ()=>{push(`Backed off. ADVANCE to re-engage or EXTRACT.`);}
@@ -4884,7 +4909,7 @@ export default function NYC(){
           setInlineChoice({prompt:nextRoom.desc,choices:[
             {label:"SNEAK",  icon:"👣",cmd:"SNEAK"},
             {label:"SEARCH", icon:"🔍",cmd:"SEARCH"},
-            {label:"ADVANCE",icon:"➡",    cmd:"ADVANCE",color:"#2a9d8f"},
+            {label:"SKIP",   icon:"➡", cmd:"SKIP ROOM",color:"#555"},
           ]});return;
         }
         if(ev==="skill_check"){
@@ -4936,6 +4961,12 @@ export default function NYC(){
       }
 
       // PAY — pay snitch NPC
+      if(C==="SKIP ROOM"||C==="SKIP"){
+        const isLastR=dungeon.currentRoom>=dungeon.rooms.length-1;
+        push(`You move past without engaging.`,isLastR?"EXTRACT to leave.":"ADVANCE to continue.");
+        setDungeon(d=>({...d,currentRoom:d.currentRoom+1,pendingEvent:null}));
+        return;
+      }
       if(C==="PAY"){
         if(gs.cash<20){push("Need $20.");return;}
         const cash=rnd(80,250);const luckBonus=getItemStats(gs.equipment||{}).luck||0;
