@@ -4562,6 +4562,7 @@ export default function NYC(){
     const h=gs.survival?.health||100;
     const hunger=gs.survival?.hunger||100;
     const energy=gs.survival?.energy||100;
+    const warmth=gs.survival?.warmth||100;
     const owned=gs.cornersOwned||[];
     const lastC=gs.lastCollect||0;
     const hoursA=Math.min((Date.now()-lastC)/3600000,12);
