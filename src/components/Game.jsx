@@ -2297,18 +2297,18 @@ const TUTORIAL_STEPS = [
     reward:{cash:20, xp:30} },
 
   // ── DAY 2 — Learning the city ───────────────────────────────────────────────
-  { id:"talk", day:2, phase:"social",
-    trigger:"TALK",
-    msg:"Day 2. Find your contact. Type TALK RAY (or TALK SMOKE, CARLOS, DEE, MARIA).",
-    prompt:"NPCs run this city. Build rep with them — talk to them, do their jobs, earn trust. Quests unlock at rep 2.",
-    hint:"→ type TALK RAY",
-    reward:null },
   { id:"scout", day:2, phase:"money",
     trigger:"SCOUT",
-    msg:"Before buying anything: SCOUT the market. Prices move.",
+    msg:"Day 2. SCOUT the market before you do anything else. Prices move.",
     prompt:"A bag worth $90 here might go for $140 in Manhattan. The whole game is knowing the spread.",
     hint:"→ type SCOUT",
     reward:{cash:15} },
+  { id:"talk", day:2, phase:"social",
+    trigger:"TALK",
+    msg:"Now find your contact. Type TALK RAY (or TALK SMOKE, CARLOS, DEE, MARIA).",
+    prompt:"NPCs run this city. Build rep with them — talk to them, do their jobs, earn trust. Quests unlock at rep 2.",
+    hint:"→ type TALK RAY",
+    reward:null },
   { id:"move", day:2, phase:"explore",
     trigger:"MOVE",
     msg:"Try moving to a different borough. Type MOVE [borough name].",
@@ -3597,6 +3597,8 @@ export default function NYC(){
     if(!fresh)return;
     worldRef.current=fresh;
     const prevMsgCount=(wMsgs||[]).length;
+    // Use highest known message time to detect genuinely new messages
+    const lastKnownMsgTime=lastToastRef.current._lastMsgTime||0;
     // normalize: Supabase returns snake_case, game uses camelCase
     // messages column is just "messages" in both - should work
     // but player_alerts vs playerAlerts needs merging
@@ -3617,11 +3619,12 @@ export default function NYC(){
     setWMsgs(newMsgs);
     // auto scroll chat if open
     setTimeout(()=>{if(chatRef.current)chatRef.current.scrollTop=chatRef.current.scrollHeight;},50);
-    // count unread from others
-    if(newMsgs.length>prevMsgCount){
-      const newOnes=newMsgs.slice(prevMsgCount);
-      // Only toast/count genuine player chat — filter out SYSTEM broadcasts and activity entries
-      const fromOthers=newOnes.filter(m=>
+    // Only toast messages newer than the last one we've seen
+    if(newMsgs.length>0){
+      // Update the high-water mark
+      const latestTime=Math.max(...newMsgs.map(m=>m.time||m.ts||0));
+      const genuinelyNew=newMsgs.filter(m=>
+        (m.time||m.ts||0)>lastKnownMsgTime &&
         m.from &&
         m.from!==gsRef.current?.name &&
         m.from!=="SYSTEM" &&
@@ -3629,10 +3632,14 @@ export default function NYC(){
         m.type!=="activity" && m.type!=="event" && m.type!=="prestige" &&
         m.type!=="pvp" && m.type!=="world" && m.type!=="system"
       );
-      if(fromOthers.length>0){
-        if(tab!=="chat")setUnread(u=>u+fromOthers.length);
+      // Advance the watermark regardless so old messages never trigger again
+      if(latestTime>lastKnownMsgTime){
+        lastToastRef.current._lastMsgTime=latestTime;
+      }
+      if(genuinelyNew.length>0){
+        if(tab!=="chat")setUnread(u=>u+genuinelyNew.length);
         // Toast only for direct player chat — once per sender per 60 seconds
-        const latest=fromOthers[fromOthers.length-1];
+        const latest=genuinelyNew[genuinelyNew.length-1];
         if(latest&&latest.from&&Date.now()-(lastToastRef.current[latest.from]||0)>60000){
           lastToastRef.current[latest.from]=Date.now();
           setToast({from:latest.from,text:latest.text,arch:latest.arch,time:Date.now()});
@@ -4088,7 +4095,30 @@ export default function NYC(){
   };
 
   const continueGame=(saved)=>{
-    setGs(saved);
+    // Migrate saved character — patch any class flags that may be missing
+    // (added after the character was first created)
+    const arch=saved.archetype||{};
+    const archId=arch.id||"veteran";
+    const migrated={...saved,
+      isHooker:    saved.isHooker    ??archId==="hooker",
+      isJunkie:    saved.isJunkie    ??archId==="junkie",
+      isVampire:   saved.isVampire   ??archId==="vampire",
+      isGhost:     saved.isGhost     ??archId==="ghost",
+      isRat:       saved.isRat       ??archId==="rat",
+      isFixer:     saved.isFixer     ??archId==="fixer",
+      isDrifter:   saved.isDrifter   ??archId==="drifter",
+      isUndoc:     saved.isUndoc     ??archId==="undocumented",
+      isSchizo:    saved.isSchizo    ??archId==="schizo",
+      isSchemer:   saved.isSchemer   ??archId==="schemer",
+      isVeteran:   saved.isVeteran   ??archId==="veteran",
+      isHustler:   saved.isHustler   ??archId==="hustler",
+      infamy:      saved.infamy      ??0,
+      product:     saved.product     ??{weed:0,pills:0,powder:0,heroin:0},
+      cornersOwned:saved.cornersOwned??[],
+      army:        saved.army        ??[],
+      survival:    saved.survival    ??{health:100,hunger:75,warmth:60,energy:100,mental:70},
+    };
+    setGs(migrated);
     const weather=getWeather(saved.day);
     const _lastSeen=(world.players||{})[saved.name]?.lastSeen||Date.now();
     const _hoursAway=Math.max(0,Math.floor((Date.now()-_lastSeen)/3600000));
@@ -4710,7 +4740,7 @@ export default function NYC(){
       "DEPLOY":      {level:3, hint:"Reach Level 3 to deploy your army."},
       "FIRE":        {level:3, hint:"Reach Level 3 to manage your army."},
       "QUESTS":      {level:3, hint:"Reach Level 3 to unlock QUESTS."},
-      "TALK":        {level:2, hint:"Reach Level 2 to TALK to NPCs."},
+      "TALK":        {level:1, hint:"Reach Level 1 to TALK to NPCs."},
       "NPCS":        {level:2, hint:"Reach Level 2 to find NPCs."},
       "ACCEPT":      {level:2, hint:"Reach Level 2 to accept quests."},
       "SKILLS":      {level:2, hint:"Reach Level 2 to spend skill points."},
@@ -6032,7 +6062,7 @@ export default function NYC(){
     // CLIENT — hooker-specific income command
     if(C==="CLIENT"){
       if(!gs.isHooker){push(`That's not how you operate. Try HUSTLE.`);return;}
-      if(gs.survival.energy<15){push(`Too tired. You need to rest first.`);return;}
+      if(gs.survival.energy<20){push(`Too tired. REST to recover energy first.`);return;}
       const clientsToday=gs.hustleCount||0;
       const maxClients=HUSTLE_DAILY_MAX[gs.archetype?.id||"hooker"]||4; // use the proper cap
       if(clientsToday>=maxClients){push(`You've hit your limit for today. Come back tomorrow.`);return;}
@@ -6158,8 +6188,7 @@ export default function NYC(){
       return;
     }
     if(C==="REST"){
-      if(gs.survival.energy<10){push(`Too exhausted to even rest properly. You need to SLEEP.`);return;}
-      const hasStreetMedic=hasSkill(gs,"street_medic");
+      if(gs.survival.energy<10){push(`Too exhausted to even rest properly. You need to SLEEP.`);return;}      const hasStreetMedic=hasSkill(gs,"street_medic");
       const restHealthBonus=hasStreetMedic?25:10;
       const restBonus=gs.isUndoc?restHealthBonus-5:restHealthBonus;
       const ghostRestHeat=gs.archetype?.id==="ghost"?2:1;
@@ -6196,14 +6225,14 @@ export default function NYC(){
             hunger:clamp(g.survival.hunger-8,0,100),
             warmth:clamp(g.survival.warmth+(evt.type==="weather"?0:15),0,100),
             health:clamp(g.survival.health+restBonus+(evt.health||0),0,100),
-            energy:clamp(g.survival.energy-(evt.energyPenalty?5:10),0,100),
+            energy:clamp(g.survival.energy+(evt.energyPenalty?5:25),0,100),
             mental:clamp((g.survival.mental||70)+5+(evt.mental||0),0,100),
           },
           heat:clamp(g.heat-ghostRestHeat+(evt.heat||0),0,10),
         },3,"rest");
       });
       push(gs.isUndoc?`Found a community spot. Laid low.`:`Found cover. Laid low.`,
-        `Health +${restBonus} · Warmth +15 · Energy -10`+
+        `Health +${restBonus} · Warmth +15 · Energy +25`+
         (isGhostRest?` · Heat -2 (Ghost bonus)`:`· Heat -1`),
         gs.survival.warmth<25?`Still cold. SHELTER for full warmth restore.`:"");
       return;
