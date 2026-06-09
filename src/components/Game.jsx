@@ -4140,7 +4140,7 @@ export default function NYC(){
       survival:    saved.survival    ??{health:100,hunger:75,warmth:60,energy:100,mental:70},
     };
     setGs(migrated);
-    const weather=getWeather(saved.day);
+    setCPin(pinIn); // enable auto-save for this session
     const _lastSeen=(world.players||{})[saved.name]?.lastSeen||Date.now();
     const _hoursAway=Math.max(0,Math.floor((Date.now()-_lastSeen)/3600000));
     const _offRpt=_hoursAway>=1?generateOfflineReport(saved,world,_hoursAway):null;
@@ -4294,6 +4294,7 @@ export default function NYC(){
       `📖 ${TUTORIAL_STEPS[0].msg}`,
       `  ${TUTORIAL_STEPS[0].hint}`,``),650);
     setTutStep(0);setTutDone(false);
+    setCPin(pinIn); // enable auto-save for this session
     saveChar(state,pinIn);
     setPhase("game");
   };
@@ -7303,6 +7304,8 @@ export default function NYC(){
       });
       // reset shelter checkins for new day
       const ws2={...world,shelterCheckins:{}};setWorld(ws2);saveWorld(ws2);
+      // Explicit save on SLEEP — most important checkpoint
+      if(cPin)setTimeout(()=>{const g2=gsRef.current;if(g2)saveChar(g2,cPin);},500);
       // generate newspaper for new day
       const paper=generateNewspaper(gs,world);
       setNewspaper(paper);
