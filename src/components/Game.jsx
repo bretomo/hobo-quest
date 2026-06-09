@@ -6338,7 +6338,6 @@ export default function NYC(){
       const heroBuy=heroP?Math.round(heroP*getBuyMult(boro,"heroin",gs.day,world.supply)):0;
       const weedBuy=Math.round(weedP*getBuyMult(boro,"weed",gs.day,world.supply));
       const pillsBuy=Math.round(pillsP*getBuyMult(boro,"pills",gs.day,world.supply));
-      const powderP=mktPrice(boro,"powder",gs.day,weather,world.supply);
       const powderBuy=Math.round(powderP*getBuyMult(boro,"powder",gs.day,world.supply));
       push(`Intel — ${b.name} ${weather.icon}:`,
         `  Weed   buy $${weedBuy} → sell $${weedP}/bag ${trend(weedP,weedBase)} (+$${weedP-weedBuy} spread)`,
