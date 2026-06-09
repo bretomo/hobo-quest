@@ -5089,7 +5089,8 @@ export default function NYC(){
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
       push(`🟢 ALWAYS AVAILABLE:`,
         `  LOOK  STATUS  HUSTLE  REST  EAT  BODEGA  HEAL  SLEEP`,
-        `  SCOUT  BUY  SELL  SEARCH  WEATHER  MOVE  PANHANDLE`,``);
+        `  SCOUT  BUY  SELL  SEARCH  WEATHER  MOVE  PANHANDLE`,
+        `  WORK  TAKE [job] — day labor shifts (see HELP MONEY)`,``);
       if(lvl2>=2){
         push(`🔵 LEVEL 2+:`,
           `  TALK [name] — NPCs: RAY SMOKE CARLOS DEE MARIA`,
