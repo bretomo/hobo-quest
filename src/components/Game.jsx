@@ -4148,6 +4148,7 @@ export default function NYC(){
     };
     setGs(migrated);
     setCPin(pinIn); // enable auto-save for this session
+    setTutDone(saved.tutDone===true); // restore tutorial completion state
     const weather=getWeather(saved.day);
     const _lastSeen=(world.players||{})[saved.name]?.lastSeen||Date.now();
     const _hoursAway=Math.max(0,Math.floor((Date.now()-_lastSeen)/3600000));
@@ -4302,8 +4303,8 @@ export default function NYC(){
       `📖 ${TUTORIAL_STEPS[0].msg}`,
       `  ${TUTORIAL_STEPS[0].hint}`,``),650);
     setTutStep(0);setTutDone(false);
-    setCPin(pinIn); // enable auto-save for this session
-    saveChar(state,pinIn);
+    setCPin(pinIn);
+    saveChar({...state,tutDone:false},pinIn); // enable auto-save for this session
     setPhase("game");
   };
 
@@ -4378,6 +4379,8 @@ export default function NYC(){
       // Tutorial complete
       setTutDone(true);
       setTutStep(TUTORIAL_STEPS.length-1);
+      // Persist tutorial completion — never show again for this character
+      if(cPin)setTimeout(()=>{const g2=gsRef.current;if(g2)saveChar({...g2,tutDone:true},cPin);},300);
       setTimeout(()=>push(``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `✓ You know what you're doing now.`,
@@ -4832,12 +4835,14 @@ export default function NYC(){
         if(dungeon.currentRoom>=dungeon.rooms.length){
           push("You've cleared the warehouse. EXTRACT to leave.");return;
         }
+        // Read the room we're entering (currentRoom index = next room to process)
         const nextRoom=dungeon.rooms[dungeon.currentRoom];
+        const ev=nextRoom.event;
         push(``,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
           `ROOM ${dungeon.currentRoom+1}/${dungeon.rooms.length} — ${nextRoom.id.replace(/_/g," ").toUpperCase()}`,
           nextRoom.desc,`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,``);
-        const ev=nextRoom.event;
         if(ev==="clear"){
+          // Clear rooms advance immediately
           setDungeon(d=>({...d,currentRoom:d.currentRoom+1}));
           push("Clear. Nothing here.",isLastRoom?"EXTRACT to leave.":"ADVANCE to continue.");
           return;
@@ -10311,7 +10316,7 @@ export default function NYC(){
                     </div>
                   )}
                 </div>
-                <div onClick={()=>{setTutDone(true);setTutStep(TUTORIAL_STEPS.length-1);}}
+                <div onClick={()=>{setTutDone(true);setTutStep(TUTORIAL_STEPS.length-1);if(cPin)setTimeout(()=>{const g2=gsRef.current;if(g2)saveChar({...g2,tutDone:true},cPin);},300);}}
                   style={{fontSize:8,color:"#444",cursor:"pointer",padding:"2px 6px",border:"1px solid #222",borderRadius:2,flexShrink:0,whiteSpace:"nowrap"}}>
                   skip ×
                 </div>
