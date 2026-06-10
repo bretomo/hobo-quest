@@ -3868,36 +3868,43 @@ export default function NYC(){
           const sub=CLASS_SUBSTANCE[g.archetype?.id||"veteran"];
           const addLvl=getAddictionLevel(g.addiction||0);
           const addFx=addLvl.effects||{};
-          // Apply addiction stat penalties to display (not permanent — just active effects)
-          if(addFx.energyDrain){
-            return{...g,survival:{...g.survival,energy:clamp(g.survival.energy-addFx.energyDrain/60,0,100)}};
-          }
-          const hasSub=sub?.product&&(g.product[sub.product]||0)>0;
+          const hasSub=sub?.product&&(g.product?.[sub.product]||0)>0;
           const addiction=g.addiction||0;
           const daysSinceUse=g.day-(g.lastUsed||0);
           const withdrawThresh=Math.max(1,3-Math.floor(addiction/30));
           const inWithdrawal=daysSinceUse>withdrawThresh&&addiction>20;
+
+          // Apply passive addiction drains every tick (was early-returning before — fixed)
+          if(addFx.energyDrain)
+            g.survival={...g.survival,energy:clamp(g.survival.energy-addFx.energyDrain/60,0,100)};
+          if(addFx.hungerDrain)
+            g.survival={...g.survival,hunger:clamp(g.survival.hunger-addFx.hungerDrain/60,0,100)};
+          // Passive addiction creep — using drugs every day slowly pushes the number up
+          if(g.highActive&&Math.random()<0.12)
+            g.addiction=Math.min(100,g.addiction+1);
+
           if(inWithdrawal){
             const wEvts=WITHDRAWAL_EVENTS[sub?.name]||WITHDRAWAL_EVENTS.stress;
             const wEvt=wEvts[Math.floor(Math.random()*wEvts.length)];
             const severity=Math.floor(addiction/15);
-            setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,
-              addiction>60?`Hands shaking. Can't think straight. USE to stop this.`:"",
-              addiction>80?`⚠ SEVERE — every action costs double energy until you use.`:"",
-            ""]),10);
-            // Apply withdrawal directly to g (already inside setGs callback)
+            // Fire withdrawal messages — not every tick, just occasionally (20% chance)
+            if(Math.random()<0.20){
+              setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,
+                addiction>60?`Hands shaking. Can't think straight. USE to stop this.`:"",
+                addiction>80?`⚠ SEVERE — health and mental dropping fast. USE or find RECOVERY.`:"",
+              ""]),10);
+            }
+            // Withdrawal damage — runs every tick, scaled by severity
             g.survival={...g.survival,
-              health:clamp(g.survival.health-(severity*5),0,100),
-              mental:clamp((g.survival.mental||70)-(severity*8),0,100),
-              energy:clamp(g.survival.energy-(severity*10),0,100),
+              health:clamp(g.survival.health-(severity*2),0,100),
+              mental:clamp((g.survival.mental||70)-(severity*3),0,100),
+              energy:clamp(g.survival.energy-(severity*4),0,100),
             };
             if(addiction>70&&Math.random()<0.15)g.cash=Math.max(0,g.cash-rnd(10,30));
-            if(addiction>80)g.heat=clamp(g.heat+1,0,10);
+            if(addiction>80)g.heat=clamp(g.heat+0.05,0,10); // slow heat creep
             g.withdrawalDay=(g.withdrawalDay||0)+1;
-            // Junkie story chapter 1 — surviving withdrawal
-            if(g.survival.health>0&&g.archetype?.id==="junkie"){
+            if(g.survival.health>0&&g.archetype?.id==="junkie")
               g.storyFlags=[...new Set([...(g.storyFlags||[]),"survived_withdrawal"])];
-            }
           }
           // Rock bottom
           if(addiction>=90&&!hasSub&&daysSinceUse>1&&Math.random()<0.3){
@@ -5796,6 +5803,7 @@ export default function NYC(){
         "Cash: $"+gs.cash+(gs.cash>MAX_CARRY_CASH?" ⚠ TARGET":"")+(gs.cashStash>0?" · Stashed: $"+gs.cashStash:""),
         `Heat: ${Math.round(gs.heat)}/10 · ${wt.stars>0?"★".repeat(wt.stars):"☆"} ${wt.name}`,
         `Infamy: ${(()=>{const il=getInfamyLevel(gs.infamy||0);return `${gs.infamy||0}/100 ${il.icon} ${il.name}${(gs.infamy||0)>=25?" — "+il.desc:""}`;})()}`,
+        (()=>{const ad=gs.addiction||0;if(ad===0)return"";const al=getAddictionLevel(ad);const daysSince=gs.day-(gs.lastUsed||0);const inW=daysSince>Math.max(1,3-Math.floor(ad/30))&&ad>20;return `${al.icon} Addiction: ${ad}/100 ${al.name}${inW?" ⚠ IN WITHDRAWAL — USE to stabilize":" · last used day "+(gs.lastUsed||0)}`;})(),
         `Cops here: ${getCopPresence(boro,world.copPresence,gs.day)}/10`,
         `XP: ${gs.xp} · Next: ${xpNext(gs.xp)} · Next stat: +${nextStat.toUpperCase()}`,
         `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
@@ -6074,7 +6082,7 @@ export default function NYC(){
       const actWs=broadcastActivity(supplyWs,_sellPool[rnd(0,_sellPool.length-1)],"💊");
       setWorld(actWs);saveWorld(actWs);
       const archSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
-      if(archSub?.product===pKey){updGs(g=>({...g,addiction:Math.min(100,g.addiction+rnd(1,3))}));}
+      if(archSub?.product===pKey){updGs(g=>({...g,addiction:Math.min(100,g.addiction+rnd(3,7))}));}
       trackContract("sell",{product:pKey,qty,boro});
       push(`Moved ${qty}× ${PRODUCTS[pKey].name}. +$${total}${weather.bustMult<1?" (weather helped)":""}.`);return;
     }
@@ -6360,7 +6368,7 @@ export default function NYC(){
           if(bItem.addictive){
             const archSub=CLASS_SUBSTANCE[ng.archetype?.id||"veteran"];
             if(archSub?.name===bItem.substance||bItem.substance==="cigarettes"){
-              ng={...ng,addiction:Math.min(100,ng.addiction+2)};
+              ng={...ng,addiction:Math.min(100,ng.addiction+rnd(2,5))};
             }
           }
           // metrocard — next move free energy
