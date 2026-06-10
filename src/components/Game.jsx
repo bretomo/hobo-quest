@@ -3370,6 +3370,7 @@ export default function NYC(){
   const [typingUser,setTypingUser]=useState(null);// typing indicator
   const [dungeon,setDungeon]=useState(null);      // active warehouse run state
   const gsRef=useRef(null);
+  const tutDoneRef=useRef(false);
   const pinRef=useRef(null);const feedRef=useRef(null);const inputRef=useRef(null);
   const chatRef=useRef(null);
   const worldRef=useRef(null);
@@ -3377,6 +3378,7 @@ export default function NYC(){
   const lastActivityRef=useRef(Date.now());
   const [unread,setUnread]=useState(0);
   useEffect(()=>{gsRef.current=gs;},[gs]);
+  useEffect(()=>{tutDoneRef.current=tutDone;},[tutDone]);
   useEffect(()=>{if(feedRef.current)feedRef.current.scrollTop=feedRef.current.scrollHeight;},[feed]);
 
   // boot
@@ -4076,8 +4078,8 @@ export default function NYC(){
   const updGs=fn=>setGs(p=>{
     if(!p)return p;
     const next=fn({...p});
-    // auto-save character every update if pin exists
-    if(cPin)saveChar(next,cPin);
+    // auto-save character every update if pin exists — always include tutDone
+    if(cPin)saveChar({...next,tutDone:tutDoneRef.current},cPin);
     return next;
   });
   const applyXP=(g,amt,type)=>{
