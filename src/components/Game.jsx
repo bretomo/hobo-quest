@@ -10395,7 +10395,7 @@ export default function NYC(){
         {/* RIGHT */}
         <div style={{display:"flex",flexDirection:"column",overflow:"hidden",width:185,flexShrink:0}}>
           <div style={{display:"flex",borderBottom:"1px solid #111",background:"#080808"}}>
-            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["lb","🏆"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":id==="chat"&&unread>0?"#e63946":"#252525",borderBottom:tab===id?"2px solid #e9c46a":id==="chat"&&unread>0?"2px solid #e63946":"2px solid transparent",animation:id==="chat"&&unread>0?"wanted 1s infinite":"none",cursor:"pointer",minWidth:24}}>{label}</div>)}
+            {[["map","MAP"],["market","MKT"],["skills","⚡"],["gear","🗡"],["quests","📋"],["safe","🏠"],["shelter","🛏"],["npcs","NPC"],["chat",unread>0?`📡${unread}`:"📡"],["crews","👥"],["lb","🏆"],["journal","📖"]].map(([id,label])=><div key={id} onClick={()=>{setTab(id);if(id==="chat")setUnread(0);}} style={{flex:1,padding:"5px 0",textAlign:"center",fontSize:8,letterSpacing:1,color:tab===id?"#e9c46a":id==="chat"&&unread>0?"#e63946":"#777",borderBottom:tab===id?"2px solid #e9c46a":id==="chat"&&unread>0?"2px solid #e63946":"2px solid transparent",animation:id==="chat"&&unread>0?"wanted 1s infinite":"none",cursor:"pointer",minWidth:24}}>{label}</div>)}
           </div>
           <div style={{flex:1,padding:9,overflowY:"auto"}}>
 
