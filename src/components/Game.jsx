@@ -63,15 +63,18 @@ const MIN_SELL_PLAYERS = 1;       // even one seller starts dropping prices
 
 // ── ADDICTION SYSTEM ─────────────────────────────────────────────────────────
 const CLASS_SUBSTANCE = {
-  veteran:      {name:"alcohol", product:null,    icon:"🍺", buyCost:15, desc:"The bottle. Only thing that quiets it."},
-  schemer:      {name:"pills",   product:"pills",  icon:"💊", buyCost:0,  desc:"Keeps the edge. Functional. Mostly."},
-  ghost:        {name:"weed",    product:"weed",   icon:"🌿", buyCost:0,  desc:"Stays level. Needs it to stay level."},
-  hustler:      {name:"powder",  product:"powder", icon:"❄️", buyCost:0,  desc:"Fuels the grind. Can't stop now."},
-  junkie:       {name:"heroin",  product:"heroin", icon:"💉", buyCost:0,  desc:"The only thing that still works. Everything else is pretending."},
-  undocumented: {name:"stress",  product:null,     icon:"😮", buyCost:0,  desc:"No substances. Just pure survival anxiety."},
-  vampire:      {name:"blood",   product:null,     icon:"🩸", buyCost:0,  desc:"Already handled. Ancient hunger."},
-  fixer:        {name:"pills",   product:"pills",  icon:"💊", buyCost:0,  desc:"Functional. Denies it completely."},
-  rat:          {name:"powder",  product:"powder", icon:"❄️", buyCost:0,  desc:"Paranoia feeds the habit."},
+  veteran:      {name:"alcohol",    product:null,     icon:"🍺", buyCost:15,  startAdd:25, desc:"The bottle. Only thing that quiets it down."},
+  schemer:      {name:"pills",      product:"pills",  icon:"💊", buyCost:0,   startAdd:20, desc:"Keeps the edge sharp. Functional. Mostly."},
+  ghost:        {name:"weed",       product:"weed",   icon:"🌿", buyCost:0,   startAdd:15, desc:"Stays level. Needs it to stay level."},
+  hustler:      {name:"powder",     product:"powder", icon:"❄️", buyCost:0,   startAdd:30, desc:"Fuels the grind. Been doing this too long to stop."},
+  junkie:       {name:"heroin",     product:"heroin", icon:"💉", buyCost:0,   startAdd:55, desc:"The only thing that still works. Everything else is pretending."},
+  undocumented: {name:"cigarettes", product:null,     icon:"🚬", buyCost:8,   startAdd:20, desc:"One pack a day. Cheap anxiety management."},
+  vampire:      {name:"blood",      product:null,     icon:"🩸", buyCost:0,   startAdd:0,  desc:"Ancient hunger. Handled differently."},
+  fixer:        {name:"pills",      product:"pills",  icon:"💊", buyCost:0,   startAdd:20, desc:"Functional. Completely denies it."},
+  rat:          {name:"powder",     product:"powder", icon:"❄️", buyCost:0,   startAdd:25, desc:"Paranoia feeds the habit. Habit feeds the paranoia."},
+  drifter:      {name:"alcohol",    product:null,     icon:"🍺", buyCost:15,  startAdd:30, desc:"Warms you up. Dulls the edges. The dog doesn't judge."},
+  schizo:       {name:"weed",       product:"weed",   icon:"🌿", buyCost:0,   startAdd:20, desc:"Cuts through the static. Without it the signal gets too loud."},
+  hooker:       {name:"pills",      product:"pills",  icon:"💊", buyCost:0,   startAdd:25, desc:"Gets you through the shift. Then the next one. Then the next."},
 };
 const ADDICTION_LEVELS = [
   {min:0,  max:19, name:"Clean",     icon:"○", color:"#2a9d8f", desc:"No dependency. You're in control.",
@@ -137,6 +140,22 @@ const HIGH_EVENTS = {
     {msg:"Using in an alley. Someone sees. Word gets back.",effect:{heat:3,mental:-5}},
     {msg:"The high hits different today. Not in a good way.",effect:{health:-30,mental:-25}},
     {msg:"You come down and the world is exactly as bad as you left it. But now you're worse.",effect:{health:-10,mental:-30,energy:-25}},
+  ],
+  alcohol:[
+    {msg:"Two beers and the noise in your head gets quieter. Not gone. Just quieter.",effect:{mental:20,health:-5}},
+    {msg:"You drink faster than you mean to. Always do.",effect:{mental:15,energy:-20,addiction_bonus:5}},
+    {msg:"Woke up somewhere unfamiliar. Cash is down. You don't remember exactly.",effect:{cash:-40,energy:-40,health:-10}},
+    {msg:"One more. You keep saying one more.",effect:{mental:10,health:-8,addiction_bonus:3}},
+    {msg:"Thunderbird on the stoop. The night is warm. For a moment nothing hurts.",effect:{mental:25,warmth:10,health:-5}},
+    {msg:"You drink until the shaking stops. It stops.",effect:{mental:20,energy:-15,health:-8}},
+    {msg:"The morning after is getting harder.",effect:{health:-15,mental:-10,energy:-30}},
+  ],
+  cigarettes:[
+    {msg:"Light one up. The stress doesn't go away but it gets a shape you can hold.",effect:{mental:10,energy:-3}},
+    {msg:"Third one this hour. Fingers yellow. You barely notice anymore.",effect:{mental:8,health:-3,addiction_bonus:2}},
+    {msg:"Someone asks for a light. You give it. Brief human contact.",effect:{mental:12}},
+    {msg:"Out of smokes. The restlessness is immediate and physical.",effect:{mental:-15,energy:-10}},
+    {msg:"Last one in the pack. You smoke it slowly.",effect:{mental:15,energy:-5}},
   ],
   heroin:[
     {msg:"The rush hits and the city disappears. For twenty minutes nothing hurts. Then it comes back.",effect:{mental:30,health:-15,energy:-30}},
@@ -606,7 +625,9 @@ const WITHDRAWAL_EVENTS = {
   weed:["Can't sleep. Sweating. Everything irritates you. You snap at the wrong person.","The anxiety is back. That familiar dread that never fully went away.","Your hands won't stop shaking. Can't focus on anything."],
   pills:["Without the pills your body aches like you're 70 years old.","Your brain won't stop. The pills were the only thing keeping the noise down.","Withdrawal hits like a wall. Everything takes three times the effort."],
   powder:["The crash is physical. Your body is staging a revolt.","You'd do almost anything for a line right now. You catch yourself thinking things that scare you.","Running on fumes. Shaking. The world feels like it's moving through glass.","Three days without and your body is falling apart."],
-  alcohol:["The shakes are bad today. Real withdrawal. Your hands betray you.","Without it the nightmares come back. You just wait for morning.","Your body needs it now. That's the part nobody tells you."],
+  heroin:["Every nerve is on fire. The absence of it is louder than anything.","You're sick. Really sick. Not metaphorically. The cold sweats, the cramps, all of it.","Your body is trying to remind you of something you already know."],
+  alcohol:["The shakes are bad today. Real withdrawal. Your hands betray you.","Without it the nightmares come back. You just wait for morning.","Your body needs it now. That's the part nobody tells you.","Alcohol withdrawal can kill. You know this. Your body knows this louder."],
+  cigarettes:["Three hours without a smoke and you're ready to fight someone over nothing.","The restlessness won't sit still. Your hands keep reaching for a pocket that's empty.","Everything is irritating in a specific, cigarette-shaped way."],
   anything:["Whatever's in your system is clearing and what's underneath is worse.","The body remembers everything you put it through. Today it's sending you the bill.","You need something. Anything. The desperation makes you reckless.","Rock bottom has a basement. You're finding that out today."],
   stress:["The anxiety is crushing today. No way out, no way forward.","Lying awake calculating how long you can survive. The math never comes out right.","Your body is in permanent fight-or-flight. Everything is a threat."],
 };
@@ -3870,46 +3891,58 @@ export default function NYC(){
           const sub=CLASS_SUBSTANCE[g.archetype?.id||"veteran"];
           const addLvl=getAddictionLevel(g.addiction||0);
           const addFx=addLvl.effects||{};
-          const hasSub=sub?.product&&(g.product?.[sub.product]||0)>0;
           const addiction=g.addiction||0;
-          const daysSinceUse=g.day-(g.lastUsed||0);
-          const withdrawThresh=Math.max(1,3-Math.floor(addiction/30));
-          const inWithdrawal=daysSinceUse>withdrawThresh&&addiction>20;
 
-          // Apply passive addiction drains every tick (was early-returning before — fixed)
+          // hasSub: has their class substance OR any drug product
+          const classProduct=sub?.product;
+          const hasClassSub=classProduct&&(g.product?.[classProduct]||0)>0;
+          const hasAnySub=hasClassSub||Object.keys(PRODUCTS).some(k=>
+            (g.product?.[k]||0)>0&&PRODUCTS[k].addGainMult
+          );
+          const hasSub=hasAnySub;
+
+          // Withdrawal based on REAL TIME not game days
+          // lastUsedTime = timestamp of last USE (fall back to day-based estimate)
+          const lastUsedMs=g.lastUsedTime||(g.lastUsed>=0?(Date.now()-(g.lastUsed===g.day?0:(g.day-g.lastUsed)*3600000*4)):0);
+          const msSinceUse=Date.now()-lastUsedMs;
+          const hoursSinceUse=msSinceUse/3600000;
+          // Withdrawal kicks in after: Curious=8h, Hooked=4h, Dependent=2h, Consumed=1h, Destroyed=30min
+          const withdrawHours={20:8, 40:4, 60:2, 80:1, 95:0.5};
+          const wHours=Object.entries(withdrawHours).reverse().find(([min])=>addiction>=Number(min))?.[1]||999;
+          const inWithdrawal=hoursSinceUse>wHours&&addiction>20&&!hasSub;
+
+          // Apply passive addiction drains every tick
           if(addFx.energyDrain)
             g.survival={...g.survival,energy:clamp(g.survival.energy-addFx.energyDrain/60,0,100)};
           if(addFx.hungerDrain)
             g.survival={...g.survival,hunger:clamp(g.survival.hunger-addFx.hungerDrain/60,0,100)};
-          // Passive addiction creep — using drugs every day slowly pushes the number up
+          // Passive creep while high
           if(g.highActive&&Math.random()<0.12)
             g.addiction=Math.min(100,g.addiction+1);
 
           if(inWithdrawal){
-            const wEvts=WITHDRAWAL_EVENTS[sub?.name]||WITHDRAWAL_EVENTS.stress;
+            const wEvts=WITHDRAWAL_EVENTS[sub?.name||"stress"]||WITHDRAWAL_EVENTS.stress;
             const wEvt=wEvts[Math.floor(Math.random()*wEvts.length)];
             const severity=Math.floor(addiction/15);
-            // Fire withdrawal messages — not every tick, just occasionally (20% chance)
             if(Math.random()<0.20){
               setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,
                 addiction>60?`Hands shaking. Can't think straight. USE to stop this.`:"",
-                addiction>80?`⚠ SEVERE — health and mental dropping fast. USE or find RECOVERY.`:"",
+                addiction>80?`⚠ SEVERE — health and mental dropping fast. USE or RECOVERY.`:"",
               ""]),10);
             }
-            // Withdrawal damage — runs every tick, scaled by severity
             g.survival={...g.survival,
               health:clamp(g.survival.health-(severity*2),0,100),
               mental:clamp((g.survival.mental||70)-(severity*3),0,100),
               energy:clamp(g.survival.energy-(severity*4),0,100),
             };
             if(addiction>70&&Math.random()<0.15)g.cash=Math.max(0,g.cash-rnd(10,30));
-            if(addiction>80)g.heat=clamp(g.heat+0.05,0,10); // slow heat creep
+            if(addiction>80)g.heat=clamp(g.heat+0.05,0,10);
             g.withdrawalDay=(g.withdrawalDay||0)+1;
             if(g.survival.health>0&&g.archetype?.id==="junkie")
               g.storyFlags=[...new Set([...(g.storyFlags||[]),"survived_withdrawal"])];
           }
           // Rock bottom
-          if(addiction>=90&&!hasSub&&daysSinceUse>1&&Math.random()<0.3){
+          if(addiction>=90&&!hasSub&&hoursSinceUse>1&&Math.random()<0.3){
             setTimeout(()=>setFeed(f=>[...f,"","☠ OVERDRAW.",
               "You haven't used. Your body is collecting the debt.",
               "Health dropping. Mental collapsing.",
@@ -3920,7 +3953,7 @@ export default function NYC(){
               mental:clamp((g.survival.mental||70)-20,0,100),
             };
             g.heat=clamp(g.heat+2,0,10);
-          } else if(addiction>=95&&!hasSub&&daysSinceUse>1){
+          } else if(addiction>=95&&!hasSub&&hoursSinceUse>0.5){
             setTimeout(()=>setFeed(f=>[...f,"","☠ Rock bottom.",getAddictionLevel(addiction).desc,"You'd do anything right now. That's the most dangerous place to be.",""]),10);
             g.survival={...g.survival,
               health:clamp(g.survival.health-10,0,100),
@@ -4203,7 +4236,11 @@ export default function NYC(){
       cashStash:0,  // cash stored safely (safe house or crew bank)
       debtOwed:0,   // fronted product debt
       dayJobDone:false, hasMetrocard:false,
-      addiction:0, lastUsed:-1, withdrawalDay:0, highActive:false,
+      addiction:CLASS_SUBSTANCE[arch.id]?.startAdd||0,
+      lastUsed:-1,
+      // Set lastUsedTime to 2 hours ago so withdrawal pressure starts building immediately
+      lastUsedTime:Date.now()-(2*3600000),
+      withdrawalDay:0, highActive:false,
       hustleCount:0,       // times hustled today
       hustleBoroLast:"",   // last borough hustled in
       hustleBoros:{},      // per-borough hustle count today
@@ -8440,7 +8477,7 @@ export default function NYC(){
           `Stash: ${stashQty-1} left. That was supposed to be sold.`,``);
         updGs(g=>{
           const eff2=hEvt2.effect||{};
-          let ng={...g,lastUsed:g.day,withdrawalDay:0,highActive:true,
+          let ng={...g,lastUsed:g.day,lastUsedTime:Date.now(),withdrawalDay:0,highActive:true,
             addiction:Math.min(100,(g.addiction||0)+addGain2),
             product:{...g.product,[sub2.product]:Math.max(0,(g.product[sub2.product]||0)-1)},
             storyHustleCash:(g.storyHustleCash||0)-20, // note the lost sale
@@ -8457,10 +8494,17 @@ export default function NYC(){
 
     if(C==="USE"){
       if(gs.isVampire){push(`FEED is your equivalent.`);return;}
-      if(gs.isUndoc){push(`You don't use. You survive.`);return;}
       const sub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
-      const hasProd=sub?.product&&(gs.product[sub.product]||0)>0;
-      // Junkie temptation — if they have product and addiction is climbing, offer stash
+      if(!sub){push(`No substance defined for your class.`);return;}
+      const hasProd=sub?.product&&(gs.product?.[sub.product]||0)>0;
+      // Bodega substances (alcohol/cigarettes) — check inventory or cash to buy
+      const isBodigaSub=!sub.product&&sub.buyCost>0;
+      const hasBodegaItem=isBodigaSub&&(
+        gs.inventory?.some(i=>(typeof i==="string"?i:i?.name||"").toLowerCase().includes(sub.name==="alcohol"?"beer":"cigarette"))
+      );
+      const canBuyBodega=isBodigaSub&&gs.cash>=sub.buyCost;
+      const canBuy=(sub?.buyCost>0&&gs.cash>=sub.buyCost)||hasBodegaItem;
+      const hasSub=hasProd||hasBodegaItem;
       if(gs.isJunkie&&hasProd&&(gs.addiction||0)>=50){
         const stashQty=gs.product[sub.product]||0;
         const withdrawal=(gs.addiction||0)>70;
@@ -8482,7 +8526,7 @@ export default function NYC(){
         return;
       }
       const canBuy=sub?.buyCost>0&&gs.cash>=sub.buyCost;
-      if(!hasProd&&!canBuy){push(`${sub?.icon} No ${sub?.name}. Running dry.`,`Addiction: ${getAddictionLevel(gs.addiction||0).name} (${gs.addiction||0}/100)`);return;}
+      if(!hasSub&&!canBuy){push(`${sub?.icon} No ${sub?.name}. Running dry.`,`Addiction: ${getAddictionLevel(gs.addiction||0).name} (${gs.addiction||0}/100)`,isBodigaSub?`BODEGA to buy some ($${sub.buyCost})`:`BUY ${sub.name.toUpperCase()} to restock.`);return;}
       const hEvts=HIGH_EVENTS[sub.name]||HIGH_EVENTS.weed;
       const hEvt=hEvts[rnd(0,hEvts.length-1)];
       const addGainMult=PRODUCTS[sub?.product]?.addGainMult||1.0;
@@ -8490,7 +8534,7 @@ export default function NYC(){
       push("",`${sub.icon} You use.`,hEvt.msg,`Addiction now: ${Math.min(100,(gs.addiction||0)+addGain)}/100`,"");
       updGs(g=>{
         const eff=hEvt.effect||{};
-        let ng={...g,lastUsed:g.day,withdrawalDay:0,highActive:true,addiction:Math.min(100,(g.addiction||0)+addGain)};
+        let ng={...g,lastUsed:g.day,lastUsedTime:Date.now(),withdrawalDay:0,highActive:true,addiction:Math.min(100,(g.addiction||0)+addGain)};
         if(sub.product&&hasProd)ng={...ng,product:{...ng.product,[sub.product]:Math.max(0,ng.product[sub.product]-1)}};
         else if(sub.buyCost)ng={...ng,cash:Math.max(0,ng.cash-sub.buyCost)};
         if(eff.cash)ng={...ng,cash:Math.max(0,ng.cash+eff.cash)};
@@ -10173,14 +10217,19 @@ export default function NYC(){
               const ad=gs.addiction||0;
               if(ad===0)return null;
               const al=getAddictionLevel(ad);
-              const daysSince=gs.day-(gs.lastUsed||0);
-              const inW=daysSince>Math.max(1,3-Math.floor(ad/30))&&ad>20;
+              const lastUsedMs=gs.lastUsedTime||(gs.lastUsed>=0?(Date.now()-(gs.lastUsed===gs.day?0:(gs.day-gs.lastUsed)*3600000*4)):0);
+              const hoursSince=(Date.now()-lastUsedMs)/3600000;
+              const wHoursMap={20:8,40:4,60:2,80:1,95:0.5};
+              const wH=Object.entries(wHoursMap).reverse().find(([min])=>ad>=Number(min))?.[1]||999;
+              const inW=hoursSince>wH&&ad>20;
               const barColor=inW?"#e63946":ad>=60?"#f4a261":"#9d4edd";
               return(
-                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,cursor:"pointer"}}
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,cursor:"pointer",marginLeft:2}}
                   onClick={()=>tapCmd("ADDICTION")} title={`Addiction: ${ad}/100 ${al.name}${inW?" — IN WITHDRAWAL":""}`}>
-                  <div style={{fontSize:6,color:inW?"#e63946":"#9d4edd",animation:inW?"blink 1s infinite":""}}>{al.icon}</div>
-                  <div style={{width:16,height:2,background:"#0f0f0f",border:"1px solid #1a1a1a"}}>
+                  <div style={{fontSize:6,color:inW?"#e63946":"#9d4edd",animation:inW?"blink 1s infinite":"",letterSpacing:0.5,fontFamily:"'Share Tech Mono',monospace"}}>
+                    {al.icon}{ad}
+                  </div>
+                  <div style={{width:24,height:2,background:"#0f0f0f",border:"1px solid #1a1a1a"}}>
                     <div style={{height:"100%",width:`${ad}%`,background:barColor,transition:"width 0.5s"}}/>
                   </div>
                 </div>
