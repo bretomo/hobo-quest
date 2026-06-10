@@ -4141,6 +4141,7 @@ export default function NYC(){
     };
     setGs(migrated);
     setCPin(pinIn); // enable auto-save for this session
+    const weather=getWeather(saved.day);
     const _lastSeen=(world.players||{})[saved.name]?.lastSeen||Date.now();
     const _hoursAway=Math.max(0,Math.floor((Date.now()-_lastSeen)/3600000));
     const _offRpt=_hoursAway>=1?generateOfflineReport(saved,world,_hoursAway):null;
