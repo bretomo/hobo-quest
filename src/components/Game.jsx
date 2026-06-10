@@ -8525,7 +8525,6 @@ export default function NYC(){
         });
         return;
       }
-      const canBuy=sub?.buyCost>0&&gs.cash>=sub.buyCost;
       if(!hasSub&&!canBuy){push(`${sub?.icon} No ${sub?.name}. Running dry.`,`Addiction: ${getAddictionLevel(gs.addiction||0).name} (${gs.addiction||0}/100)`,isBodigaSub?`BODEGA to buy some ($${sub.buyCost})`:`BUY ${sub.name.toUpperCase()} to restock.`);return;}
       const hEvts=HIGH_EVENTS[sub.name]||HIGH_EVENTS.weed;
       const hEvt=hEvts[rnd(0,hEvts.length-1)];
