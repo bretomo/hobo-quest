@@ -10434,25 +10434,25 @@ export default function NYC(){
             {tab==="skills"&&<SkillPanel gs={gs} onUnlock={unlockSkill}/>}
             {tab==="quests"&&<QuestPanel gs={gs} npcs={npcs} onAccept={acceptQuest} onComplete={completeQuest} onAbandon={abandonQuest} boro={boro}/>}
             {tab==="gear"&&<div style={{padding:8}}>
-              <div style={{fontSize:7,color:"#444",letterSpacing:2,marginBottom:8}}>// EQUIPMENT</div>
+              <div style={{fontSize:7,color:"#888",letterSpacing:2,marginBottom:8}}>// EQUIPMENT</div>
               {/* Visual character with slots */}
               <div style={{display:"flex",gap:8,marginBottom:8}}>
                 {/* Silhouette */}
                 <div style={{width:80,flexShrink:0,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
                   {/* Head slot */}
-                  {(()=>{const slot="head";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
-                  return <div style={{width:40,height:40,border:`1px solid ${item?rc[item.rarity]||"#333":"#1a1a1a"}`,background:item?"#0a0a0a":"#060606",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:item?10:6,color:item?rc[item.rarity]:"#222"}}
+                  {(()=>{const slot="head";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#888",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                  return <div style={{width:40,height:40,border:`1px solid ${item?rc[item.rarity]||"#444":"#2a2a2a"}`,background:item?"#0a0a0a":"#060606",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:item?10:6,color:item?rc[item.rarity]:"#444"}}
                     onClick={()=>push("","HEAD: "+(item?.name||"Empty"),item?.desc||"Nothing equipped.",item?Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>"  +"+k+" "+v).join(", "):"Type EQUIP [item] to equip something.","")}
                     title={item?.name||"Head slot"}>
                     {item?"🎭":"👤"}
                   </div>;})()}
                   {/* Body */}
-                  <div style={{fontSize:28,lineHeight:1,color:"#1a1a1a",margin:"4px 0",fontFamily:"monospace"}}>
+                  <div style={{fontSize:28,lineHeight:1,color:"#555",margin:"4px 0",fontFamily:"monospace"}}>
                     {(()=>{const chestRaw=gs.equipment?.chest;const bodyItem=chestRaw?(typeof chestRaw==="object"&&chestRaw._rolled?chestRaw:getItemById(chestRaw)):null;return bodyItem?"🥼":"👕";})()}
                   </div>
                   {/* Feet */}
-                  {(()=>{const slot="feet";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
-                  return <div style={{fontSize:item?12:8,color:item?rc[item.rarity]:"#1a1a1a",cursor:"pointer"}} onClick={()=>push("FEET: "+(item?.name||"Empty"))} title={item?.name||"Feet"}>
+                  {(()=>{const slot="feet";const itemId=gs.equipment?.[slot];const item=itemId?getItemById(itemId):null;const rc={common:"#888",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                  return <div style={{fontSize:item?12:8,color:item?rc[item.rarity]:"#444",cursor:"pointer"}} onClick={()=>push("FEET: "+(item?.name||"Empty"))} title={item?.name||"Feet"}>
                     {item?"👟":"⬜"}
                   </div>;})()}
                 </div>
@@ -10461,16 +10461,16 @@ export default function NYC(){
                   {["head","chest","hands","feet","weapon","accessory"].map(slot=>{
                     const itemId=gs.equipment?.[slot];
                     const item=itemId?getItemById(itemId):null;
-                    const rc={common:"#333",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
-                    const color=item?rc[item.rarity]||"#333":"#1a1a1a";
-                    return <div key={slot} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,padding:"3px 5px",border:`1px solid ${item?"#1a1a1a":"#0d0d0d"}`,background:"#060606",cursor:"pointer"}}
+                    const rc={common:"#aaa",uncommon:"#2a9d8f",rare:"#e9c46a",legendary:"#e63946"};
+                    const color=item?rc[item.rarity]||"#aaa":"#555";
+                    return <div key={slot} style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,padding:"3px 5px",border:`1px solid ${item?"#2a2a2a":"#1a1a1a"}`,background:"#060606",cursor:"pointer"}}
                       onClick={()=>{if(item)push("","["+item.rarity.toUpperCase()+"] "+item.name,item.desc||"","Stats: "+Object.entries(item.stats||{}).filter(([,v])=>v).map(([k,v])=>"+"+k+" "+v).join(", "),"UNEQUIP "+item.name+" to remove.");}}
                     >
-                      <div style={{fontSize:7,color:"#222",width:42,letterSpacing:1,flexShrink:0}}>{slot.toUpperCase()}</div>
+                      <div style={{fontSize:7,color:"#666",width:42,letterSpacing:1,flexShrink:0}}>{slot.toUpperCase()}</div>
                       <div style={{flex:1,fontSize:7,color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {item?item.name:"—"}
                       </div>
-                      {item&&<div style={{fontSize:6,color:"#333"}}>{Object.entries(item.stats||{}).filter(([,v])=>v&&v!==0).slice(0,2).map(([k,v])=>"+"+v+" "+k.slice(0,3)).join(" ")}</div>}
+                      {item&&<div style={{fontSize:6,color:"#888"}}>{Object.entries(item.stats||{}).filter(([,v])=>v&&v!==0).slice(0,2).map(([k,v])=>"+"+v+" "+k.slice(0,3)).join(" ")}</div>}
                     </div>;
                   })}
                 </div>
@@ -10481,13 +10481,13 @@ export default function NYC(){
                 const pct=((gs.addiction||0)/100)*100;
                 return <div style={{marginTop:8,marginBottom:8}}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:2}}>
-                    <div style={{fontSize:7,color:"#333",letterSpacing:1}}>ADDICTION</div>
+                    <div style={{fontSize:7,color:"#888",letterSpacing:1}}>ADDICTION</div>
                     <div style={{fontSize:7,color:al.color}}>{al.icon} {al.name}</div>
                   </div>
                   <div style={{height:4,background:"#111",borderRadius:2}}>
                     <div style={{height:"100%",width:pct+"%",background:al.color,borderRadius:2,transition:"width 0.3s"}}/>
                   </div>
-                  {(gs.addiction||0)>=40&&<div style={{fontSize:6,color:"#333",marginTop:2}}>Type RECOVERY to find Carmen's drop-in center</div>}
+                  {(gs.addiction||0)>=40&&<div style={{fontSize:6,color:"#777",marginTop:2}}>Type RECOVERY to find Carmen's drop-in center</div>}
                 </div>;
               })()}
               {/* Total gear stats */}
@@ -10495,14 +10495,14 @@ export default function NYC(){
                 const eq=getItemStats(gs.equipment||{});
                 const statKeys=Object.entries(eq).filter(([,v])=>v&&v!==0);
                 if(statKeys.length===0)return null;
-                return <div style={{borderTop:"1px solid #0d0d0d",paddingTop:6,marginTop:4}}>
-                  <div style={{fontSize:7,color:"#222",letterSpacing:1,marginBottom:4}}>TOTAL BONUSES</div>
+                return <div style={{borderTop:"1px solid #1a1a1a",paddingTop:6,marginTop:4}}>
+                  <div style={{fontSize:7,color:"#888",letterSpacing:1,marginBottom:4}}>TOTAL BONUSES</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
                     {statKeys.map(([k,v])=><div key={k} style={{fontSize:7,color:"#2a9d8f",padding:"1px 5px",border:"1px solid #0d2a1e"}}>+{v} {k}</div>)}
                   </div>
                 </div>;
               })()}
-              <div style={{marginTop:8,fontSize:7,color:"#1a1a1a"}}>EQUIP [item] · UNEQUIP [slot] · INVENTORY</div>
+              <div style={{marginTop:8,fontSize:7,color:"#666"}}>EQUIP [item] · UNEQUIP [slot] · INVENTORY</div>
             </div>}
             {tab==="gear_OLD"&&<GearPanel gs={gs} onUnequip={unequipSlot} onEquip={(slot)=>{
   // equip from inventory via panel - find first unequipped item for that slot
