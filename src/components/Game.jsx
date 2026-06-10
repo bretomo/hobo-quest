@@ -6482,9 +6482,15 @@ export default function NYC(){
           "","UPGRADE CORNER — spend cash to increase income","ABANDON CORNER — release it");
         return;
       }
-      if(cur){
-        // Occupied — need to beat owner
+      if(cur&&cur!==gs.name){
+        // Someone else owns this corner — need to beat them first
         push("🚩 "+cur+" owns this corner.","You need to beat them in a fight first.","ATTACK "+cur+" while in this borough — then CLAIM.");
+        return;
+      }
+      if(cur===gs.name&&!gs.cornersOwned?.includes(boro)){
+        // World says you own it but local state is out of sync — fix it
+        updGs(g=>({...g,cornersOwned:[...new Set([...(g.cornersOwned||[]),boro])]}));
+        push("🚩 You already own the "+b.name+" corner. (State synced.)");
         return;
       }
       // Claim requirement — hustle+level gate
@@ -10148,13 +10154,31 @@ export default function NYC(){
               const urgent=val<=crit;
               return(
                 <div key={key} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,cursor:"pointer"}} onClick={()=>tapCmd("STATUS")} title={key+": "+val+"%"}>
-                  <div style={{fontSize:6,color:urgent?critColor:"#333",animation:urgent?"blink 1s infinite":""}}>{icon}</div>
+                  <div style={{fontSize:6,color:urgent?critColor:"#666",animation:urgent?"blink 1s infinite":""}}>{icon}</div>
                   <div style={{width:16,height:2,background:"#0f0f0f",border:"1px solid #1a1a1a"}}>
                     <div style={{height:"100%",width:`${val}%`,background:color,transition:"width 0.5s"}}/>
                   </div>
                 </div>
               );
             })}
+            {/* Addiction indicator — shown when addiction > 0 */}
+            {(()=>{
+              const ad=gs.addiction||0;
+              if(ad===0)return null;
+              const al=getAddictionLevel(ad);
+              const daysSince=gs.day-(gs.lastUsed||0);
+              const inW=daysSince>Math.max(1,3-Math.floor(ad/30))&&ad>20;
+              const barColor=inW?"#e63946":ad>=60?"#f4a261":"#9d4edd";
+              return(
+                <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1,cursor:"pointer"}}
+                  onClick={()=>tapCmd("ADDICTION")} title={`Addiction: ${ad}/100 ${al.name}${inW?" — IN WITHDRAWAL":""}`}>
+                  <div style={{fontSize:6,color:inW?"#e63946":"#9d4edd",animation:inW?"blink 1s infinite":""}}>{al.icon}</div>
+                  <div style={{width:16,height:2,background:"#0f0f0f",border:"1px solid #1a1a1a"}}>
+                    <div style={{height:"100%",width:`${ad}%`,background:barColor,transition:"width 0.5s"}}/>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {/* Product mini-indicator — shows what you're carrying */}
