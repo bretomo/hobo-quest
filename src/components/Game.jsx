@@ -3360,6 +3360,173 @@ function GearPanel({gs,onUnequip,day,boro}){
   </div>;
 }
 
+// ── MUSIC ENGINE ─────────────────────────────────────────────────────────────
+const MUSIC_MOODS = {
+  street:     { label:"The Street",    bpm:72,  kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0], rim:[0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0], bassNotes:["C2","Eb2","F2","Bb2"], bassPattern:[1,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0], padNotes:["C3","G3"], padVol:-28, melNotes:["C4","Eb4","F4","G4","Bb4"], melPattern:[1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1], revWet:0.3, vol:-12 },
+  hot:        { label:"Running Hot",   bpm:88,  kick:[1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,0], snare:[0,0,0,0,1,0,0,1,0,0,0,0,1,0,1,0], hihat:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1], rim:[0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0], bassNotes:["C2","C2","Eb2","G1"], bassPattern:[1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,1], padNotes:["C3","Eb3"], padVol:-24, melNotes:["C4","D4","Eb4","G4","Ab4"], melPattern:[1,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0], revWet:0.5, vol:-10 },
+  combat:     { label:"FIGHT",         bpm:110, kick:[1,0,0,0,1,0,0,0,1,0,1,0,1,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1], hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0], rim:[0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0], bassNotes:["C2","C2","C2","G1"], bassPattern:[1,0,1,0,0,0,1,0,1,0,0,0,1,0,1,0], padNotes:["C3","F#3"], padVol:-20, melNotes:[], melPattern:[], revWet:0.2, vol:-8 },
+  blizzard:   { label:"Freezing",      bpm:52,  kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], hihat:[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0], rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], bassNotes:["G1","G1","C2","F1"], bassPattern:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], padNotes:["C3","G3","D4"], padVol:-18, melNotes:["C5","Eb5","G5"], melPattern:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], revWet:0.7, vol:-14 },
+  rain:       { label:"Soaked",        bpm:68,  kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,1,0,1,1,0,1,1,1,1,0,1,1,0,1,1], rim:[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0], bassNotes:["F2","Ab2","Eb2","Bb1"], bassPattern:[1,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0], padNotes:["F3","Ab3","Eb4"], padVol:-22, melNotes:["F4","Ab4","Bb4","C5","Eb5"], melPattern:[1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], revWet:0.55, vol:-13 },
+  fog:        { label:"The Fog",       bpm:58,  kick:[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], snare:[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], hihat:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0], rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], bassNotes:["D2","F2","C2","G1"], bassPattern:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], padNotes:["D3","A3","F4"], padVol:-16, melNotes:["D5","F5","A5","C5"], melPattern:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0], revWet:0.8, vol:-15 },
+  heatwave:   { label:"Scorched",      bpm:65,  kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0], rim:[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0], bassNotes:["G1","G1","C2","D2"], bassPattern:[1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0], padNotes:["G3","D4"], padVol:-26, melNotes:["G4","A4","C5","D5","G5"], melPattern:[1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0], revWet:0.35, vol:-14 },
+  dungeon:    { label:"The Warehouse", bpm:95,  kick:[1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0], snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0], hihat:[1,0,1,0,0,0,1,0,1,0,1,0,0,0,0,1], rim:[0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0], bassNotes:["C2","C2","F1","G1"], bassPattern:[1,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0], padNotes:["C3","F#3","B2"], padVol:-22, melNotes:["C4","Db4"], melPattern:[0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], revWet:0.4, vol:-11 },
+  withdrawal: { label:"Sick",          bpm:62,  kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0], snare:[0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0], hihat:[1,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0], rim:[0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0], bassNotes:["Ab1","G1","Ab1","F1"], bassPattern:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], padNotes:["Ab2","Eb3"], padVol:-20, melNotes:["Ab4","G4","F4"], melPattern:[1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0], revWet:0.6, vol:-16 },
+  vampire:    { label:"The Night",     bpm:55,  kick:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], snare:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], hihat:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], bassNotes:["D2","F2","A1","E2"], bassPattern:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0], padNotes:["D3","F3","A3","C4"], padVol:-14, melNotes:["D5","F5","E5","A5","C5"], melPattern:[1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0], revWet:0.75, vol:-13 },
+};
+
+function selectMusicMood({heat,weather,inCombat,inDungeon,isVampire,addiction,mental}){
+  if(inCombat)return"combat";
+  if(inDungeon)return"dungeon";
+  if(isVampire)return"vampire";
+  if(addiction>=70&&mental<40)return"withdrawal";
+  if(weather==="blizzard")return"blizzard";
+  if(weather==="fog")return"fog";
+  if(weather==="rain"||weather==="storm")return"rain";
+  if(weather==="heatwave")return"heatwave";
+  if(heat>=7)return"hot";
+  return"street";
+}
+
+function MusicEngine({heat=0,weather="clear",inCombat=false,inDungeon=false,isVampire=false,addiction=0,mental=70}){
+  const [started,setStarted]=useState(false);
+  const [muted,setMuted]=useState(false);
+  const [volume,setVolume]=useState(0.7);
+  const [moodKey,setMoodKey]=useState("street");
+  const [showVol,setShowVol]=useState(false);
+  const toneRef=useRef(null);
+  const seqRef=useRef(null);
+  const masterRef=useRef(null);
+  const reverbRef=useRef(null);
+  const kickRef=useRef(null);
+  const snareRef=useRef(null);
+  const hihatRef=useRef(null);
+  const rimRef=useRef(null);
+  const bassRef=useRef(null);
+  const padRef=useRef(null);
+  const melRef=useRef(null);
+  const mountedRef=useRef(true);
+  const moodKeyRef=useRef("street");
+
+  const startSeq=useCallback((mk)=>{
+    const T=toneRef.current;if(!T)return;
+    const mood=MUSIC_MOODS[mk]||MUSIC_MOODS.street;
+    moodKeyRef.current=mk;
+    if(seqRef.current){try{seqRef.current.stop();seqRef.current.dispose();}catch(e){}}
+    T.Transport.stop();T.Transport.cancel();
+    T.Transport.bpm.value=mood.bpm;
+    if(reverbRef.current)reverbRef.current.wet.rampTo(mood.revWet,1.5);
+    if(masterRef.current)masterRef.current.volume.rampTo(mood.vol,1.5);
+    if(padRef.current&&mood.padNotes.length){
+      try{padRef.current.volume.value=mood.padVol;padRef.current.triggerAttackRelease(mood.padNotes,"2n",T.now()+0.5);}catch(e){}
+    }
+    let step=0;
+    const seq=new T.Sequence((time,s)=>{
+      s=s%16;step=s;
+      if(mood.kick[s]&&kickRef.current)kickRef.current.triggerAttackRelease("C1","8n",time);
+      if(mood.snare[s]&&snareRef.current)snareRef.current.triggerAttackRelease("8n",time);
+      if(mood.hihat[s]&&hihatRef.current)hihatRef.current.triggerAttackRelease("32n",time);
+      if(mood.rim[s]&&rimRef.current)rimRef.current.triggerAttackRelease("16n",time);
+      if(mood.bassPattern[s]&&bassRef.current&&mood.bassNotes.length){
+        bassRef.current.triggerAttackRelease(mood.bassNotes[Math.floor(s/4)%mood.bassNotes.length],"8n",time);
+      }
+      if(mood.melPattern[s]&&melRef.current&&mood.melNotes.length){
+        melRef.current.triggerAttackRelease(mood.melNotes[s%mood.melNotes.length],"4n",time);
+      }
+      if(s===0&&padRef.current&&mood.padNotes.length){
+        try{padRef.current.volume.value=mood.padVol;padRef.current.triggerAttackRelease(mood.padNotes,"1n",time);}catch(e){}
+      }
+    },[...Array(16).keys()],"16n");
+    seq.start(0);seqRef.current=seq;T.Transport.start();
+  },[]);
+
+  const initAudio=useCallback(async()=>{
+    if(toneRef.current)return;
+    // Load Tone.js from CDN via script tag if not already present
+    if(!window.Tone){
+      await new Promise((res,rej)=>{
+        const s=document.createElement("script");
+        s.src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js";
+        s.onload=res;s.onerror=rej;
+        document.head.appendChild(s);
+      });
+    }
+    const T=window.Tone;
+    toneRef.current=T;
+    await T.start();
+    const master=new T.Volume(-12).toDestination();
+    const reverb=new T.Reverb({decay:2.5,wet:0.3}).connect(master);
+    await reverb.generate();
+    masterRef.current=master;reverbRef.current=reverb;
+    kickRef.current=new T.MembraneSynth({pitchDecay:0.08,octaves:6,envelope:{attack:0.001,decay:0.35,sustain:0,release:0.1},volume:-6}).connect(master);
+    snareRef.current=new T.NoiseSynth({noise:{type:"white"},envelope:{attack:0.001,decay:0.18,sustain:0,release:0.05},volume:-14}).connect(reverb);
+    hihatRef.current=new T.MetalSynth({frequency:400,envelope:{attack:0.001,decay:0.06,release:0.01},harmonicity:5.1,modulationIndex:32,resonance:4000,octaves:1.5,volume:-22}).connect(reverb);
+    rimRef.current=new T.MetalSynth({frequency:240,envelope:{attack:0.001,decay:0.1,release:0.01},harmonicity:8,modulationIndex:40,resonance:5000,octaves:0.5,volume:-26}).connect(reverb);
+    bassRef.current=new T.MonoSynth({oscillator:{type:"sawtooth"},filter:{frequency:400,type:"lowpass",Q:2},envelope:{attack:0.01,decay:0.2,sustain:0.4,release:0.3},filterEnvelope:{attack:0.01,decay:0.1,sustain:0.5,release:0.3,baseFrequency:200,octaves:2},volume:-18}).connect(master);
+    padRef.current=new T.PolySynth(T.Synth,{oscillator:{type:"triangle"},envelope:{attack:0.5,decay:1,sustain:0.6,release:2},volume:-28}).connect(reverb);
+    melRef.current=new T.MonoSynth({oscillator:{type:"sine"},envelope:{attack:0.05,decay:0.2,sustain:0.4,release:0.8},volume:-24}).connect(reverb);
+    startSeq("street");
+  },[startSeq]);
+
+  // Mood transitions
+  useEffect(()=>{
+    if(!started||!toneRef.current)return;
+    const target=selectMusicMood({heat,weather,inCombat,inDungeon,isVampire,addiction,mental});
+    if(target===moodKeyRef.current)return;
+    setMoodKey(target);
+    const t=setTimeout(()=>{if(mountedRef.current)startSeq(target);},600);
+    return()=>clearTimeout(t);
+  },[heat,weather,inCombat,inDungeon,isVampire,addiction,mental,started,startSeq]);
+
+  // Volume control
+  useEffect(()=>{
+    if(!masterRef.current)return;
+    const mood=MUSIC_MOODS[moodKeyRef.current]||MUSIC_MOODS.street;
+    const offset=(volume-0.7)*20;
+    masterRef.current.volume.rampTo(muted?-80:mood.vol+offset,0.3);
+  },[volume,muted]);
+
+  // Cleanup
+  useEffect(()=>{
+    mountedRef.current=true;
+    return()=>{
+      mountedRef.current=false;
+      try{seqRef.current?.stop();seqRef.current?.dispose();}catch(e){}
+      try{toneRef.current?.Transport.stop();}catch(e){}
+      [kickRef,snareRef,hihatRef,rimRef,bassRef,padRef,melRef,masterRef,reverbRef].forEach(r=>{try{r.current?.dispose();}catch(e){}});
+    };
+  },[]);
+
+  const handleClick=async()=>{
+    if(!started){await initAudio();setStarted(true);}
+    else setMuted(m=>!m);
+  };
+
+  const mood=MUSIC_MOODS[moodKey]||MUSIC_MOODS.street;
+  return(
+    <div style={{position:"fixed",bottom:90,left:12,zIndex:300,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4,fontFamily:"'Share Tech Mono',monospace",userSelect:"none"}}>
+      {showVol&&started&&(
+        <div style={{background:"#080808",border:"1px solid #2a2a2a",padding:"6px 8px",display:"flex",flexDirection:"column",gap:4,marginBottom:2}}>
+          <div style={{fontSize:7,color:"#555",letterSpacing:1}}>VOLUME</div>
+          <input type="range" min={0} max={1} step={0.05} value={volume} onChange={e=>setVolume(parseFloat(e.target.value))} style={{width:72,height:2,accentColor:"#e9c46a",cursor:"pointer"}}/>
+          <div style={{fontSize:7,color:"#333",letterSpacing:1}}>{started&&!muted?mood.label:"—"}</div>
+        </div>
+      )}
+      <div onClick={handleClick} onMouseEnter={()=>setShowVol(true)} onMouseLeave={()=>setShowVol(false)}
+        style={{display:"flex",alignItems:"center",gap:5,padding:"4px 7px",background:started&&!muted?"#e9c46a12":"#06060a",border:`1px solid ${started&&!muted?"#e9c46a44":"#1a1a1a"}`,color:started&&!muted?"#e9c46a":"#333",cursor:"pointer",transition:"all 0.2s",fontSize:9,letterSpacing:1}}>
+        {started&&!muted?(
+          <div style={{display:"flex",alignItems:"flex-end",gap:1,height:10}}>
+            {[3,7,5,9,4,7,3].map((h,i)=>(
+              <div key={i} style={{width:2,height:h,background:"#e9c46a",animation:`mBar${i%3} ${0.4+i*0.07}s ease-in-out infinite alternate`,borderRadius:1}}/>
+            ))}
+          </div>
+        ):<span style={{fontSize:10}}>♪</span>}
+        <span style={{fontSize:8}}>{!started?"MUSIC":muted?"MUTED":""}</span>
+      </div>
+      <style>{`@keyframes mBar0{from{height:2px}to{height:10px}}@keyframes mBar1{from{height:4px}to{height:8px}}@keyframes mBar2{from{height:3px}to{height:12px}}`}</style>
+    </div>
+  );
+}
+
 export default function NYC(){
   const [phase,setPhase]   =useState("boot");
   const [gameTime,setGameTime] =useState({hour:8,minute:0}); // game starts at 8am
@@ -11172,6 +11339,17 @@ export default function NYC(){
             ))}
           </div>
         )}
+
+        {/* MUSIC ENGINE */}
+        <MusicEngine
+          heat={gs.heat}
+          weather={getWeather(gs.day)?.id}
+          inCombat={!!combat}
+          inDungeon={!!dungeon&&dungeon.status==="active"}
+          isVampire={!!gs.isVampire}
+          addiction={gs.addiction||0}
+          mental={gs.survival?.mental??70}
+        />
 
         {/* BOTTOM */}
         <div style={{borderTop:"1px solid #111",display:"flex",alignItems:"center",padding:"0 16px",gap:7,background:"#080808",minHeight:46,flexShrink:0}}>
