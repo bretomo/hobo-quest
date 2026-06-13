@@ -3110,7 +3110,7 @@ function CharPortrait({gs}){
           <div style={{position:"absolute",bottom:2,right:2,background:color,color:"#000",fontSize:7,fontFamily:"'Bebas Neue',sans-serif",padding:"0 3px",letterSpacing:1}}>Lv{gs.level}</div>
           {/* Status overlay */}
           {gs.wanted&&<div style={{position:"absolute",top:2,left:2,background:"#e63946",color:"#fff",fontSize:6,padding:"0 2px"}}>HOT</div>}
-          {gs.isVampire&&!gs.feedUsed&&<div style={{position:"absolute",top:2,left:2,background:"#9d4edd",color:"#fff",fontSize:6,padding:"0 2px"}}>HUN</div>}
+          {gs.isVampire&&(gs.feedCount_today||0)<2&&<div style={{position:"absolute",top:2,left:2,background:"#9d4edd",color:"#fff",fontSize:6,padding:"0 2px"}}>HUN</div>}
           {gs.isRat&&gs.exposedAsRat&&<div style={{position:"absolute",top:2,left:2,background:"#ff6b6b",color:"#fff",fontSize:6,padding:"0 2px"}}>EXP</div>}
         </div>
       </div>
@@ -7634,7 +7634,7 @@ export default function NYC(){
           fiveBoroStreak:checkFiveBoroWin(g,world)?(g.fiveBoroStreak||0)+1:0,
           infamy:Math.max(0,(g.infamy||0)-INFAMY_DECAY_PER_SLEEP), // slow decay
           fiveBoroStartDay:checkFiveBoroWin(g,world)&&!(g.fiveBoroStreak>0)?nextDay:g.fiveBoroStartDay,
-          informsToday:0,patrolEncountered:false,feedUsed:false};
+          informsToday:0,patrolEncountered:false,feedUsed:false,feedCount_today:0};
         // Auto-eat: if hungry and have food, consume one item overnight
         if(ng.survival.hunger<40){
           const foodNames=["sandwich","soup","hotdog","chips","water"];
@@ -8743,7 +8743,37 @@ export default function NYC(){
       const sub0=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       const isSubstanceName=sub0&&(itemName===sub0.name||itemName===sub0.product);
       if(isProductName||isSubstanceName){
-        // fall through to substance USE handler below
+        // Redirect to the substance USE handler by treating this as bare USE
+        // We do this by falling out of the if(useItemM) block with C rewritten
+        // Actually just set a flag and handle inline:
+        const _sub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
+        if(!_sub){push(`No substance defined for your class.`);return;}
+        if(gs.isVampire){push(`FEED is your equivalent.`);return;}
+        const _hasProd=_sub?.product&&(gs.product?.[_sub.product]||0)>0;
+        const _isBodigaSub=!_sub.product&&_sub.buyCost>0;
+        const _hasBodegaItem=_isBodigaSub&&gs.inventory?.some(i=>(typeof i==="string"?i:i?.name||"").toLowerCase().includes(_sub.name==="alcohol"?"beer":"cigarette"));
+        const _hasSub=_hasProd||_hasBodegaItem;
+        const _canBuy=(_sub?.buyCost>0&&gs.cash>=_sub.buyCost)||_hasBodegaItem;
+        if(!_hasSub&&!_canBuy){push(`${_sub?.icon} No ${_sub?.name}. Running dry.`,_isBodigaSub?`BODEGA to buy some ($${_sub.buyCost})`:`BUY ${_sub.name.toUpperCase()} to restock.`);return;}
+        const _hEvts=HIGH_EVENTS[_sub.name]||HIGH_EVENTS.weed;
+        const _hEvt=_hEvts[rnd(0,_hEvts.length-1)];
+        const _addGainMult=PRODUCTS[_sub?.product]?.addGainMult||1.0;
+        const _addGain=Math.round((rnd(3,8)+Math.floor((gs.addiction||0)/20))*_addGainMult);
+        push("",`${_sub.icon} You use.`,_hEvt.msg,`Addiction now: ${Math.min(100,(gs.addiction||0)+_addGain)}/100`,"");
+        updGs(g=>{
+          const _eff=_hEvt.effect||{};
+          let ng={...g,lastUsed:g.day,lastUsedTime:Date.now(),withdrawalDay:0,highActive:true,addiction:Math.min(100,(g.addiction||0)+_addGain)};
+          if(_sub.product&&_hasProd)ng={...ng,product:{...ng.product,[_sub.product]:Math.max(0,ng.product[_sub.product]-1)}};
+          else if(_sub.buyCost)ng={...ng,cash:Math.max(0,ng.cash-_sub.buyCost)};
+          if(_eff.cash)ng={...ng,cash:Math.max(0,ng.cash+_eff.cash)};
+          if(_eff.health)ng={...ng,survival:{...ng.survival,health:clamp(ng.survival.health+_eff.health,0,100)}};
+          if(_eff.mental)ng={...ng,survival:{...ng.survival,mental:clamp((ng.survival.mental||70)+_eff.mental,0,100)}};
+          if(_eff.energy)ng={...ng,survival:{...ng.survival,energy:clamp(ng.survival.energy+(_eff.energy||0),0,100)}};
+          if(_eff.heat)ng={...ng,heat:clamp(ng.heat+_eff.heat,0,10)};
+          if(_eff.addiction_bonus)ng={...ng,addiction:Math.min(100,ng.addiction+(_eff.addiction_bonus||0))};
+          return ng;
+        });
+        return;
       } else {
       const inInv=gs.inventory.find(i=>i.toLowerCase()===itemName.toLowerCase()||i.toLowerCase().includes(itemName.toLowerCase()));
       if(!inInv){push("You don't have "+itemName+" in your inventory.");return;}
@@ -9009,28 +9039,35 @@ export default function NYC(){
     // FEED — vampire feeds on NPC for health and cash
     if(C==="FEED"){
       if(!gs.isVampire){push(`That's not your nature.`);return;}
-      if(gs.feedUsed){push(`You've fed today. Wait until tomorrow.`);return;}
-      const feedHeal=hasSkill(gs,"blood_money")?30:15;
+      const feedsToday=gs.feedCount_today||0;
+      const maxFeeds=hasSkill(gs,"ancient_blood")?3:2;
+      if(feedsToday>=maxFeeds){push(`You've fed ${feedsToday} times today. The hunger is satisfied. Wait until tomorrow.`);return;}
+      const feedHeal=hasSkill(gs,"blood_money")?50:35;
       const feedBonus=hasSkill(gs,"blood_money")?20:0;
       const ancientBlood=hasSkill(gs,"ancient_blood");
-      const healAmt=ancientBlood?100:feedHeal; // full heal if ancient blood
+      const healAmt=ancientBlood?100:feedHeal;
       const cash=rnd(15,35)+feedBonus;
+      const feedsAfter=feedsToday+1;
       updGs(g=>applyXP({...g,
         cash:g.cash+cash,
-        feedUsed:true,
+        feedUsed:feedsAfter>=maxFeeds,
         feedCount:(g.feedCount||0)+1,
+        feedCount_today:feedsAfter,
         survival:{...g.survival,
-          health:clamp(g.survival.health+healAmt,0,100), // FEED heals, not sets
-          warmth:clamp(g.survival.warmth+20,0,100),
+          health:clamp(g.survival.health+healAmt,0,100),
+          warmth:clamp(g.survival.warmth+25,0,100),
         }},12,"fight"));
       const feedMsgs=[
         `You find someone alone near the overpass. They don't remember anything afterward.`,
         `A drunk stumbles out of the bar. You help them to a dark corner. They won't be calling anyone tonight.`,
         `The subway car empties out. You're alone with someone who shouldn't have been alone.`,
         `Quick. Quiet. They'll wake up confused but alive. Mostly.`,
+        `Someone waiting for the bus. Wrong night to be alone.`,
+        `You move through the crowd and nobody notices until it's done.`,
       ];
-      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,"+$"+cash+". Health +"+healAmt+"hp."+(ancientBlood?" (Ancient Blood — full restore)":""));
-      if(gs.survival.health>=95)push(`You're at full strength.`);
+      push(`🧛 ${feedMsgs[rnd(0,feedMsgs.length-1)]}`,
+        `+$${cash}. Health +${healAmt}hp. Warmth +25.`,
+        feedsAfter<maxFeeds?`Feed ${feedsAfter}/${maxFeeds} today. You could feed again.`:`Fed ${maxFeeds}/${maxFeeds} today. Sated until tomorrow.`);
       return;
     }
 
@@ -9170,7 +9207,13 @@ export default function NYC(){
     if(C==="THIRST"){
       if(!gs.isVampire){push(`You're not that kind of thirsty.`);return;}
       const feeds=gs.feedCount||0;
-      push(`🧛 Blood count: ${feeds} feeds total.`,`Thralls: ${gs.thralls?.length||0}/3`,`Feed today: ${gs.feedUsed?"Yes — sated":"No — hungry"}`,`Health: ${gs.survival.health}% · Warmth: ${gs.survival.warmth}%`,`Sunlight warning: Stay out of open spaces during the day.`);
+      const maxFeedsT=hasSkill(gs,"ancient_blood")?3:2;
+      const feedsTodayT=gs.feedCount_today||0;
+      push(`🧛 Blood count: ${feeds} feeds total.`,
+        `Fed today: ${feedsTodayT}/${maxFeedsT}${feedsTodayT<maxFeedsT?" — can still feed":" — sated until tomorrow"}`,
+        `Thralls: ${gs.thralls?.length||0}/3`,
+        `Health: ${gs.survival.health}% · Warmth: ${gs.survival.warmth}%`,
+        `Sunlight warning: Stay out of open spaces during the day.`);
       return;
     }
 
