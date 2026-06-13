@@ -8626,10 +8626,14 @@ export default function NYC(){
         });
         return;
       }
-      // USE BUY — fall through to normal USE handler
+      // USE BUY — fall through to normal USE handler by rewriting C
+      if(C==="USE BUY"){
+        // User wants to buy rather than use stash — continue to USE logic below
+        // This is handled by the USE handler below
+      }
     }
 
-    if(C==="USE"){
+    if(C==="USE"||C==="USE BUY"){
       if(gs.isVampire){push(`FEED is your equivalent.`);return;}
       const sub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
       if(!sub){push(`No substance defined for your class.`);return;}
@@ -8642,7 +8646,7 @@ export default function NYC(){
       const canBuyBodega=isBodigaSub&&gs.cash>=sub.buyCost;
       const canBuy=(sub?.buyCost>0&&gs.cash>=sub.buyCost)||hasBodegaItem;
       const hasSub=hasProd||hasBodegaItem;
-      if(gs.isJunkie&&hasProd&&(gs.addiction||0)>=50){
+      if(gs.isJunkie&&hasProd&&(gs.addiction||0)>=70&&C!=="USE BUY"){
         const stashQty=gs.product[sub.product]||0;
         const withdrawal=(gs.addiction||0)>70;
         push(``,
