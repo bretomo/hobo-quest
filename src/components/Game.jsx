@@ -3924,22 +3924,38 @@ export default function NYC(){
             const wEvts=WITHDRAWAL_EVENTS[sub?.name||"stress"]||WITHDRAWAL_EVENTS.stress;
             const wEvt=wEvts[Math.floor(Math.random()*wEvts.length)];
             const severity=Math.floor(addiction/15);
-            if(Math.random()<0.20){
-              setTimeout(()=>setFeed(f=>[...f,"",`🤢 WITHDRAWAL (${getAddictionLevel(addiction).name}):`,wEvt,
-                addiction>60?`Hands shaking. Can't think straight. USE to stop this.`:"",
-                addiction>80?`⚠ SEVERE — health and mental dropping fast. USE or RECOVERY.`:"",
+            // Withdrawal fires a message more often at higher severity
+            const msgChance=addiction>=80?0.40:addiction>=60?0.25:0.15;
+            if(Math.random()<msgChance){
+              setTimeout(()=>setFeed(f=>[...f,"",`🤢 ${getAddictionLevel(addiction).icon} WITHDRAWAL:`,wEvt,
+                addiction>=40?`${sub?.icon} USE to stop this.`:"",
+                addiction>=60?`Can't think straight. Everything hurts. You NEED ${sub?.name}.`:"",
+                addiction>=80?`⚠ SEVERE — body shutting down. USE or RECOVERY now.`:"",
               ""]),10);
             }
+            // Withdrawal damage — scales hard with severity
+            // At Hooked(40): -4/-6/-8 per tick. At Destroyed(95): -14/-21/-28 per tick
             g.survival={...g.survival,
-              health:clamp(g.survival.health-(severity*2),0,100),
-              mental:clamp((g.survival.mental||70)-(severity*3),0,100),
-              energy:clamp(g.survival.energy-(severity*4),0,100),
+              health:clamp(g.survival.health-(severity*4),0,100),
+              mental:clamp((g.survival.mental||70)-(severity*6),0,100),
+              energy:clamp(g.survival.energy-(severity*8),0,100),
             };
-            if(addiction>70&&Math.random()<0.15)g.cash=Math.max(0,g.cash-rnd(10,30));
-            if(addiction>80)g.heat=clamp(g.heat+0.05,0,10);
+            // High addiction = can't keep cash, start doing desperate things
+            if(addiction>=60&&Math.random()<0.25)
+              g.cash=Math.max(0,g.cash-rnd(15,40));
+            if(addiction>=70)
+              g.heat=clamp(g.heat+0.1,0,10);
+            // Hustle and deal penalties — can't focus when sick
+            if(addiction>=50)
+              g.hustleBonus=(g.hustleBonus||0)-1; // temporary penalty resets each hustle
             g.withdrawalDay=(g.withdrawalDay||0)+1;
             if(g.survival.health>0&&g.archetype?.id==="junkie")
               g.storyFlags=[...new Set([...(g.storyFlags||[]),"survived_withdrawal"])];
+          } else if(hasSub&&g.highActive){
+            // Just used — brief relief message occasionally
+            if(Math.random()<0.05){
+              setTimeout(()=>setFeed(f=>[...f,`${sub?.icon} The ${sub?.name} is working. For now.`]),10);
+            }
           }
           // Rock bottom
           if(addiction>=90&&!hasSub&&hoursSinceUse>1&&Math.random()<0.3){
@@ -4085,19 +4101,58 @@ export default function NYC(){
         }
         if(g.survival.warmth<15&&w.id==="blizzard")setTimeout(()=>setFeed(f=>[...f,`❄️ Blizzard. Find shelter or you'll freeze.`]),10);
         if(g.survival.health<=0){
-          const cause=g.survival.hunger<=0?"Starved.":g.survival.warmth<=0?"Froze.":g.survival.energy<=0?"Exhaustion.":"Health depleted.";
+          // Determine cause from context — check withdrawal and OD flags too
+          const cause=g._deathCause||(
+            g.survival.hunger<=0?"Starvation.":
+            g.survival.warmth<=0?"Exposure.":
+            g.survival.energy<=0?"Exhaustion.":
+            (g.addiction||0)>=40&&(g.withdrawalDay||0)>0?"Withdrawal.":
+            "Health depleted."
+          );
           setTimeout(()=>{
-            const _deathMsgs=[
-              `☠ ${g.name} went down on Day ${g.day}. Level ${g.level}. ${cause}`,
-              `☠ ${g.name} is gone. Day ${g.day}. Level ${g.level}. ${cause} The city doesn't stop.`,
-              `☠ Day ${g.day}. Level ${g.level}. ${g.name} ran out of road. ${cause}`,
+            // ── Release corners immediately on death ─────────────────────────
+            const deadCorners=(g.cornersOwned||[]);
+            if(deadCorners.length>0){
+              setWorld(prev=>{
+                const newCorners={...prev.corners};
+                const newLastVisit={...prev.cornerLastVisit};
+                deadCorners.forEach(bId=>{
+                  if(newCorners[bId]===g.name){
+                    delete newCorners[bId];
+                    delete newLastVisit[g.name+":"+bId];
+                  }
+                });
+                const ws={...prev,corners:newCorners,cornerLastVisit:newLastVisit};
+                saveWorld(ws);return ws;
+              });
+            }
+            // ── Server-wide death announcement ───────────────────────────────
+            const cornersMsg=deadCorners.length>0
+              ?` Their ${deadCorners.length} corner${deadCorners.length>1?"s are":"is"} now unclaimed.`:"";
+            const deathAnnouncements=[
+              `☠ ${g.name} [${g.archetype?.name||"Unknown"}] died on Day ${g.day}. ${cause}${cornersMsg}`,
+              `☠ ${g.name} ran out of road. Day ${g.day} · Level ${g.level}. ${cause}${cornersMsg}`,
+              `☠ Day ${g.day}. ${g.name} is gone. ${cause} The city keeps moving.${cornersMsg}`,
             ];
-            const dWs=broadcastActivity(world,_deathMsgs[rnd(0,_deathMsgs.length-1)],"☠");setWorld(dWs);saveWorld(dWs);
+            const announcement=deathAnnouncements[rnd(0,deathAnnouncements.length-1)];
+            const dWs=broadcastActivity(world,announcement,"☠");
+            setWorld(prev=>({...prev,
+              messages:[...(prev.messages||[]),{
+                from:"SYSTEM",text:announcement,time:Date.now(),type:"death",icon:"☠"
+              }],
+              wallOfDead:[...(prev.wallOfDead||[]).slice(-19),
+                {name:g.name,level:g.level,day:g.day,cause,
+                 archetype:g.archetype?.name,corners:deadCorners.length,time:Date.now()}],
+            }));
+            saveWorld(dWs);
+            // ── Local death feed ─────────────────────────────────────────────
             setFeed(f=>[...f,``,`☠ YOU DIED`,cause,`Day ${g.day} · Level ${g.level}`,``,
+              deadCorners.length>0?`Your ${deadCorners.length} corner${deadCorners.length>1?"s have":"has"} been released.`:"",
               g.survival.hunger<=0?`EAT regularly — BODEGA has food. Hunger drains every minute.`:
               g.survival.warmth<=0?`SHELTER when cold — warmth drains fast in bad weather.`:
+              cause==="Withdrawal."?`RECOVERY exists. Carmen runs a drop-in on 3rd. It doesn't have to end like this.`:
+              cause.includes("Overdose")||cause.includes("Laced")?`Bad batch. Next time check SCOUT for supply warnings.`:
               `Keep your health bar up — REST, HEAL, or CLINIC.`,``]);
-            setWorld(prev=>{const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),{name:g.name,level:g.level,day:g.day,cause,time:Date.now()}]};saveWorld(ws);return ws;});
             setTimeout(()=>setPhase("dead"),3000);
           },10);
         }
@@ -4176,6 +4231,7 @@ export default function NYC(){
       isVeteran:   saved.isVeteran   ??archId==="veteran",
       isHustler:   saved.isHustler   ??archId==="hustler",
       infamy:      saved.infamy      ??0,
+      lastUsedTime:saved.lastUsedTime ??0,
       product:     saved.product     ??{weed:0,pills:0,powder:0,heroin:0},
       cornersOwned:saved.cornersOwned??[],
       army:        saved.army        ??[],
@@ -4697,6 +4753,20 @@ export default function NYC(){
     if(h<30)       btns.push({label:"HEAL",   icon:"🩹",cmd:"HEAL",   color:"#e63946"});
     else if(hunger<25)btns.push({label:"EAT",    icon:"🍞",cmd:"EAT",    color:"#f4a261"});
     else if(energy<20)btns.push({label:"REST",   icon:"😴",cmd:"REST",   color:"#888"});
+    // Withdrawal emergency button — surfaces USE prominently when sick
+    if(!gs.isVampire&&!gs.isUndoc&&(gs.addiction||0)>=40){
+      const useSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
+      if(useSub){
+        const uLastMs=gs.lastUsedTime||(Date.now()-(gs.day-(gs.lastUsed||0))*3600000*4);
+        const uHours=(Date.now()-uLastMs)/3600000;
+        const uWH={40:4,60:2,80:1,95:0.5};
+        const uW=Object.entries(uWH).reverse().find(([m])=>(gs.addiction||0)>=Number(m))?.[1]||999;
+        if(uHours>uW){
+          btns.push({label:`USE ${useSub.name.slice(0,4).toUpperCase()}`,icon:useSub.icon,cmd:"USE",
+            color:(gs.addiction||0)>=80?"#e63946":"#9d4edd"});
+        }
+      }
+    }
     // Warmth emergency or blizzard — surface SHELTER prominently
     if(warmth<25||w?.id==="blizzard")
       btns.push({label:"SHELTER",icon:"🏠",cmd:"SHELTER",color:warmth<15?"#e63946":"#a8dadc"});
@@ -5178,6 +5248,15 @@ export default function NYC(){
         `SELL [item] [#] — sell product (prices vary by borough)`,
         `MOVE [borough]  — travel to find better prices`,
         `ARBITRAGE       — shows best buy/sell spread right now`,
+        `SCOUT           — current buy/sell prices + spread`,
+        ``,
+        `PRODUCTS: weed · pills · powder · heroin`,
+        `  Weed   — low heat, low margin, available everywhere`,
+        `  Pills  — medium heat, medium margin`,
+        `  Powder — high heat, high margin`,
+        `  Heroin — very high heat/margin · Level 4+ · Bronx/Queens only`,
+        `           Requires NPC connect (rep 5+) · BUY HEROIN [#]`,
+        `           Junkies: SCORE to find it when desperate (2x/day)`,
         ``,
         `CORNERS (passive income):`,
         `  CLAIM           — take the corner here ($50)`,
@@ -5623,7 +5702,13 @@ export default function NYC(){
           const loseText=bData?.fleeMsg
             ?`You didn't make it this time.\n${bData.fleeMsg}`
             :`${b.name} beat you. Heal up and try again.`;
-          push(``,`${b.name} beat you this time.`,loseText,`Heal up. Come back.`);
+          const lossDmg=rnd(20,40);
+          updGs(g=>{
+            const newHp=clamp(g.survival.health-lossDmg,0,100);
+            return{...g,survival:{...g.survival,health:newHp},
+              _deathCause:newHp<=0?"Killed in combat.":undefined};
+          });
+          push(``,`${b.name} beat you this time.`,loseText,`Health -${lossDmg}. CLINIC or REST before trying again.`,``);
         },
         ()=>{
           // Flee — use fleeMsg
@@ -5850,7 +5935,7 @@ export default function NYC(){
         (()=>{const ad=gs.addiction||0;if(ad===0)return"";const al=getAddictionLevel(ad);const daysSince=gs.day-(gs.lastUsed||0);const inW=daysSince>Math.max(1,3-Math.floor(ad/30))&&ad>20;return `${al.icon} Addiction: ${ad}/100 ${al.name}${inW?" ⚠ IN WITHDRAWAL — USE to stabilize":" · last used day "+(gs.lastUsed||0)}`;})(),
         `Cops here: ${getCopPresence(boro,world.copPresence,gs.day)}/10`,
         `XP: ${gs.xp} · Next: ${xpNext(gs.xp)} · Next stat: +${nextStat.toUpperCase()}`,
-        `Product: Weed×${gs.product.weed} Pills×${gs.product.pills} Powder×${gs.product.powder} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
+        `Product: Weed×${gs.product.weed||0} Pills×${gs.product.pills||0} Powder×${gs.product.powder||0}${(gs.product.heroin||0)>0?` Heroin×${gs.product.heroin}`:""} (weight: ${pw.toFixed(1)}/${MAX_CARRY_WEIGHT})`,
         gs.debtOwed>0?`⚠ DEBT: $${gs.debtOwed} — PAY DEBT`:"",
         gs.isHooker?"Clients today: "+(gs.hustleCount||0)+"/"+(HUSTLE_DAILY_MAX["hooker"]||4)+" · Regulars: "+(gs.regulars||0):!gs.isFixer&&!gs.isRat?"Hustles today: "+(gs.hustleCount||0)+"/"+HUSTLE_DAILY_MAX[gs.archetype?.id||"veteran"]+(gs.hustleBoroLast===boro&&(gs.hustleBoros?.[boro]||0)>=2?" ⚠ SAME BLOCK PENALTY":""):"",
         `Day labor: ${gs.dayJobDone?"Done for today":"Available — type WORK"}`,
@@ -6053,7 +6138,7 @@ export default function NYC(){
         updGs(g=>applyXP({...g,cash:g.cash+total3,cooked:{...g.cooked,[pKey]:held3-qty3},heat:clamp(g.heat+hg3,0,10)},12*qty3,"deal"));
         push(`${recipe3.icon} Sold ${qty3}x ${pKey}. +$${total3}.`);return;
       }
-      if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder. For cooked: SELL COOKED [name].`);return;}
+      if(!PRODUCTS[pKey]){push(`Unknown. Try: weed, pills, powder, heroin. For cooked: SELL COOKED [name].`);return;}
       const runnerBonus=(gs.army||[]).filter(u=>u.id==="runner").length;
       const maxSell=gs.isHustler?8:gs.archetype?.id==="ghost"?7:5+runnerBonus;
       if(qty>maxSell){push(`Can't move ${qty} at once. Max ${maxSell} per transaction.`);return;}
@@ -6064,7 +6149,7 @@ export default function NYC(){
       if(sellsToday>=maxSellTx){
         push(`Market's dry here. You've moved ${pKey} in ${getBoro(boro)?.name} ${sellsToday} times today.`,`Come back tomorrow or try another borough.`);return;
       }
-      if(gs.product[pKey]<qty){push(`Only have ${gs.product[pKey]}.`);return;}
+      if((gs.product[pKey]||0)<qty){push(`Only have ${gs.product[pKey]||0} ${PRODUCTS[pKey].unit}${(gs.product[pKey]||0)!==1?"s":""}.`);return;}
       const price=mktPrice(boro,pKey,gs.day,weather,world.supply);const total=price*qty;
       // Heat scales with quantity AND current borough heat level
       const boroHeatMult=b.heat/8;
@@ -6093,13 +6178,19 @@ export default function NYC(){
         push("",bustMsgs[rnd(0,bustMsgs.length-1)],"Heat critical. LAY LOW or SKIP TOWN now.","");return;
       }
       const sellLogKey2=`sells_${boro}_${pKey}`;
-      updGs(g=>applyXP({...g,
-        cash:g.cash+total,
-        product:{...g.product,[pKey]:g.product[pKey]-qty},
-        heat:clamp(g.heat+hg,0,10),
-        dailySells:{...(g.dailySells||{}),[sellLogKey2]:((g.dailySells||{})[sellLogKey2]||0)+1},
-        lifetime:{...g.lifetime,deals:(g.lifetime?.deals||0)+qty,cashEarned:(g.lifetime?.cashEarned||0)+total},
-      },8*qty,"deal"));
+      updGs(g=>{
+        // Double-check inside callback — prevents overselling from stale state
+        const actualQty=Math.min(qty,g.product[pKey]||0);
+        if(actualQty<=0)return g; // nothing to sell
+        const actualTotal=Math.round(price*actualQty);
+        return applyXP({...g,
+          cash:g.cash+actualTotal,
+          product:{...g.product,[pKey]:Math.max(0,(g.product[pKey]||0)-actualQty)},
+          heat:clamp(g.heat+Math.max(1,Math.round(actualQty*PRODUCTS[pKey].rm*boroHeatMult*prodHeatMult)),0,10),
+          dailySells:{...(g.dailySells||{}),[sellLogKey2]:((g.dailySells||{})[sellLogKey2]||0)+1},
+          lifetime:{...g.lifetime,deals:(g.lifetime?.deals||0)+actualQty,cashEarned:(g.lifetime?.cashEarned||0)+actualTotal},
+        },8*actualQty,"deal");
+      });
       // update world supply data so prices respond
       // Supply tracking — accumulates per borough per product per day
       const supplyKey=`${boro}_${pKey}_d${gs.day}`;
@@ -6196,7 +6287,31 @@ export default function NYC(){
       return;
     }
     if(C==="HUSTLE"){
-      if(gs.isHooker){push(`You don't hustle like that. Type CLIENT.`);return;}
+      // Withdrawal penalty on hustle — can't work properly when sick
+      const hustleSubCheck=(()=>{
+        if(gs.isVampire||gs.isUndoc)return null;
+        const hSub=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
+        if(!hSub||(gs.addiction||0)<40)return null;
+        const hLastMs=gs.lastUsedTime||(Date.now()-(gs.day-( gs.lastUsed||0))*3600000*4);
+        const hHours=(Date.now()-hLastMs)/3600000;
+        const hWH={40:4,60:2,80:1,95:0.5};
+        const hW=Object.entries(hWH).reverse().find(([m])=>(gs.addiction||0)>=Number(m))?.[1]||999;
+        return hHours>hW?{sick:true,addiction:gs.addiction,name:hSub.name,icon:hSub.icon}:null;
+      })();
+      if(hustleSubCheck){
+        const {addiction:hAdd,name:hName,icon:hIcon}=hustleSubCheck;
+        // Severe withdrawal completely blocks hustle at high addiction
+        if(hAdd>=80&&Math.random()<0.6){
+          push(``,`${hIcon} Can't focus. ${hName} withdrawal too bad.`,
+            `Your hands are shaking. You can't run your game like this.`,
+            `USE ${hName.toUpperCase()} to stabilize. Or push through and take the penalty.`,``);
+          return;
+        }
+        // Moderate withdrawal reduces pay significantly
+        if(hAdd>=60){
+          push(`${hIcon} Sick. Working through it.`);
+        }
+      }
       if(gs.survival.energy<20){push(`Too tired. REST first.`);return;}
       // Fixer and Rat have better alternatives
       if(gs.isFixer){push(`Fixers don't hustle. BROKER deals or WIRE cash instead.`);return;}
@@ -6237,9 +6352,11 @@ export default function NYC(){
       // Infamy penalty — high infamy players earn less from NPCs (they're scared/suspicious)
       const infamyL=getInfamyLevel(gs.infamy||0);
       const infamyNpcPenalty=infamyL.npcMult||1.0;
+      // Withdrawal makes you worse at your work
+      const withdrawPenalty=hustleSubCheck?Math.max(0.3,1-(hustleSubCheck.addiction/200)):1.0;
 
       if(ok){
-        let base=Math.round((rnd(style.basePay[0],style.basePay[1])+gs.stats.hustle)/infamyNpcPenalty);
+        let base=Math.round((rnd(style.basePay[0],style.basePay[1])+gs.stats.hustle)/infamyNpcPenalty*withdrawPenalty);
         base=Math.round(base*payoutMult);
         // Schemer crit — 20% chance 2x on first hustle
         if(style.crit&&todayCount===0&&Math.random()<0.2){
@@ -6966,7 +7083,7 @@ export default function NYC(){
       const [,tName,prod,qtyS,priceS]=offerM;
       const qty=parseInt(qtyS);const price=parseInt(priceS);
       if(tName.toLowerCase()===gs.name.toLowerCase()){push("Can't trade with yourself.");return;}
-      if(!PRODUCTS[prod.toLowerCase()]&&!RECIPES[prod.toLowerCase()]){push("Unknown product: "+prod+". Try: weed, pills, powder.");return;}
+      if(!PRODUCTS[prod.toLowerCase()]&&!RECIPES[prod.toLowerCase()]){push("Unknown product: "+prod+". Try: weed, pills, powder, heroin.");return;}
       const pKey=prod.toLowerCase();
       const held=(gs.product[pKey]||0)+(gs.cooked?.[pKey]||0);
       if(held<qty){push("You only have "+held+" "+pKey+".");return;}
@@ -7335,7 +7452,7 @@ export default function NYC(){
           },
           heat:clamp(g.heat-(g.archetype?.id==="ghost"?3:2),0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
-          dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},
+          dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},scoreCount:0,
           contractsCompleted:[],contractProgress:{},
           // storyBoroDays: increment if slept in same boro as yesterday
           storyBoroDays:g.sleepBoro===boro?(g.storyBoroDays||0)+1:0,
@@ -7622,11 +7739,31 @@ export default function NYC(){
     // SCORE — junkie unique command (find product at street price)
     if(C==="SCORE"){
       if(!gs.isJunkie){push(`That's not your world.`);return;}
-      const cost=rnd(8,15);
+      const scoreSub=CLASS_SUBSTANCE["junkie"];
+      const scoreProd=scoreSub.product; // heroin
+      // Daily limit — can only score twice a day
+      const scoreCount=gs.scoreCount||0;
+      if(scoreCount>=2){push(`You've already scored twice today. Wait until tomorrow.`);return;}
+      // Carry weight check
+      const curWeight=getCarryWeight(gs.product);
+      const prodWeight=PRODUCT_WEIGHT[scoreProd]||1;
+      if(curWeight+prodWeight>MAX_CARRY_WEIGHT){push(`Already carrying too much. SELL or STASH first.`);return;}
+      // Source borough restriction — heroin only scores in Bronx/Queens
+      const heroScoreBoros=PRODUCTS.heroin?.sourceBoros||["bronx","queens"];
+      if(!heroScoreBoros.includes(boro)){
+        push(`Can't score here. Your connect is in ${heroScoreBoros.map(b=>getBoro(b)?.name).join(" or ")}.`);return;
+      }
+      const cost=rnd(Math.round(mktPrice(boro,scoreProd,gs.day,weather,world.supply)*0.7),
+                     Math.round(mktPrice(boro,scoreProd,gs.day,weather,world.supply)*0.9));
       if(gs.cash<cost){push(`Can't score. Need at least $${cost}.`);return;}
-      // scoring gives a small hit of weed at deep discount, but raises heat slightly
-      updGs(g=>applyXP({...g,cash:g.cash-cost,product:{...g.product,weed:g.product.weed+1},heat:clamp(g.heat+0.5,0,10),survival:{...g.survival,energy:clamp(g.survival.energy+20,0,100)}},3,"deal"));
-      push(`You know where to go when you need it.`,`$${cost}. One bag. Nobody saw anything.`,`Energy up. Heat barely moved.`);return;
+      updGs(g=>applyXP({...g,
+        cash:g.cash-cost,
+        product:{...g.product,[scoreProd]:(g.product[scoreProd]||0)+1},
+        heat:clamp(g.heat+1,0,10),
+        scoreCount:(g.scoreCount||0)+1,
+        survival:{...g.survival,energy:clamp(g.survival.energy+10,0,100)}
+      },3,"deal"));
+      push(`You know where to go when you need it.`,`$${cost}. One bag of ${scoreSub.name}. Nobody saw anything.`,`Heat +1. Scored ${scoreCount+1}/2 today.`);return;
     }
 
     // CONNECT — undocumented unique command (tap community network)
@@ -8542,6 +8679,72 @@ export default function NYC(){
         if(eff.energy)ng={...ng,survival:{...ng.survival,energy:clamp(ng.survival.energy+(eff.energy||0),0,100)}};
         if(eff.heat)ng={...ng,heat:clamp(ng.heat+eff.heat,0,10)};
         if(eff.addiction_bonus)ng={...ng,addiction:Math.min(100,ng.addiction+(eff.addiction_bonus||0))};
+
+        // ── OVERDOSE / LACED PRODUCT CHECK ────────────────────────────────
+        // Base OD chance by substance — heroin highest, weed near zero
+        const odBase={heroin:0.04,powder:0.025,pills:0.015,weed:0.003,alcohol:0.008,cigarettes:0.001};
+        const odChance=(odBase[sub?.name]||0.01)
+          *(1+(ng.addiction/100)*1.5)  // higher addiction = higher tolerance = need more = higher OD risk
+          *(ng.survival.health<40?1.8:1); // already hurt = much more dangerous
+        const laceChance=(odBase[sub?.name]||0.01)*0.6; // laced is slightly less common than pure OD
+        const odRoll=Math.random();
+
+        if(odRoll<odChance){
+          // OVERDOSE — severe health crash, possibly fatal
+          const fatal=ng.survival.health<30||Math.random()<0.3;
+          const odMsgs={
+            heroin:["The shot hits wrong. Too much. Everything slows down too fast.",
+                    "You miscalculated the dose. Your body knows before you do."],
+            powder:["Your heart is going too fast. Way too fast.",
+                    "Three lines was one too many. The room tilts."],
+            pills: ["The pills aren't what you thought. Nothing is slowing down.",
+                    "Too many. Your system can't process all of this."],
+            alcohol:["You drank until you couldn't stop. Your body is shutting down.",
+                     "Alcohol poisoning. You knew it was possible. Now it's happening."],
+            weed:  ["Laced. Something in it that shouldn't be there."],
+          };
+          const odMsg=(odMsgs[sub?.name]||["Something is very wrong."])[rnd(0,( odMsgs[sub?.name]||[""]).length-1)];
+          setTimeout(()=>setFeed(f=>[...f,"",`☠ OVERDOSE`,odMsg,
+            fatal?"Your body can't handle it. This is it.":"You're on the edge. Don't move. Don't use again today.",
+            fatal?"":` Health -60. Rest immediately.`
+          ,""]),50);
+          ng={...ng,survival:{...ng.survival,
+            health:clamp(ng.survival.health-(fatal?100:60),0,100),
+            mental:clamp((ng.survival.mental||70)-30,0,100),
+            energy:clamp(ng.survival.energy-50,0,100),
+          },_deathCause:fatal?"Overdose.":undefined};
+          if(!fatal)ng={...ng,heat:clamp(ng.heat+2,0,10)};
+          // Trigger death immediately on fatal OD — don't wait for tick
+          if(fatal){
+            setTimeout(()=>{
+              setFeed(f=>[...f,"","☠ OVERDOSE — FATAL",
+                "Too much. Too fast. Your body couldn't handle it.",
+                "","RETIRE to start over or LOAD CHARACTER."]);
+              setWorld(prev=>{
+                const ws={...prev,wallOfDead:[...(prev.wallOfDead||[]).slice(-19),
+                  {name:gs.name,level:gs.level||1,day:gs.day||1,cause:"Overdose.",time:Date.now()}]};
+                saveWorld(ws);return ws;
+              });
+              setTimeout(()=>setPhase("dead"),3000);
+            },200);
+          } // someone calls 911
+        } else if(odRoll<odChance+laceChance){
+          // LACED — bad batch, not necessarily fatal but very damaging
+          const laceTypes=["fentanyl","rat poison","cut with glass","baking soda and something worse","xylazine"];
+          const lacedWith=laceTypes[rnd(0,laceTypes.length-1)];
+          setTimeout(()=>setFeed(f=>[...f,"",`⚠ BAD BATCH`,
+            `Laced with ${lacedWith}. This isn't what you paid for.`,
+            "Your body knows something is wrong. Health dropping.",
+            (ng.addiction||0)>=60?"You need to get to a clinic. Now.":"Find help.",
+          ""]),50);
+          ng={...ng,survival:{...ng.survival,
+            health:clamp(ng.survival.health-rnd(25,45),0,100),
+            mental:clamp((ng.survival.mental||70)-20,0,100),
+          },heat:clamp(ng.heat+1,0,10),
+          _deathCause:ng.survival.health-rnd(25,45)<=0?"Laced product.":undefined};
+        }
+        // ── END OD CHECK ───────────────────────────────────────────────────
+
         return ng;
       });
       return;
@@ -9037,7 +9240,7 @@ export default function NYC(){
     // PRICES — fixer sees all borough prices at once
     if(C==="PRICES"){
       if(!gs.isFixer&&!hasSkill(gs,"inside_prices")){push(`You don't have those connections yet.`);return;}
-      push(`🔧 ALL MARKET PRICES — Day ${gs.day}:`,...BOROUGHS.map(b=>`  ${b.short}: Weed $${mktPrice(b.id,"weed",gs.day,weather,world.supply)} · Pills $${mktPrice(b.id,"pills",gs.day,weather,world.supply)} · Powder $${mktPrice(b.id,"powder",gs.day,weather,world.supply)}`));return;
+      push(`🔧 ALL MARKET PRICES — Day ${gs.day}:`,...BOROUGHS.map(b=>`  ${b.short}: Weed $${mktPrice(b.id,"weed",gs.day,weather,world.supply)} · Pills $${mktPrice(b.id,"pills",gs.day,weather,world.supply)} · Powder $${mktPrice(b.id,"powder",gs.day,weather,world.supply)}${PRODUCTS.heroin.sourceBoros.includes(b.id)?` · Heroin $${mktPrice(b.id,"heroin",gs.day,weather,world.supply)}`:""}`));return;
     }
 
     // ── RAT COMMANDS ─────────────────────────────────────────────────────────
@@ -10108,12 +10311,12 @@ export default function NYC(){
     <div style={{minHeight:"100vh",background:"#050505",color:"#c0c0b8",display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Share Tech Mono',monospace"}}>
       <div style={{maxWidth:480,width:"100%"}}>
         <div style={{fontFamily:"'VT323',monospace",fontSize:72,color:"#e63946",textShadow:"0 0 40px #e6394688",letterSpacing:4,lineHeight:1,marginBottom:4}}>YOU DIED</div>
-        <div style={{fontSize:9,color:"#333",letterSpacing:4,marginBottom:24}}>END OF THE LINE</div>
-        {gs&&<div style={{borderLeft:"2px solid #1a1a1a",paddingLeft:16,marginBottom:24}}>
+        <div style={{fontSize:9,color:"#666",letterSpacing:4,marginBottom:24}}>END OF THE LINE</div>
+        {gs&&<div style={{borderLeft:"2px solid #333",paddingLeft:16,marginBottom:24}}>
           <div style={{fontFamily:"'Bebas Neue',sans-serif",fontSize:22,color:gs.archetype?.color||"#888",letterSpacing:2,marginBottom:4}}>
             {gs.archetype?.icon} {gs.name}
           </div>
-          <div style={{fontSize:9,color:"#444",marginBottom:16}}>{gs.archetype?.name}</div>
+          <div style={{fontSize:9,color:"#777",marginBottom:16}}>{gs.archetype?.name}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"4px 16px",marginBottom:16}}>
             {[["Days Survived",gs.day],["Level Reached",gs.level],["Cash at Death","$"+(gs.cash||0)],
               ["Total Earned","$"+(gs.lifetime?.cashEarned||0)],["PvP Wins",gs.lifetime?.pvpWins||0],
@@ -10122,8 +10325,8 @@ export default function NYC(){
               ["Addiction",getAddictionLevel(gs.addiction||0).name],
               ["Corners Held",(gs.cornersOwned||[]).length],
             ].map(([label,val])=><div key={label}>
-              <div style={{fontSize:7,color:"#222",letterSpacing:1}}>{label.toUpperCase()}</div>
-              <div style={{fontSize:11,color:"#555",fontFamily:"'VT323',monospace"}}>{val}</div>
+              <div style={{fontSize:7,color:"#888",letterSpacing:1}}>{label.toUpperCase()}</div>
+              <div style={{fontSize:11,color:"#ccc",fontFamily:"'VT323',monospace"}}>{val}</div>
             </div>)}
           </div>
           {(gs.title||gs.notorietyTitle)&&<div style={{marginBottom:12}}>
@@ -10132,7 +10335,7 @@ export default function NYC(){
           {(gs.addiction||0)>60&&<div style={{fontSize:8,color:"#e63946",marginBottom:12,fontStyle:"italic"}}>
             {getAddictionLevel(gs.addiction).name} at death. The habit outlasted everything else.
           </div>}
-          <div style={{marginTop:8,fontSize:9,color:"#2a2a2a",lineHeight:1.6,fontStyle:"italic",borderTop:"1px solid #0d0d0d",paddingTop:12}}>
+          <div style={{marginTop:8,fontSize:9,color:"#666",lineHeight:1.6,fontStyle:"italic",borderTop:"1px solid #1a1a1a",paddingTop:12}}>
             {(()=>{
               const d=gs.day;const l=gs.level;
               if(l>=8)return "Made it to Level "+l+". "+d+" days. The city takes everyone eventually. Just slower for some.";
@@ -10150,7 +10353,7 @@ export default function NYC(){
             LOAD CHARACTER
           </div>
         </div>
-        <div style={{fontSize:7,color:"#111",textAlign:"center",marginTop:16}}>Your legend is on the Wall of Dead.</div>
+        <div style={{fontSize:7,color:"#555",textAlign:"center",marginTop:16}}>Your legend is on the Wall of Dead.</div>
       </div>
     </div>
   </>);
@@ -10873,17 +11076,17 @@ export default function NYC(){
                 {unread>0&&<span style={{color:"#e63946",marginLeft:4,animation:"wanted 1s infinite"}}> {unread} NEW</span>}
               </div>
               <div style={{display:"flex",gap:6}}>
-                <div onClick={()=>setChatStrip(false)} style={{fontSize:6,color:"#222",cursor:"pointer"}}>hide</div>
+                <div onClick={()=>setChatStrip(false)} style={{fontSize:6,color:"#777",cursor:"pointer"}}>hide</div>
                 <div onClick={()=>{setTab("chat");setUnread(0);if(inputRef.current)inputRef.current.focus();}} style={{fontSize:6,color:"#444",cursor:"pointer"}}>expand ↗</div>
               </div>
             </div>
-            {recentMsgs.length===0&&<div style={{fontSize:7,color:"#1a1a1a",fontStyle:"italic"}}>No recent messages. Type /message to chat.</div>}
+            {recentMsgs.length===0&&<div style={{fontSize:7,color:"#666",fontStyle:"italic"}}>No recent messages. Type /message to chat.</div>}
             {recentMsgs.map((m,i)=>{
               const mc=aColors[m.arch]||"#2a9d8f";
               return <div key={i} style={{display:"flex",gap:5,alignItems:"baseline",marginBottom:1}}>
                 <span style={{color:mc,fontSize:7,flexShrink:0,minWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.from}</span>
                 <span style={{color:"#888",fontSize:8,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{m.text}</span>
-                <span style={{color:"#222",fontSize:6,flexShrink:0}}>{m.time?new Date(m.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</span>
+                <span style={{color:"#777",fontSize:6,flexShrink:0}}>{m.time?new Date(m.time).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):""}</span>
               </div>;
             })}
             {typingUser&&<div style={{fontSize:6,color:"#333",fontStyle:"italic"}}>{typingUser} is typing...</div>}
