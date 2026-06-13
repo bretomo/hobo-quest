@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { loadWorld, saveWorld as sbSaveWorld, loadCharacter, saveCharacter, subscribeToWorld, unsubscribe, sendChatMessage, cleanStaleCharacters, deleteCharacter } from '../lib/supabase';
 
 const FONTS = `@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=VT323&display=swap');`;
@@ -3360,6 +3360,130 @@ function GearPanel({gs,onUnequip,day,boro}){
   </div>;
 }
 
+// ── MUSIC ENGINE ─────────────────────────────────────────────────────────────
+const MUSIC_MOODS={
+  street:    {label:"The Street",    bpm:72, kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hihat:[1,0,1,0,1,0,1,0,1,0,1,1,1,0,1,0],rim:[0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0],bassNotes:["C2","Eb2","F2","Bb2"],bassP:[1,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0],padNotes:["C3","G3"],padVol:-28,melNotes:["C4","Eb4","F4","G4","Bb4"],melP:[1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,1],rev:0.3,vol:-12},
+  hot:       {label:"Running Hot",   bpm:88, kick:[1,0,0,1,0,0,1,0,1,0,0,0,1,0,0,0],snare:[0,0,0,0,1,0,0,1,0,0,0,0,1,0,1,0],hihat:[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],rim:[0,1,0,0,0,0,0,1,0,0,1,0,0,0,0,0],bassNotes:["C2","C2","Eb2","G1"],bassP:[1,0,1,0,1,0,0,0,1,0,1,0,1,0,0,1],padNotes:["C3","Eb3"],padVol:-24,melNotes:["C4","D4","Eb4","G4","Ab4"],melP:[1,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0],rev:0.5,vol:-10},
+  combat:    {label:"FIGHT",         bpm:110,kick:[1,0,0,0,1,0,0,0,1,0,1,0,1,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,1],hihat:[1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0],rim:[0,0,1,0,0,1,0,0,0,0,0,1,0,0,1,0],bassNotes:["C2","C2","C2","G1"],bassP:[1,0,1,0,0,0,1,0,1,0,0,0,1,0,1,0],padNotes:["C3","F#3"],padVol:-20,melNotes:[],melP:[],rev:0.2,vol:-8},
+  blizzard:  {label:"Freezing",      bpm:52, kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],hihat:[1,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0],rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],bassNotes:["G1","G1","C2","F1"],bassP:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],padNotes:["C3","G3","D4"],padVol:-18,melNotes:["C5","Eb5","G5"],melP:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],rev:0.7,vol:-14},
+  rain:      {label:"Soaked",        bpm:68, kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hihat:[1,1,0,1,1,0,1,1,1,1,0,1,1,0,1,1],rim:[0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],bassNotes:["F2","Ab2","Eb2","Bb1"],bassP:[1,0,0,0,1,0,0,1,0,0,1,0,0,0,0,0],padNotes:["F3","Ab3","Eb4"],padVol:-22,melNotes:["F4","Ab4","Bb4","C5","Eb5"],melP:[1,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],rev:0.55,vol:-13},
+  fog:       {label:"The Fog",       bpm:58, kick:[1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],snare:[0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],hihat:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,1,0],rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],bassNotes:["D2","F2","C2","G1"],bassP:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],padNotes:["D3","A3","F4"],padVol:-16,melNotes:["D5","F5","A5","C5"],melP:[0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0],rev:0.8,vol:-15},
+  heatwave:  {label:"Scorched",      bpm:65, kick:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hihat:[1,0,1,1,0,1,0,0,1,0,1,1,0,1,0,0],rim:[0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0],bassNotes:["G1","G1","C2","D2"],bassP:[1,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0],padNotes:["G3","D4"],padVol:-26,melNotes:["G4","A4","C5","D5"],melP:[1,0,0,0,0,0,0,0,1,0,0,0,0,1,0,0],rev:0.35,vol:-14},
+  dungeon:   {label:"The Warehouse", bpm:95, kick:[1,0,0,0,1,0,0,0,1,0,0,1,0,0,0,0],snare:[0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],hihat:[1,0,1,0,0,0,1,0,1,0,1,0,0,0,0,1],rim:[0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0],bassNotes:["C2","C2","F1","G1"],bassP:[1,0,0,1,0,0,1,0,1,0,0,0,0,1,0,0],padNotes:["C3","F#3","B2"],padVol:-22,melNotes:["C4","Db4"],melP:[0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],rev:0.4,vol:-11},
+  withdrawal:{label:"Sick",          bpm:62, kick:[1,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0],snare:[0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0],hihat:[1,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0],rim:[0,0,1,0,0,0,0,0,0,0,0,0,0,1,0,0],bassNotes:["Ab1","G1","Ab1","F1"],bassP:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],padNotes:["Ab2","Eb3"],padVol:-20,melNotes:["Ab4","G4","F4"],melP:[1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0],rev:0.6,vol:-16},
+  vampire:   {label:"The Night",     bpm:55, kick:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],snare:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],hihat:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],rim:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],bassNotes:["D2","F2","A1","E2"],bassP:[1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0],padNotes:["D3","F3","A3","C4"],padVol:-14,melNotes:["D5","F5","E5","A5","C5"],melP:[1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0],rev:0.75,vol:-13},
+};
+function selectMusicMood({heat,weather,inCombat,inDungeon,isVampire,addiction,mental}){
+  if(inCombat)return"combat";if(inDungeon)return"dungeon";if(isVampire)return"vampire";
+  if(addiction>=70&&mental<40)return"withdrawal";if(weather==="blizzard")return"blizzard";
+  if(weather==="fog")return"fog";if(weather==="rain"||weather==="storm")return"rain";
+  if(weather==="heatwave")return"heatwave";if(heat>=7)return"hot";return"street";
+}
+function MusicEngine({heat=0,weather="clear",inCombat=false,inDungeon=false,isVampire=false,addiction=0,mental=70}){
+  const [started,setStarted]=useState(false);
+  const [muted,setMuted]=useState(false);
+  const [volume,setVolume]=useState(0.7);
+  const [moodKey,setMoodKey]=useState("street");
+  const [showVol,setShowVol]=useState(false);
+  const toneRef=useRef(null),seqRef=useRef(null),masterRef=useRef(null),reverbRef=useRef(null);
+  const kickRef=useRef(null),snareRef=useRef(null),hihatRef=useRef(null),rimRef=useRef(null);
+  const bassRef=useRef(null),padRef=useRef(null),melRef=useRef(null);
+  const mountedRef=useRef(true),moodKeyRef=useRef("street"),startedRef=useRef(false);
+
+  const startSeq=useCallback((mk)=>{
+    const T=toneRef.current;if(!T)return;
+    const m=MUSIC_MOODS[mk]||MUSIC_MOODS.street;moodKeyRef.current=mk;
+    if(seqRef.current){try{seqRef.current.stop();seqRef.current.dispose();}catch(e){}}
+    T.Transport.stop();T.Transport.cancel();T.Transport.bpm.value=m.bpm;
+    if(reverbRef.current)reverbRef.current.wet.rampTo(m.rev,1.5);
+    if(masterRef.current)masterRef.current.volume.rampTo(m.vol,1.5);
+    if(padRef.current&&m.padNotes.length){try{padRef.current.volume.value=m.padVol;padRef.current.triggerAttackRelease(m.padNotes,"2n",T.now()+0.5);}catch(e){}}
+    const seq=new T.Sequence((time,s)=>{
+      s=s%16;
+      if(m.kick[s]&&kickRef.current)kickRef.current.triggerAttackRelease("C1","8n",time);
+      if(m.snare[s]&&snareRef.current)snareRef.current.triggerAttackRelease("8n",time);
+      if(m.hihat[s]&&hihatRef.current)hihatRef.current.triggerAttackRelease("32n",time);
+      if(m.rim[s]&&rimRef.current)rimRef.current.triggerAttackRelease("16n",time);
+      if(m.bassP[s]&&bassRef.current&&m.bassNotes.length)bassRef.current.triggerAttackRelease(m.bassNotes[Math.floor(s/4)%m.bassNotes.length],"8n",time);
+      if(m.melP[s]&&melRef.current&&m.melNotes.length)melRef.current.triggerAttackRelease(m.melNotes[s%m.melNotes.length],"4n",time);
+      if(s===0&&padRef.current&&m.padNotes.length){try{padRef.current.volume.value=m.padVol;padRef.current.triggerAttackRelease(m.padNotes,"1n",time);}catch(e){}}
+    },[...Array(16).keys()],"16n");
+    seq.start(0);seqRef.current=seq;T.Transport.start();
+  },[]);
+
+  const initAudio=useCallback(async()=>{
+    if(toneRef.current||startedRef.current)return;startedRef.current=true;
+    if(!window.Tone){
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    const T=window.Tone;toneRef.current=T;await T.start();
+    const master=new T.Volume(-12).toDestination();
+    const reverb=new T.Reverb({decay:2.5,wet:0.3}).connect(master);await reverb.generate();
+    masterRef.current=master;reverbRef.current=reverb;
+    kickRef.current=new T.MembraneSynth({pitchDecay:0.08,octaves:6,envelope:{attack:0.001,decay:0.35,sustain:0,release:0.1},volume:-6}).connect(master);
+    snareRef.current=new T.NoiseSynth({noise:{type:"white"},envelope:{attack:0.001,decay:0.18,sustain:0,release:0.05},volume:-14}).connect(reverb);
+    hihatRef.current=new T.MetalSynth({frequency:400,envelope:{attack:0.001,decay:0.06,release:0.01},harmonicity:5.1,modulationIndex:32,resonance:4000,octaves:1.5,volume:-22}).connect(reverb);
+    rimRef.current=new T.MetalSynth({frequency:240,envelope:{attack:0.001,decay:0.1,release:0.01},harmonicity:8,modulationIndex:40,resonance:5000,octaves:0.5,volume:-26}).connect(reverb);
+    bassRef.current=new T.MonoSynth({oscillator:{type:"sawtooth"},filter:{frequency:400,type:"lowpass",Q:2},envelope:{attack:0.01,decay:0.2,sustain:0.4,release:0.3},filterEnvelope:{attack:0.01,decay:0.1,sustain:0.5,release:0.3,baseFrequency:200,octaves:2},volume:-18}).connect(master);
+    padRef.current=new T.PolySynth(T.Synth,{oscillator:{type:"triangle"},envelope:{attack:0.5,decay:1,sustain:0.6,release:2},volume:-28}).connect(reverb);
+    melRef.current=new T.MonoSynth({oscillator:{type:"sine"},envelope:{attack:0.05,decay:0.2,sustain:0.4,release:0.8},volume:-24}).connect(reverb);
+    if(mountedRef.current){setStarted(true);startSeq(moodKeyRef.current);}
+  },[startSeq]);
+
+  useEffect(()=>{
+    const handler=()=>{if(!startedRef.current)initAudio();};
+    window.addEventListener("click",handler,{once:true});
+    window.addEventListener("keydown",handler,{once:true});
+    window.addEventListener("touchstart",handler,{once:true});
+    return()=>{window.removeEventListener("click",handler);window.removeEventListener("keydown",handler);window.removeEventListener("touchstart",handler);};
+  },[initAudio]);
+
+  useEffect(()=>{
+    if(!started||!toneRef.current)return;
+    const target=selectMusicMood({heat,weather,inCombat,inDungeon,isVampire,addiction,mental});
+    if(target===moodKeyRef.current)return;
+    setMoodKey(target);
+    const t=setTimeout(()=>{if(mountedRef.current)startSeq(target);},600);
+    return()=>clearTimeout(t);
+  },[heat,weather,inCombat,inDungeon,isVampire,addiction,mental,started,startSeq]);
+
+  useEffect(()=>{
+    if(!masterRef.current)return;
+    const m=MUSIC_MOODS[moodKeyRef.current]||MUSIC_MOODS.street;
+    masterRef.current.volume.rampTo(muted?-80:m.vol+((volume-0.7)*20),0.3);
+  },[volume,muted]);
+
+  useEffect(()=>{
+    mountedRef.current=true;
+    return()=>{mountedRef.current=false;
+      try{seqRef.current?.stop();seqRef.current?.dispose();}catch(e){}
+      try{toneRef.current?.Transport.stop();}catch(e){}
+      [kickRef,snareRef,hihatRef,rimRef,bassRef,padRef,melRef,masterRef,reverbRef].forEach(r=>{try{r.current?.dispose();}catch(e){}});
+    };
+  },[]);
+
+  const mood=MUSIC_MOODS[moodKey]||MUSIC_MOODS.street;
+  return(
+    <div style={{position:"fixed",bottom:90,left:12,zIndex:9999,display:"flex",flexDirection:"column",alignItems:"flex-start",gap:4,fontFamily:"'Share Tech Mono',monospace",userSelect:"none",pointerEvents:"auto"}}>
+      {showVol&&(
+        <div style={{background:"#080808",border:"1px solid #2a2a2a",padding:"6px 8px",display:"flex",flexDirection:"column",gap:4,marginBottom:2}}>
+          <div style={{fontSize:7,color:"#555",letterSpacing:1}}>VOLUME</div>
+          <input type="range" min={0} max={1} step={0.05} value={volume} onChange={e=>setVolume(parseFloat(e.target.value))} style={{width:72,accentColor:"#e9c46a",cursor:"pointer"}}/>
+          <div style={{fontSize:7,color:"#e9c46a88"}}>{started&&!muted?mood.label:"—"}</div>
+        </div>
+      )}
+      <div onClick={()=>setMuted(m=>!m)} onMouseEnter={()=>setShowVol(true)} onMouseLeave={()=>setShowVol(false)}
+        style={{display:"flex",alignItems:"center",gap:5,padding:"5px 9px",background:started&&!muted?"#e9c46a18":"#0a0a0a",border:`1px solid ${started&&!muted?"#e9c46a55":"#222"}`,color:started&&!muted?"#e9c46a":"#444",cursor:"pointer",transition:"all 0.2s",fontSize:9,borderRadius:2}}>
+        {started&&!muted
+          ?<div style={{display:"flex",alignItems:"flex-end",gap:1,height:10}}>{[3,7,5,9,4,7,3].map((h,i)=><div key={i} style={{width:2,height:h,background:"#e9c46a",animation:`mBar${i%3} ${0.4+i*0.07}s ease-in-out infinite alternate`,borderRadius:1}}/>)}</div>
+          :<span style={{fontSize:12}}>♪</span>}
+        <span style={{fontSize:8}}>{!started?"":muted?"MUTED":""}</span>
+      </div>
+      <style>{`@keyframes mBar0{from{height:2px}to{height:10px}}@keyframes mBar1{from{height:4px}to{height:8px}}@keyframes mBar2{from{height:3px}to{height:12px}}`}</style>
+    </div>
+  );
+}
+
 export default function NYC(){
   const [phase,setPhase]   =useState("boot");
   const [gameTime,setGameTime] =useState({hour:8,minute:0}); // game starts at 8am
@@ -3390,16 +3514,13 @@ export default function NYC(){
   const [mProd,setMProd]   =useState("weed");
   const [mQty,setMQty]     =useState(1);
   const [npcs,setNpcsRaw] =useState(NPCS);
-  // Sync npcs rep from gs.npcRep whenever gs changes (handles load/continue)
   useEffect(()=>{
     if(!gs?.npcRep)return;
     setNpcsRaw(prev=>prev.map(n=>gs.npcRep[n.id]!==undefined?{...n,rep:gs.npcRep[n.id]}:n));
-  },[gs?.name]); // only re-sync on character load, not every gs update
-  // Wrapper that also persists rep into gs
+  },[gs?.name]);
   const setNpcs=useCallback((updater)=>{
     setNpcsRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      // Write updated rep back into gs so it saves
       const repMap={};next.forEach(n=>{repMap[n.id]=n.rep||0;});
       setGs(g=>g?{...g,npcRep:repMap}:g);
       return next;
@@ -4310,8 +4431,7 @@ export default function NYC(){
       skills:[],skillPoints:1,
       backstory:backstory||{},journal:[],
       xpMult:driveOpt?.xpMult||1.0,
-      activeQuests:{},completedQuests:[],questProgress:{},
-      npcRep:{},  // persisted NPC rep — keyed by npc id
+      activeQuests:{},completedQuests:[],questProgress:{},npcRep:{},
       title:"",
       dailySells:{},
       contractsCompleted:[],
@@ -6213,11 +6333,9 @@ export default function NYC(){
       }
       const sellLogKey2=`sells_${boro}_${pKey}`;
       updGs(g=>{
-        // Double-check inside callback — prevents overselling from stale state
         const actualQty=Math.min(qty,g.product[pKey]||0);
-        if(actualQty<=0)return g; // nothing to sell
+        if(actualQty<=0)return g;
         const actualTotal=Math.round(price*actualQty);
-        // Update quest progress for any active requireSell quests
         const newQuestProg={...g.questProgress};
         Object.entries(g.activeQuests||{}).forEach(([qid,q])=>{
           if(q.requireSell&&q.requireSell.product===pKey&&(q.requireBoro===boro||!q.requireBoro)){
@@ -8620,7 +8738,13 @@ export default function NYC(){
     // USE — intentionally get high
     const useItemM=C.match(/^USE (.+)$/);
     if(useItemM){
-      const itemName=useItemM[1].trim();
+      const itemName=useItemM[1].trim().toLowerCase();
+      const isProductName=Object.keys(PRODUCTS).includes(itemName);
+      const sub0=CLASS_SUBSTANCE[gs.archetype?.id||"veteran"];
+      const isSubstanceName=sub0&&(itemName===sub0.name||itemName===sub0.product);
+      if(isProductName||isSubstanceName){
+        // fall through to substance USE handler below
+      } else {
       const inInv=gs.inventory.find(i=>i.toLowerCase()===itemName.toLowerCase()||i.toLowerCase().includes(itemName.toLowerCase()));
       if(!inInv){push("You don't have "+itemName+" in your inventory.");return;}
       const itemDef=BASE_ITEMS.find(i=>i.name.toLowerCase()===inInv.toLowerCase()||i.id.toLowerCase()===inInv.toLowerCase());
@@ -8649,6 +8773,7 @@ export default function NYC(){
         push("Can't use "+inInv+" directly. Check INVENTORY for options.");return;
       }
       if(used)push("",msg,"");return;
+      } // end else
     }
     // USE STASH — junkie uses their own product (from sell inventory)
     if(C==="USE STASH"||C==="USE BUY"){
@@ -11110,6 +11235,9 @@ export default function NYC(){
         )}
 
         </div>{/* end MAIN CONTENT ROW */}
+
+        {/* MUSIC ENGINE */}
+        {gs&&<MusicEngine heat={gs.heat} weather={getWeather(gs.day)?.id} inCombat={!!combat} inDungeon={!!dungeon&&dungeon.status==="active"} isVampire={!!gs.isVampire} addiction={gs.addiction||0} mental={gs.survival?.mental??70}/>}
 
         {/* TOAST NOTIFICATION */}
         {toast&&(()=>{
