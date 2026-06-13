@@ -657,11 +657,11 @@ const DEMAND_SPIKE = 0.25;        // price spike per day without supply
 
 // ── CORNER SYSTEM ─────────────────────────────────────────────────────────────
 const CORNER_BASE_INCOME = {
-  manhattan: [80,120],
-  bronx:     [45,70],
-  brooklyn:  [50,75],
-  queens:    [40,65],
-  staten:    [20,35],
+  manhattan: [180,280],  // ~$230/day HOT — worth owning
+  bronx:     [100,150],
+  brooklyn:  [110,170],
+  queens:    [90,140],
+  staten:    [50,80],
 };
 const CORNER_UPGRADE_COST  = [0, 150, 350, 700];
 const CORNER_UPGRADE_MULT  = [1.0, 1.5, 2.2, 3.5];
@@ -683,21 +683,30 @@ const CORNER_TIERS = {
   LOST:      { name:"LOST",      mult:0,   accrualCap:0,  desc:"Corner taken. You need to reclaim it.", icon:"☠" },
 };
 
+const CORNER_HOT_HOURS  = 48;  // HOT for 48 real hours after visit
+const CORNER_COLD_HOURS = 120; // COLD window: 48-120 hours (5 days total)
+
 const getCornerTier=(bId, gs, world)=>{
-  const lastVisit=world?.cornerLastVisit?.[gs.name+":"+bId]||0;
-  const daysSince=(gs.day||1)-(lastVisit||0);
+  const lastVisitTs=world?.cornerLastVisit?.[gs.name+":"+bId]||0;
+  // Support both timestamp (new) and game-day (legacy) format
+  const isTimestamp=lastVisitTs>1000000000000; // ms timestamps are 13 digits
+  const hoursSince=isTimestamp
+    ?(Date.now()-lastVisitTs)/3600000
+    :((gs.day||1)-(lastVisitTs||0))*24; // legacy: treat game days as 24h each
   const army=gs.army||[];
   const hasLt=army.some(u=>u.id==="lieutenant");
   const hasEnforcer=army.some(u=>u.id==="enforcer");
   const deployed=(gs.armyDeployedBoro||{})[bId];
   const armyHere=deployed&&(hasLt||hasEnforcer);
+  // Lieutenant keeps ALL your corners WARM regardless of deployment location
+  const ltAnywhere=hasLt&&army.length>0;
   const contestedDay=(world?.cornerContested||{})[bId];
   const owner=world?.corners?.[bId];
   if(owner&&owner!==gs.name)return CORNER_TIERS.LOST;
   if(contestedDay&&(gs.day-contestedDay)<=1)return CORNER_TIERS.CONTESTED;
-  if(daysSince<=CORNER_PRESENCE_DAYS)return CORNER_TIERS.HOT;
-  if(armyHere||hasLt)return CORNER_TIERS.WARM;
-  if(daysSince<=CORNER_PRESENCE_DAYS+3)return CORNER_TIERS.COLD;
+  if(hoursSince<=CORNER_HOT_HOURS)return CORNER_TIERS.HOT;
+  if(armyHere||ltAnywhere)return CORNER_TIERS.WARM;    // army/lt holds it warm
+  if(hoursSince<=CORNER_COLD_HOURS)return CORNER_TIERS.COLD;
   return CORNER_TIERS.CONTESTED;
 };
 
@@ -3834,13 +3843,17 @@ export default function NYC(){
         const isHeatwave=w.id==="heatwave";
         const warmthDrainActual=isHeatwave?0:Math.max(warmDrain,inSafehouse?0.5:2);
 
+        // Street Fixer passive heat reduction (heatReduce per day ÷ 60 ticks/day)
+        const fixerReduce=(p.army||[]).reduce((s,u)=>{
+          const unit=ARMY_UNITS.find(x=>x.id===u.id);return s+(unit?.heatReduce||0);
+        },0)/60;
         const g={...p,survival:{
           hunger:clamp(p.survival.hunger-hungerDrain,0,100),
           warmth:clamp(p.survival.warmth-warmthDrainActual,0,100),
           health:p.survival.health, // damage handled by zero/warning blocks below
           energy:clamp(p.survival.energy-energyDrain,0,100),
           mental:clamp((p.survival.mental||70)-mentalDrain+mentalBoost+dogMentalBoost,0,100),
-        },heat:clamp(p.heat-0.1-safeHeatDrain,0,10)};
+        },heat:clamp(p.heat-0.1-safeHeatDrain-fixerReduce,0,10)};
 
         // Zero-bar consequences — scaled to actually kill in reasonable time
         if(g.survival.warmth===0){
@@ -4232,6 +4245,7 @@ export default function NYC(){
       isHustler:   saved.isHustler   ??archId==="hustler",
       infamy:      saved.infamy      ??0,
       lastUsedTime:saved.lastUsedTime ??0,
+      lastSleepTime:saved.lastSleepTime??0,
       product:     saved.product     ??{weed:0,pills:0,powder:0,heroin:0},
       cornersOwned:saved.cornersOwned??[],
       army:        saved.army        ??[],
@@ -4296,6 +4310,7 @@ export default function NYC(){
       lastUsed:-1,
       // Set lastUsedTime to 2 hours ago so withdrawal pressure starts building immediately
       lastUsedTime:Date.now()-(2*3600000),
+      lastSleepTime:0,
       withdrawalDay:0, highActive:false,
       hustleCount:0,       // times hustled today
       hustleBoroLast:"",   // last borough hustled in
@@ -5744,7 +5759,7 @@ export default function NYC(){
         };
         delete newWs.cornerContested[bId];
         delete newWs.cornerContestedBy[bId];
-        newWs.cornerLastVisit={...world.cornerLastVisit,[gs.name+":"+bId]:gs.day};
+        newWs.cornerLastVisit={...world.cornerLastVisit,[gs.name+":"+bId]:Date.now()};
         setWorld(newWs);saveWorld(newWs);
         if(!gs.cornersOwned?.includes(bId))updGs(g=>({...g,cornersOwned:[...(g.cornersOwned||[]),bId]}));
         else updGs(g=>g);
@@ -5887,7 +5902,7 @@ export default function NYC(){
       updGs(g=>applyXP({...g,lookCount:(g.lookCount||0)+1},1,"look"));
       // Update corner presence — track last visit to each owned corner
       if(gs.cornersOwned?.includes(boro)){
-        const pvWs={...world,cornerLastVisit:{...(world.cornerLastVisit||{}),[gs.name+":"+boro]:gs.day}};
+        const pvWs={...world,cornerLastVisit:{...(world.cornerLastVisit||{}),[gs.name+":"+boro]:Date.now()}};
         // clear contested status if player visits personally
         if((pvWs.cornerContested||{})[boro]){
           delete pvWs.cornerContested[boro];
@@ -6145,9 +6160,12 @@ export default function NYC(){
       // Daily sell limit — same product, same borough, max 3 transactions
       const sellLogKey=`sells_${boro}_${pKey}`;
       const sellsToday=(gs.dailySells||{})[sellLogKey]||0;
-      const maxSellTx=gs.isHustler?5:3;
+      const hasRunnerDeployed=(gs.army||[]).some(u=>u.id==="runner")&&
+        Object.keys(gs.armyDeployedBoro||{}).includes(boro);
+      const maxSellTx=(gs.isHustler?5:3)+(hasRunnerDeployed?2:0);
       if(sellsToday>=maxSellTx){
-        push(`Market's dry here. You've moved ${pKey} in ${getBoro(boro)?.name} ${sellsToday} times today.`,`Come back tomorrow or try another borough.`);return;
+        push(`Market's dry here. Moved ${pKey} ${sellsToday}x in ${getBoro(boro)?.name} today.`,
+          hasRunnerDeployed?`Runner is already giving you +2. Come back tomorrow.`:`Deploy a runner here for +2 more sells.`);return;
       }
       if((gs.product[pKey]||0)<qty){push(`Only have ${gs.product[pKey]||0} ${PRODUCTS[pKey].unit}${(gs.product[pKey]||0)!==1?"s":""}.`);return;}
       const price=mktPrice(boro,pKey,gs.day,weather,world.supply);const total=price*qty;
@@ -6679,7 +6697,7 @@ export default function NYC(){
       ws={...ws,
         corners:{...ws.corners,[boro]:gs.name},
         cornerLevels:{...(ws.cornerLevels||{}),[boro]:0},
-        cornerLastVisit:{...(ws.cornerLastVisit||{}),[gs.name+":"+boro]:gs.day},
+        cornerLastVisit:{...(ws.cornerLastVisit||{}),[gs.name+":"+boro]:Date.now()},
       };
       setWorld(ws);saveWorld(ws);setWMsgs(ws.messages||[]);
       updGs(g=>applyXP({...g,cash:g.cash-50,cornersOwned:[...g.cornersOwned,boro],lifetime:{...g.lifetime,corners:(g.lifetime?.corners||0)+1}},30,"claim"));
@@ -7208,7 +7226,17 @@ export default function NYC(){
 
     // SLEEP — weather changes next day
     if(C==="SLEEP"){
-      // Captain spawn — appears when world total heat is high
+      // ── SLEEP COOLDOWN — must wait 20 real minutes between sleeps ─────────
+      const MIN_SLEEP_MINS=20;
+      const lastSleepMs=gs.lastSleepTime||0;
+      const minsSinceSlept=(Date.now()-lastSleepMs)/60000;
+      if(lastSleepMs>0&&minsSinceSlept<MIN_SLEEP_MINS){
+        const minsLeft=Math.ceil(MIN_SLEEP_MINS-minsSinceSlept);
+        push(``,`😴 Too soon to sleep again.`,
+          `You need to actually do something before you can rest.`,
+          `${minsLeft} minute${minsLeft!==1?"s":""} until you can sleep.`,``);
+        return;
+      }
       const worldHeat=Object.values(world.players||{}).reduce((s,p)=>s+(p.heat||0),0);
       if(worldHeat>30&&(!world.captainBoro||world.captainDay!==gs.day)){
         const capBoro=BOROUGHS[rnd(0,BOROUGHS.length-1)].id;
@@ -7453,6 +7481,7 @@ export default function NYC(){
           heat:clamp(g.heat-(g.archetype?.id==="ghost"?3:2),0,10),habitPaid:g.cash>=habitCost,
           hustleCount:0,hustleBoroLast:"",hustleBoros:{},
           dayJobDone:false,hasMetrocard:false,panhandleCount:0,dailySells:{},scoreCount:0,
+          lastSleepTime:Date.now(),
           contractsCompleted:[],contractProgress:{},
           // storyBoroDays: increment if slept in same boro as yesterday
           storyBoroDays:g.sleepBoro===boro?(g.storyBoroDays||0)+1:0,
