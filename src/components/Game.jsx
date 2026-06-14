@@ -1374,21 +1374,21 @@ const DAY_LABOR_JOBS = [
 
 // ── BODEGA ITEMS ──────────────────────────────────────────────────────────────
 const BODEGA_ITEMS = {
-  coffee:     { name:"Coffee",          price:2,  desc:"Bodega coffee. Hot. Gets you moving.", effect:{energy:20,mental:5}, addictive:false },
-  sandwich:   { name:"Sandwich",        price:6,  desc:"Deli sandwich. Real food.",             effect:{hunger:40,energy:10}, addictive:false },
-  chips:      { name:"Chips",           price:2,  desc:"Bag of chips. Junk food hunger fix.",  effect:{hunger:15}, addictive:false },
-  water:      { name:"Water",           price:1,  desc:"Bottled water. You need this.",        effect:{hunger:10,health:5}, addictive:false },
-  beer:       { name:"Beer",            price:4,  desc:"40oz. Takes the edge off.",            effect:{warmth:10,mental:8,energy:-5}, addictive:true, substance:"alcohol" },
-  cigarettes: { name:"Cigarettes",      price:5,  desc:"Pack of loosies. Mental reset.",      effect:{mental:10,health:-3}, addictive:true, substance:"cigarettes" },
-  coffee_xl:  { name:"Large Coffee",    price:4,  desc:"Double cup. Night shift fuel.",        effect:{energy:35,mental:8}, addictive:false },
-  soup:       { name:"Cup of Soup",     price:3,  desc:"Warm. Salt. Better than nothing.",     effect:{hunger:25,warmth:10}, addictive:false },
+  coffee:     { name:"Coffee",          price:2,  desc:"Bodega coffee. Hot. Gets you moving.", effect:{energy:35,mental:5}, addictive:false },
+  sandwich:   { name:"Sandwich",        price:6,  desc:"Deli sandwich. Real food.",             effect:{hunger:50,energy:15}, addictive:false },
+  chips:      { name:"Chips",           price:2,  desc:"Bag of chips. Junk food hunger fix.",  effect:{hunger:20}, addictive:false },
+  water:      { name:"Water",           price:1,  desc:"Bottled water. You need this.",        effect:{hunger:15,health:5}, addictive:false },
+  beer:       { name:"Beer",            price:4,  desc:"40oz. Takes the edge off.",            effect:{warmth:10,mental:10,energy:-5}, addictive:true, substance:"alcohol" },
+  cigarettes: { name:"Cigarettes",      price:5,  desc:"Pack of loosies. Mental reset.",      effect:{mental:12,health:-3}, addictive:true, substance:"cigarettes" },
+  coffee_xl:  { name:"Large Coffee",    price:4,  desc:"Double cup. Night shift fuel.",        effect:{energy:55,mental:10}, addictive:false },
+  soup:       { name:"Cup of Soup",     price:3,  desc:"Warm. Salt. Better than nothing.",     effect:{hunger:30,warmth:15}, addictive:false },
   metrocard:  { name:"MetroCard",       price:3,  desc:"Single ride. Gets you where you're going.", effect:{energy:0}, special:"transit", addictive:false },
   aspirin:    { name:"Aspirin",         price:3,  desc:"Dollar store bottle. Takes the edge off pain.", effect:{health:10,mental:5}, addictive:false },
-  energydrink:{ name:"Energy Drink",    price:3,  desc:"It'll work. For a few hours.",         effect:{energy:40,health:-5}, addictive:false },
-  hotdog:     { name:"Hot Dog",         price:2,  desc:"Street cart. Mustard. You know what you're getting.", effect:{hunger:20}, addictive:false },
+  energydrink:{ name:"Energy Drink",    price:3,  desc:"It'll work. For a few hours.",         effect:{energy:60,health:-3}, addictive:false },
+  hotdog:     { name:"Hot Dog",         price:2,  desc:"Street cart. Mustard. You know what you're getting.", effect:{hunger:25,energy:5}, addictive:false },
   bandage:    { name:"Street Bandage",  price:8,  desc:"Gauze and tape from the corner store. +25 health.", effect:{health:25}, addictive:false },
   neosporin:  { name:"First Aid Kit",   price:15, desc:"Actual kit. Stops the bleeding properly. +40 health.", effect:{health:40}, addictive:false },
-  fortywine:  { name:"Thunderbird",     price:3,  desc:"Cheap wine. Numbs things. +mental, -health long term.", effect:{mental:20,warmth:15,health:-5}, addictive:true, substance:"alcohol" },
+  fortywine:  { name:"Thunderbird",     price:3,  desc:"Cheap wine. Numbs things. +mental, -health long term.", effect:{mental:20,warmth:15,energy:5,health:-5}, addictive:true, substance:"alcohol" },
 };
 
 // ── DYNAMIC NPC DIALOGUE ──────────────────────────────────────────────────────
@@ -3974,7 +3974,7 @@ export default function NYC(){
         // Warmth: weather-based but minimum 2/tick = faster pressure
         // Energy: 3/tick (was 2/tick)
         const hungerDrain=8;
-        const energyDrain=3;
+        const energyDrain=2; // reduced from 3 — less brutal between sleeps
         // Heatwave has 0 warmth drain by design — don't apply the floor to it
         const isHeatwave=w.id==="heatwave";
         const warmthDrainActual=isHeatwave?0:Math.max(warmDrain,inSafehouse?0.5:2);
@@ -6209,8 +6209,51 @@ export default function NYC(){
     const unstashM=C.match(/^UNSTASH (\w+)$/);
     if(unstashM){unstashProduct(unstashM[1].toLowerCase());return;}
 
-    // BUY
-    // Support BUY POWDER 2 and BUY 2 POWDER
+    // ── BUY MARKET [1-4] — black market rolled items (must be before generic BUY)
+    const buyMktMEarly=C.match(/^BUY MARKET ([1-4])$/);
+    if(buyMktMEarly){
+      // handled below — skip to that section
+    }
+    // ── BODEGA ITEMS — check before product BUY so "BUY COFFEE" etc work ──────
+    const _bodbuyQuery=C.startsWith("BUY ")&&!buyMktMEarly?C.slice(4).toLowerCase().trim():null;
+    const _bodbuyKey=_bodbuyQuery?(
+      Object.keys(BODEGA_ITEMS).find(k=>k===_bodbuyQuery)||
+      Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase()===_bodbuyQuery)||
+      Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase().includes(_bodbuyQuery))||
+      Object.keys(BODEGA_ITEMS).find(k=>_bodbuyQuery.includes(k)&&k.length>3)
+    ):null;
+    if(_bodbuyKey){
+      const bItem=BODEGA_ITEMS[_bodbuyKey];
+      if(gs.cash<bItem.price){push(`Need $${bItem.price}. Have $${gs.cash}.`);return;}
+      updGs(g=>{
+        let ng={...g,cash:g.cash-bItem.price};
+        const eff=bItem.effect||{};
+        if(eff.hunger!==undefined)ng={...ng,survival:{...ng.survival,hunger:Math.min(100,ng.survival.hunger+(eff.hunger||0))}};
+        if(eff.energy!==undefined)ng={...ng,survival:{...ng.survival,energy:Math.min(100,ng.survival.energy+(eff.energy||0))}};
+        if(eff.warmth!==undefined)ng={...ng,survival:{...ng.survival,warmth:Math.min(100,ng.survival.warmth+(eff.warmth||0))}};
+        if(eff.health!==undefined)ng={...ng,survival:{...ng.survival,health:clamp(ng.survival.health+(eff.health||0),0,100)}};
+        if(eff.mental!==undefined)ng={...ng,survival:{...ng.survival,mental:Math.min(100,(ng.survival.mental||70)+(eff.mental||0))}};
+        if(bItem.addictive){const archSub=CLASS_SUBSTANCE[ng.archetype?.id||"veteran"];if(archSub?.name===bItem.substance)ng={...ng,addiction:Math.min(100,ng.addiction+rnd(2,5))};}
+        if(bItem.special==="transit")ng={...ng,hasMetrocard:true};
+        return ng;
+      });
+      const bMsgs={
+        coffee:["You take the first sip standing at the counter. It's bad coffee. It's also exactly what you needed.","The bodega guy knows your order. You didn't tell him. He just knows."],
+        coffee_xl:["Double cup. You're going to need it.","The large one. You've earned it."],
+        beer:["The 40 goes down warm. The block softens a little.","You find a stoop. Sit. The city moves around you without caring."],
+        fortywine:["Thunderbird. Old faithful. The city disappears for a little while.","Cheap wine. It does what it needs to do."],
+        cigarettes:["First drag in how long? You exhale slowly. Something in your chest unclenches.","You smoke half and put the rest behind your ear for later."],
+        metrocard:["You tap through the turnstile. The train is running. Small miracle.","Underground. Nobody can see you down here. Sometimes that's exactly what you need."],
+        sandwich:["Real food. You almost forgot what that felt like.","Deli sandwich. You eat it standing at the counter."],
+        energydrink:["Cracks open. Burns going down. You'll feel it in an hour.","It tastes like chemicals and regret. You drink the whole thing."],
+      };
+      const bMsg=bMsgs[_bodbuyKey]?bMsgs[_bodbuyKey][rnd(0,bMsgs[_bodbuyKey].length-1)]:null;
+      const effStr=Object.entries(bItem.effect||{}).filter(([,v])=>v&&v!==0).map(([k,v])=>`${k} ${v>0?"+":""}${v}`).join(" · ");
+      push(`🏪 ${bItem.name} — $${bItem.price}`,bMsg||bItem.desc,effStr);
+      return;
+    }
+
+    // ── PRODUCT BUY (weed/pills/powder/heroin) ────────────────────────────────
     const _buyA=C.match(/^BUY ([A-Za-z]+) (\d+)$/);
     const _buyB=C.match(/^BUY (\d+) ([A-Za-z]+)$/);
     const buyM=_buyA||(_buyB?[_buyB[0],_buyB[2],_buyB[1]]:C.match(/^BUY (\w+)(?:\s+(\d+))?$/));
@@ -6589,14 +6632,14 @@ export default function NYC(){
             hunger:clamp(g.survival.hunger-8,0,100),
             warmth:clamp(g.survival.warmth+(evt.type==="weather"?0:15),0,100),
             health:clamp(g.survival.health+restBonus+(evt.health||0),0,100),
-            energy:clamp(g.survival.energy+(evt.energyPenalty?5:25),0,100),
+            energy:clamp(g.survival.energy+(evt.energyPenalty?5:40),0,100),
             mental:clamp((g.survival.mental||70)+5+(evt.mental||0),0,100),
           },
           heat:clamp(g.heat-ghostRestHeat+(evt.heat||0),0,10),
         },3,"rest");
       });
       push(gs.isUndoc?`Found a community spot. Laid low.`:`Found cover. Laid low.`,
-        `Health +${restBonus} · Warmth +15 · Energy +25`+
+        `Health +${restBonus} · Warmth +15 · Energy +40`+
         (isGhostRest?` · Heat -2 (Ghost bonus)`:`· Heat -1`),
         gs.survival.warmth<25?`Still cold. SHELTER for full warmth restore.`:"");
       return;
@@ -6662,51 +6705,7 @@ export default function NYC(){
       return;
     }
 
-    // BUY [bodega item] — override to check bodega first
-    // BUY [bodega item] — match against BODEGA_ITEMS directly, no hardcoded allowlist
-    const bodbuyM=C.match(/^BUY (.+)$/);
-    const bodbuyItem=bodbuyM?(()=>{
-      const query=bodbuyM[1].toLowerCase().trim();
-      // Priority: exact key → exact name → name includes query → query includes key
-      const key=Object.keys(BODEGA_ITEMS).find(k=>k===query)||
-        Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase()===query)||
-        Object.keys(BODEGA_ITEMS).find(k=>BODEGA_ITEMS[k].name.toLowerCase().includes(query))||
-        Object.keys(BODEGA_ITEMS).find(k=>query.includes(k)&&k.length>3); // min 4 chars to avoid false matches
-      return key?{key,item:BODEGA_ITEMS[key]}:null;
-    })():null;
-    if(bodbuyM&&bodbuyItem){
-      const {key:itemKey,item:bItem}=bodbuyItem;
-        if(gs.cash<bItem.price){push(`Need $${bItem.price}. Have $${gs.cash}.`);return;}
-        updGs(g=>{
-          let ng={...g,cash:g.cash-bItem.price};
-          const eff=bItem.effect||{};
-          if(eff.hunger!==undefined)ng={...ng,survival:{...ng.survival,hunger:Math.min(100,ng.survival.hunger+(eff.hunger||0))}};
-          if(eff.energy!==undefined)ng={...ng,survival:{...ng.survival,energy:Math.min(100,ng.survival.energy+(eff.energy||0))}};
-          if(eff.warmth!==undefined)ng={...ng,survival:{...ng.survival,warmth:Math.min(100,ng.survival.warmth+(eff.warmth||0))}};
-          if(eff.health!==undefined)ng={...ng,survival:{...ng.survival,health:clamp(ng.survival.health+(eff.health||0),0,100)}};
-          if(eff.mental!==undefined)ng={...ng,survival:{...ng.survival,mental:Math.min(100,(ng.survival.mental||70)+(eff.mental||0))}};
-          // addiction from beer/cigarettes
-          if(bItem.addictive){
-            const archSub=CLASS_SUBSTANCE[ng.archetype?.id||"veteran"];
-            if(archSub?.name===bItem.substance||bItem.substance==="cigarettes"){
-              ng={...ng,addiction:Math.min(100,ng.addiction+rnd(2,5))};
-            }
-          }
-          // metrocard — next move free energy
-          if(bItem.special==="transit")ng={...ng,hasMetrocard:true};
-          return ng;
-        });
-        const bMsgs={
-          coffee:["You take the first sip standing at the counter. It's bad coffee. It's also exactly what you needed.","The bodega guy knows your order. You didn't tell him. He just knows."],
-          beer:["The 40 goes down warm. The block softens a little.","You find a stoop. Sit. The city moves around you without caring."],
-          cigarettes:["First drag in how long? You exhale slowly. Something in your chest unclenches.","You smoke half and put the rest behind your ear for later."],
-          metrocard:["You tap through the turnstile. The train is running. Small miracle.","Underground. Nobody can see you down here. Sometimes that's exactly what you need."],
-        };
-        const bMsg=bMsgs[itemKey]?bMsgs[itemKey][rnd(0,bMsgs[itemKey].length-1)]:null;
-        push(`🏪 ${bItem.name} — $${bItem.price}`,bMsg||bItem.desc,`${Object.entries(bItem.effect||{}).filter(([,v])=>v!==0).map(([k,v])=>`${k} ${v>0?"+":""}${v}`).join(" · ")}`);
-        return;
-    }
-    // SCOUT DOG — drifter special
+    // ── SCOUT DOG — drifter special
     if(C==="SCOUT DOG"||C==="DOG SCOUT"){
       if(!gs.isDrifter){push(`Only the Drifter has a dog.`);return;}
       if(gs.survival.energy<10){push(`Your dog is tired too.`);return;}
